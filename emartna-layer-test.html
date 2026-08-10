@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>عمارتنا | اختبار طبقة السحابة</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16202A; --paper:#F3F5F4; --line:#D6DBD9;
+    --teal:#0F766E; --teal-lo:#E3F0EE;
+    --pass:#15803D; --fail:#B4241C; --wait:#B0762A; --muted:#6B7A82;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);
+    font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;line-height:1.7;
+    padding:24px 16px 90px}
+  .wrap{max-width:900px;margin:0 auto}
+  header{border-bottom:2px solid var(--ink);padding-bottom:18px;margin-bottom:26px}
+  h1{font-family:'Cairo';font-weight:900;font-size:clamp(26px,5vw,38px)}
+  h1 span{color:var(--teal)}
+  .sub{color:var(--muted);font-size:15px;margin-top:4px}
+  h2{font-family:'Cairo';font-weight:900;font-size:18px;margin:28px 0 12px;
+    padding-bottom:6px;border-bottom:1px solid var(--line)}
+
+  .field{margin-bottom:12px}
+  label{display:block;font-size:13px;font-weight:600;margin-bottom:5px}
+  input{width:100%;padding:11px 13px;border:1.5px solid var(--line);background:#fff;
+    font-family:'IBM Plex Sans Arabic';font-size:15px}
+  input:focus{outline:2px solid var(--teal);outline-offset:-1px}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row>*{flex:1;min-width:140px}
+  button{font-family:'Cairo';font-weight:600;font-size:15px;padding:11px 20px;
+    border:1.5px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer}
+  button.ghost{background:#fff;color:var(--ink)}
+  button.teal{background:var(--teal);border-color:var(--teal)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+
+  .step{background:#fff;border:1px solid var(--line);border-inline-start:4px solid var(--line);
+    padding:14px 16px;margin-bottom:10px}
+  .step.pass{border-inline-start-color:var(--pass)}
+  .step.fail{border-inline-start-color:var(--fail)}
+  .step.busy{border-inline-start-color:var(--wait)}
+  .step-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .step-name{font-family:'Cairo';font-weight:600;font-size:16px}
+  .badge{font-size:11px;font-weight:600;padding:3px 10px}
+  .badge.idle{background:#EEF1F0;color:var(--muted)}
+  .badge.busy{background:#FBF0DC;color:var(--wait)}
+  .badge.pass{background:#E1F0E5;color:var(--pass)}
+  .badge.fail{background:#F8E3E1;color:var(--fail)}
+  .msg{font-size:13.5px;color:var(--muted);margin-top:6px}
+  .msg.err{color:var(--fail);font-family:'IBM Plex Mono';font-size:12px;
+    background:#FDF3F2;padding:8px 10px;word-break:break-word}
+
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13.5px;background:#fff}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:right}
+  th{background:var(--teal-lo);font-weight:600;font-family:'Cairo'}
+  td.num{font-family:'IBM Plex Mono';direction:ltr;text-align:left}
+  .neg{color:var(--fail)}
+  .who{font-family:'IBM Plex Mono';font-size:12px;color:var(--muted);margin-top:8px}
+  .note{background:#fff;border:1px solid var(--line);padding:14px 16px;font-size:13.5px;margin-top:16px}
+  .note b{font-family:'Cairo'}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>اختبار <span>طبقة السحابة</span></h1>
+    <p class="sub">بنتأكد إن الترجمة بين البرنامج وقاعدة البيانات شغالة في الاتجاهين — قراءة وكتابة.</p>
+  </header>
+
+  <h2>١ · الدخول</h2>
+  <div class="row">
+    <div class="field"><label>رقم الموبايل أو الإيميل</label>
+      <input id="uid" placeholder="01015324941"></div>
+    <div class="field"><label>كلمة السر</label>
+      <input id="pwd" type="password" placeholder="••••••"></div>
+  </div>
+  <div class="row">
+    <button id="btnLogin" class="teal">دخول وتحميل</button>
+    <button id="btnLogout" class="ghost">خروج</button>
+  </div>
+  <p class="who" id="who">مفيش حد مسجّل دخول.</p>
+
+  <h2>٢ · الفحص</h2>
+  <div id="steps"></div>
+
+  <h2>٣ · الأرصدة كما يحسبها البرنامج</h2>
+  <div id="balances"></div>
+
+  <div class="note">
+    <b>اختبار الكتابة:</b> الزرار ده بيضيف حركة دفع لشقة ٩ (اللي عليها متأخرات)،
+    بالظبط زي ما البرنامج بيعمل — <code>D.ledger.push(...)</code> ثم <code>save()</code>.
+    بعدها بنتأكد إنها وصلت السحابة فعلًا.
+    <div class="row" style="margin-top:12px">
+      <button id="btnWrite" class="teal" disabled>سجّل دفعة ٣٥٠ لشقة ٩</button>
+      <button id="btnReload" class="ghost" disabled>أعد التحميل من السحابة</button>
+    </div>
+  </div>
+
+</div>
+
+<script type="module">
+import './emartna-cloud.js';
+
+const STEPS = [
+  ['boot',    'تحميل بيانات العمارة من السحابة'],
+  ['shape',   'البيانات جاية بشكل D اللي البرنامج فاهمه'],
+  ['refs',    'ترجمة المراجع (الشقة ↔ الحركة ↔ الحساب)'],
+  ['calc',    'حسابات البرنامج شغالة على البيانات'],
+  ['write',   'الكتابة وصلت السحابة'],
+];
+
+const box = document.getElementById('steps');
+STEPS.forEach(([id,name])=>{
+  box.insertAdjacentHTML('beforeend',`
+    <div class="step" id="s-${id}">
+      <div class="step-head"><span class="step-name">${name}</span>
+        <span class="badge idle" id="b-${id}">لسه</span></div>
+      <div class="msg" id="m-${id}"></div>
+    </div>`);
+});
+const LBL={idle:'لسه',busy:'بيفحص…',pass:'تمام',fail:'مشكلة'};
+function set(id,st,msg,err){
+  document.getElementById('s-'+id).className='step '+st;
+  const b=document.getElementById('b-'+id);
+  b.className='badge '+st; b.textContent=LBL[st];
+  const m=document.getElementById('m-'+id);
+  m.className='msg'+(err?' err':''); m.textContent=msg||'';
+}
+
+let D=null, BID='DEMO01';
+
+async function refreshWho(){
+  const u=await CLOUD.currentUser();
+  document.getElementById('who').textContent =
+    u ? `مسجّل دخول: ${u.email}` : 'مفيش حد مسجّل دخول.';
+  return u;
+}
+
+document.getElementById('btnLogin').onclick = async ()=>{
+  const id=document.getElementById('uid').value;
+  const pw=document.getElementById('pwd').value;
+  set('boot','busy');
+  try{
+    await CLOUD.signIn(id,pw);
+  }catch(e){ return set('boot','fail',e.message,true); }
+  await refreshWho();
+  await runChecks();
+};
+
+document.getElementById('btnLogout').onclick = async ()=>{
+  await CLOUD.signOut(); D=null;
+  await refreshWho();
+  STEPS.forEach(([id])=>set(id,'idle',''));
+  document.getElementById('balances').innerHTML='';
+  document.getElementById('btnWrite').disabled=true;
+  document.getElementById('btnReload').disabled=true;
+};
+
+async function runChecks(){
+  /* --- ١ تحميل --- */
+  set('boot','busy');
+  D = loadBuildingData(BID);
+  if (!D){
+    const ids=Object.keys(CLOUD._cache.buildings);
+    return set('boot','fail',
+      `العمارة DEMO01 مش موجودة. المتاح: ${ids.join(', ')||'لا شيء'}`,true);
+  }
+  set('boot','pass', `${D.building.name} — ${D.apartments.length} وحدة`);
+
+  /* --- ٢ الشكل --- */
+  set('shape','busy');
+  const need=['building','apartments','accounts','ledger','expenses',
+              'expenseCategories','projects','users'];
+  const miss=need.filter(k=>D[k]===undefined);
+  if (miss.length) return set('shape','fail','ناقص: '+miss.join(', '),true);
+  const a=D.apartments.find(x=>x.id==='ap9');
+  if(!a) return set('shape','fail','الشقة ap9 مش موجودة',true);
+  set('shape','pass',
+    `الشقة ap9: رقم ${a.number} · ${a.ownerName} · اشتراك ${a.monthlyFee} · ${a.usageType}`);
+
+  /* --- ٣ المراجع --- */
+  set('refs','busy');
+  const lg = D.ledger.filter(l=>l.apartmentId==='ap9');
+  if(!lg.length) return set('refs','fail','مفيش حركات مربوطة بـ ap9 — الترجمة فشلت',true);
+  const pay = D.ledger.find(l=>l.type==='دفعة');
+  const acc = pay ? D.accounts.find(x=>x.id===pay.accountId) : null;
+  set('refs','pass',
+    `ap9 عليها ${lg.length} حركة · أول دفعة مربوطة بحساب: ${acc?acc.name:'؟'}`);
+
+  /* --- ٤ الحسابات --- */
+  set('calc','busy');
+  try{
+    const rows = D.apartments.map(ap=>{
+      const items = D.ledger.filter(l=>l.apartmentId===ap.id);
+      const due  = items.filter(l=>l.type!=='دفعة').reduce((s,l)=>s+Number(l.amount),0);
+      const paid = items.filter(l=>l.type==='دفعة').reduce((s,l)=>s+Number(l.amount),0);
+      return { ap, due, paid, bal:(Number(ap.openingBalance)||0)+due-paid };
+    });
+    renderBalances(rows);
+    const owing = rows.filter(r=>r.bal>0).length;
+    set('calc','pass', `اتحسب رصيد ${rows.length} وحدة — ${owing} عليهم متأخرات`);
+    document.getElementById('btnWrite').disabled=false;
+    document.getElementById('btnReload').disabled=false;
+  }catch(e){ set('calc','fail',e.message,true); }
+}
+
+function renderBalances(rows){
+  document.getElementById('balances').innerHTML = `
+    <table><thead><tr>
+      <th>الوحدة</th><th>المالك</th><th>النوع</th>
+      <th>المستحق</th><th>المدفوع</th><th>الرصيد</th>
+    </tr></thead><tbody>
+      ${rows.map(r=>`<tr>
+        <td class="num">${r.ap.number}</td>
+        <td>${r.ap.ownerName}</td>
+        <td>${r.ap.usageType}</td>
+        <td class="num">${r.due.toLocaleString('en')}</td>
+        <td class="num">${r.paid.toLocaleString('en')}</td>
+        <td class="num ${r.bal>0?'neg':''}"><b>${r.bal.toLocaleString('en')}</b></td>
+      </tr>`).join('')}
+    </tbody></table>
+    <p class="msg">الرصيد الموجب = متأخرات على الوحدة.</p>`;
+}
+
+/* --- ٥ الكتابة --- */
+document.getElementById('btnWrite').onclick = async ()=>{
+  set('write','busy','بيكتب…');
+  const before = D.ledger.length;
+
+  // بالظبط زي ما البرنامج بيعمل
+  D.ledger.push({
+    id: 'test_' + Date.now(),
+    apartmentId: 'ap9',
+    type: 'دفعة',
+    amount: 350,
+    accountId: 'cash',
+    date: new Date().toISOString().slice(0,10),
+    note: 'دفعة اختبار من طبقة السحابة',
+  });
+  saveBuildingData(BID, D);
+
+  await new Promise(r=>setTimeout(r,1500));
+  await CLOUD.syncNow();
+  await new Promise(r=>setTimeout(r,1200));
+
+  const st = CLOUD.status();
+  if (st.lastError) return set('write','fail', st.lastError, true);
+
+  // تأكيد مباشر من قاعدة البيانات
+  const { data, error } = await CLOUD._sb
+    .from('ledger').select('legacy_id,amount,type')
+    .eq('note','دفعة اختبار من طبقة السحابة');
+
+  if (error) return set('write','fail', error.message, true);
+  if (!data.length) return set('write','fail','التغيير مش موجود في السحابة',true);
+
+  set('write','pass',
+    `اتسجّلت ${data.length} دفعة في السحابة — ${data[0].amount} جنيه. ` +
+    `الحركات في الذاكرة: ${before} ← ${D.ledger.length}`);
+  await runChecksCalcOnly();
+};
+
+async function runChecksCalcOnly(){
+  const rows = D.apartments.map(ap=>{
+    const items = D.ledger.filter(l=>l.apartmentId===ap.id);
+    const due  = items.filter(l=>l.type!=='دفعة').reduce((s,l)=>s+Number(l.amount),0);
+    const paid = items.filter(l=>l.type==='دفعة').reduce((s,l)=>s+Number(l.amount),0);
+    return { ap, due, paid, bal:(Number(ap.openingBalance)||0)+due-paid };
+  });
+  renderBalances(rows);
+}
+
+document.getElementById('btnReload').onclick = async ()=>{
+  set('boot','busy','بيعيد التحميل…');
+  CLOUD._cache.buildings={}; CLOUD._cache.snapshot={};
+  await CLOUD.bootstrap();
+  await runChecks();
+};
+
+refreshWho();
+</script>
+</body>
+</html>
