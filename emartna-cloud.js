@@ -309,17 +309,71 @@ async function fetchBuilding(buildingUuid, legacyId){
     .select('name').eq('building_id', buildingUuid).order('sort_order');
   D.expenseCategories = (cats.data || []).map(c => c.name);
 
-  // المستخدمين: البرنامج محتاج D.users — بنبنيها من العضويات
+  // ---- المستخدمين ----
+  // البرنامج محتاج D.users. بنبنيها من مصدرين:
+  //   1) العضويات = ناس عملوا حساب فعلًا
+  //   2) الدعوات   = ناس رئيس الاتحاد سجّل أرقامهم وبيستنوا
+  // كل صف فيه inviteStatus عشان الشاشة تعرف تعرض الحالة.
+
   const mem = await sb.from('memberships')
     .select('id,user_id,apartment_id,role,active').eq('building_id', buildingUuid);
-  D.users = (mem.data || []).map(m => ({
-    id: m.id,
-    username: ctx.legacyOf.apartments?.[m.apartment_id] || m.user_id,
-    role: m.role === 'admin' ? 'admin' : 'owner',
-    apartmentId: ctx.legacyOf.apartments?.[m.apartment_id] || null,
-    active: m.active,
-    __authId: m.user_id,
-  }));
+
+  const authIds = [...new Set((mem.data||[]).map(m => m.user_id))];
+  const profiles = {};
+  if (authIds.length){
+    const pr = await sb.from('profiles')
+      .select('id,full_name,phone,phone_country,phone_e164,email')
+      .in('id', authIds);
+    (pr.data || []).forEach(p => { profiles[p.id] = p; });
+  }
+
+  const apOf = uuid => ctx.legacyOf.apartments?.[uuid] || null;
+
+  D.users = (mem.data || []).map(m => {
+    const p = profiles[m.user_id] || {};
+    const apLegacy = apOf(m.apartment_id);
+    const ap = apLegacy ? D.apartments.find(a => a.id === apLegacy) : null;
+    return {
+      id: m.id,
+      username: apLegacy || (p.phone_e164 || '').replace('+','') || m.user_id.slice(0,8),
+      name: p.full_name || (ap ? ap.ownerName : ''),
+      role: m.role === 'admin' ? 'admin' : (m.role === 'tenant' ? 'tenant' : 'owner'),
+      apartmentId: apLegacy,
+      phoneCountry: p.phone_country || '+20',
+      phone: p.phone || '',
+      email: p.email || '',
+      active: m.active !== false,
+      inviteStatus: 'joined',
+      __authId: m.user_id,
+      __membershipId: m.id,
+    };
+  });
+
+  // الدعوات اللي لسه مستنية
+  const inv = await sb.from('invitations')
+    .select('*').eq('building_id', buildingUuid).eq('status','pending');
+
+  (inv.data || []).forEach(v => {
+    const apLegacy = apOf(v.apartment_id);
+    const ap = apLegacy ? D.apartments.find(a => a.id === apLegacy) : null;
+    if (apLegacy && D.users.some(u => u.apartmentId === apLegacy)) return;
+    D.users.push({
+      id: 'inv_' + v.id,
+      username: apLegacy || v.phone_e164 || v.email || '',
+      name: ap ? ap.ownerName : '',
+      role: v.role === 'admin' ? 'admin' : (v.role === 'tenant' ? 'tenant' : 'owner'),
+      apartmentId: apLegacy,
+      phoneCountry: v.phone_country || '+20',
+      phone: v.phone || '',
+      email: v.email || '',
+      active: false,
+      inviteStatus: 'pending',
+      inviteCode: v.invite_code,
+      __inviteId: v.id,
+    });
+  });
+
+  D.__invitations = inv.data || [];
 
   cache.uuid[legacyId]   = ctx.uuidOf;
   cache.legacy[legacyId] = ctx.legacyOf;
@@ -566,6 +620,99 @@ window.CLOUD = {
     return true;
   },
 
+  /* ---------- الدعوات ---------- */
+  invites: {
+
+    /* دعوة واحدة لشقة */
+    async create(legacyBuildingId, { apartmentId, phone, phoneCountry='+20', email, role='owner' }){
+      const bUuid = cache.buildingUuid[legacyBuildingId];
+      if (!bUuid) throw new Error('العمارة مش محمّلة');
+      if (!phone && !email) throw new Error('لازم رقم موبايل أو إيميل');
+
+      const apUuid = apartmentId
+        ? cache.uuid[legacyBuildingId]?.apartments?.[apartmentId] : null;
+      if (apartmentId && !apUuid) throw new Error('الشقة ' + apartmentId + ' مش موجودة');
+
+      const { data, error } = await sb.from('invitations').insert({
+        building_id: bUuid,
+        apartment_id: apUuid,
+        phone_country: phoneCountry,
+        phone: phone || null,
+        phone_e164: phone ? normPhone(phone, phoneCountry) : null,
+        email: email || null,
+        role,
+      }).select().single();
+      if (error) throw error;
+      return data;
+    },
+
+    /* دعوات لكل الشقق اللي لسه مالهاش مستخدم — بأرقامها المسجّلة */
+    async createForAll(legacyBuildingId){
+      const D = cache.buildings[legacyBuildingId];
+      if (!D) throw new Error('العمارة مش محمّلة');
+
+      const taken = new Set(D.users.map(u => u.apartmentId).filter(Boolean));
+      const targets = D.apartments.filter(a => !a.closed && !taken.has(a.id));
+
+      const made = [], skipped = [];
+      for (const ap of targets){
+        if (!ap.phone){ skipped.push({ ap: ap.number, why: 'مفيش رقم موبايل' }); continue; }
+        try{
+          made.push(await CLOUD.invites.create(legacyBuildingId, {
+            apartmentId: ap.id,
+            phone: ap.phone,
+            phoneCountry: ap.phoneCountry || '+20',
+            email: ap.email || null,
+            role: 'owner',
+          }));
+        }catch(e){ skipped.push({ ap: ap.number, why: e.message }); }
+      }
+      return { made, skipped };
+    },
+
+    async revoke(inviteId){
+      const { error } = await sb.from('invitations')
+        .update({ status:'revoked' }).eq('id', inviteId);
+      if (error) throw error;
+    },
+
+    async list(legacyBuildingId){
+      const bUuid = cache.buildingUuid[legacyBuildingId];
+      const { data, error } = await sb.from('invitations')
+        .select('*').eq('building_id', bUuid).order('created_at');
+      if (error) throw error;
+      return data;
+    },
+
+    /* رابط الانضمام اللي بيتبعت واتساب */
+    link(code, base){
+      const root = base || (location.origin + location.pathname.replace(/[^/]*$/, ''));
+      return root + 'join.html?code=' + encodeURIComponent(code);
+    },
+
+    /* نص رسالة الواتساب */
+    message(buildingName, apartmentLabel, code, base){
+      return [
+        `أهلًا 👋`,
+        `دي دعوتك للانضمام لنظام "${buildingName}" على تطبيق عمارتنا.`,
+        apartmentLabel ? `الوحدة: ${apartmentLabel}` : '',
+        ``,
+        `كود الدعوة: ${code}`,
+        `الرابط: ${CLOUD.invites.link(code, base)}`,
+        ``,
+        `هتسجّل برقم موبايلك وتختار كلمة سر، وبعدها تقدر تشوف حسابك ومدفوعاتك في أي وقت.`,
+      ].filter(Boolean).join('\n');
+    },
+
+    /* الساكن بينادي دي بعد ما يعمل حساب */
+    async accept(code){
+      const { data, error } = await sb.rpc('accept_invitation', { p_code: code || null });
+      if (error) throw error;
+      await CLOUD.bootstrap();
+      return data;
+    },
+  },
+
   status(){
     return {
       online: cache.online,
@@ -580,6 +727,14 @@ window.CLOUD = {
   _cache: cache,
   _sb: sb,
 };
+
+function normPhone(raw, country='+20'){
+  let d = (raw || '').replace(/[^\d+]/g,'');
+  if (!d) return null;
+  if (d.startsWith('00')) d = '+' + d.slice(2);
+  if (d.startsWith('+'))  return d;
+  return country + d.replace(/^0+/,'');
+}
 
 function toLoginEmail(raw, country='+20'){
   const v = (raw || '').trim();

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>عمارتنا | دعوات السكان</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16202A; --paper:#F3F5F4; --line:#D6DBD9;
+    --teal:#0F766E; --teal-lo:#E3F0EE;
+    --pass:#15803D; --fail:#B4241C; --wait:#B0762A; --muted:#6B7A82;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);
+    font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;line-height:1.7;
+    padding:24px 16px 80px}
+  .wrap{max-width:1000px;margin:0 auto}
+  header{border-bottom:2px solid var(--ink);padding-bottom:16px;margin-bottom:24px}
+  h1{font-family:'Cairo';font-weight:900;font-size:clamp(24px,5vw,34px)}
+  h1 span{color:var(--teal)}
+  .sub{color:var(--muted);font-size:14.5px;margin-top:4px}
+  h2{font-family:'Cairo';font-weight:900;font-size:18px;margin:26px 0 12px;
+    padding-bottom:6px;border-bottom:1px solid var(--line)}
+
+  .field{margin-bottom:12px}
+  label{display:block;font-size:13px;font-weight:600;margin-bottom:5px}
+  input{width:100%;padding:11px 13px;border:1.5px solid var(--line);background:#fff;
+    font-family:'IBM Plex Sans Arabic';font-size:15px}
+  input:focus{outline:2px solid var(--teal);outline-offset:-1px}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row>*{flex:1;min-width:150px}
+  button{font-family:'Cairo';font-weight:600;font-size:15px;padding:11px 18px;
+    border:1.5px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer}
+  button.ghost{background:#fff;color:var(--ink);border-color:var(--line)}
+  button.teal{background:var(--teal);border-color:var(--teal)}
+  button.sm{font-size:13px;padding:6px 12px}
+  button:disabled{opacity:.45;cursor:not-allowed}
+
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13.5px;background:#fff}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:right;vertical-align:middle}
+  th{background:var(--teal-lo);font-weight:600;font-family:'Cairo';font-size:13px}
+  code{font-family:'IBM Plex Mono';font-size:12.5px;background:#EEF1F0;padding:2px 6px}
+  .badge{font-size:11px;font-weight:600;padding:3px 9px;white-space:nowrap;display:inline-block}
+  .badge.joined{background:#E1F0E5;color:var(--pass)}
+  .badge.pending{background:#FBF0DC;color:var(--wait)}
+  .badge.none{background:#EEF1F0;color:var(--muted)}
+  .badge.admin{background:var(--teal);color:#fff}
+
+  .note{background:#fff;border:1px solid var(--line);padding:14px 16px;font-size:13.5px;margin-top:16px}
+  .note b{font-family:'Cairo'}
+  .who{font-family:'IBM Plex Mono';font-size:12px;color:var(--muted);margin-top:8px}
+  .msg{font-size:13.5px;padding:10px 12px;margin-top:12px;display:none}
+  .msg.show{display:block}
+  .msg.ok{background:#E1F0E5;color:var(--pass)}
+  .msg.bad{background:#FBE6E4;color:var(--fail)}
+  pre{font-family:'IBM Plex Sans Arabic';font-size:13px;background:#fff;
+    border:1px solid var(--line);padding:12px;white-space:pre-wrap;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>دعوات <span>السكان</span></h1>
+    <p class="sub">رئيس الاتحاد بيولّد كود لكل وحدة، ويبعته واتساب. الساكن يسجّل بنفسه ويترّبط بشقته تلقائيًا.</p>
+  </header>
+
+  <h2>الدخول</h2>
+  <div class="row">
+    <div class="field"><label>رقم الموبايل</label><input id="uid" placeholder="01015324941"></div>
+    <div class="field"><label>كلمة السر</label><input id="pwd" type="password"></div>
+  </div>
+  <div class="row">
+    <button id="btnLogin" class="teal">دخول</button>
+    <button id="btnLogout" class="ghost">خروج</button>
+  </div>
+  <p class="who" id="who">مفيش حد مسجّل دخول.</p>
+
+  <h2>الوحدات والحسابات</h2>
+  <div class="row" style="margin-bottom:6px">
+    <button id="btnAll" class="teal" disabled>ولّد دعوات لكل الوحدات اللي مالهاش حساب</button>
+    <button id="btnRefresh" class="ghost" disabled>تحديث</button>
+  </div>
+  <div class="msg" id="msg"></div>
+  <div id="table"></div>
+
+  <div class="note" id="waBox" style="display:none">
+    <b>رسالة الواتساب</b>
+    <pre id="waText"></pre>
+    <div class="row" style="margin-top:10px">
+      <button id="btnCopy" class="ghost">انسخ الرسالة</button>
+      <button id="btnWa" class="teal">افتح واتساب</button>
+    </div>
+  </div>
+
+</div>
+
+<script type="module">
+import './emartna-cloud.js';
+
+const $ = id => document.getElementById(id);
+const BID = 'DEMO01';
+let D = null, selected = null;
+
+function say(t, kind){ const m=$('msg'); m.textContent=t; m.className='msg show '+(kind||'bad'); }
+function clearMsg(){ $('msg').className='msg'; }
+
+async function who(){
+  const u = await CLOUD.currentUser();
+  $('who').textContent = u ? `مسجّل دخول: ${u.email}` : 'مفيش حد مسجّل دخول.';
+  return u;
+}
+
+$('btnLogin').onclick = async () => {
+  clearMsg();
+  try{
+    await CLOUD.signIn($('uid').value, $('pwd').value);
+    await who();
+    render();
+  }catch(e){ say(e.message); }
+};
+
+$('btnLogout').onclick = async () => {
+  await CLOUD.signOut(); D=null;
+  await who();
+  $('table').innerHTML=''; $('waBox').style.display='none';
+  $('btnAll').disabled=true; $('btnRefresh').disabled=true;
+};
+
+function render(){
+  D = loadBuildingData(BID);
+  if (!D){ return say('العمارة DEMO01 مش محمّلة. اتأكد إنك رئيس اتحاد فيها.'); }
+  $('btnAll').disabled=false; $('btnRefresh').disabled=false;
+
+  const rows = D.apartments.map(ap => {
+    const u = D.users.find(x => x.apartmentId === ap.id);
+    return { ap, u };
+  });
+
+  const admins = D.users.filter(u => !u.apartmentId);
+
+  $('table').innerHTML = `
+  <table><thead><tr>
+    <th>الوحدة</th><th>المالك</th><th>الموبايل</th>
+    <th>الحالة</th><th>كود الدعوة</th><th></th>
+  </tr></thead><tbody>
+  ${admins.map(u=>`<tr>
+    <td>—</td><td>${esc(u.name||'رئيس الاتحاد')}</td>
+    <td class="ltr">${esc(u.phone||'-')}</td>
+    <td><span class="badge admin">رئيس اتحاد</span></td>
+    <td>—</td><td>—</td>
+  </tr>`).join('')}
+  ${rows.map(({ap,u})=>{
+    const st = !u ? 'none' : u.inviteStatus;
+    const label = st==='joined' ? 'عنده حساب' : st==='pending' ? 'دعوة مستنية' : 'مفيش حساب';
+    return `<tr>
+      <td><b>${ap.number}</b> <span style="color:var(--muted)">${esc(ap.usageType||'')}</span></td>
+      <td>${esc(ap.ownerName||'-')}</td>
+      <td class="ltr">${esc(ap.phone||'—')}</td>
+      <td><span class="badge ${st}">${label}</span></td>
+      <td>${u&&u.inviteCode?`<code>${esc(u.inviteCode)}</code>`:'—'}</td>
+      <td>${
+        st==='pending'
+          ? `<button class="btn sm ghost" onclick="pick('${ap.id}')">الرسالة</button>`
+        : st==='none'
+          ? `<button class="btn sm" onclick="makeOne('${ap.id}')">ولّد دعوة</button>`
+          : '—'
+      }</td>
+    </tr>`;
+  }).join('')}
+  </tbody></table>`;
+}
+
+function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+window.makeOne = async (apId) => {
+  clearMsg();
+  const ap = D.apartments.find(a=>a.id===apId);
+  if (!ap.phone) return say(`الوحدة ${ap.number} مالهاش رقم موبايل مسجّل. ضيف الرقم الأول.`);
+  try{
+    await CLOUD.invites.create(BID, {
+      apartmentId: apId, phone: ap.phone,
+      phoneCountry: ap.phoneCountry||'+20', email: ap.email||null, role:'owner',
+    });
+    await CLOUD.bootstrap(); render();
+    say(`اتولّدت دعوة للوحدة ${ap.number}.`,'ok');
+    pick(apId);
+  }catch(e){ say(e.message); }
+};
+
+$('btnAll').onclick = async () => {
+  clearMsg();
+  $('btnAll').disabled = true;
+  try{
+    const { made, skipped } = await CLOUD.invites.createForAll(BID);
+    await CLOUD.bootstrap(); render();
+    let t = `اتولّدت ${made.length} دعوة.`;
+    if (skipped.length) t += ` واتخطّت ${skipped.length}: ` +
+      skipped.map(s=>`وحدة ${s.ap} (${s.why})`).join('، ');
+    say(t, made.length ? 'ok' : 'bad');
+  }catch(e){ say(e.message); }
+  finally{ $('btnAll').disabled = false; }
+};
+
+$('btnRefresh').onclick = async () => { await CLOUD.bootstrap(); render(); };
+
+window.pick = (apId) => {
+  const ap = D.apartments.find(a=>a.id===apId);
+  const u  = D.users.find(x=>x.apartmentId===apId);
+  if (!u || !u.inviteCode) return;
+  selected = { ap, u };
+  const label = (ap.type==='shop'?'محل ':'شقة ') + ap.number;
+  const text = CLOUD.invites.message(D.building.name, label, u.inviteCode);
+  $('waText').textContent = text;
+  $('waBox').style.display = 'block';
+  $('waBox').scrollIntoView({ behavior:'smooth', block:'nearest' });
+};
+
+$('btnCopy').onclick = async () => {
+  await navigator.clipboard.writeText($('waText').textContent);
+  say('الرسالة اتنسخت.','ok');
+};
+
+$('btnWa').onclick = () => {
+  if (!selected) return;
+  const phone = (selected.ap.phoneCountry||'+20').replace('+','') +
+                (selected.ap.phone||'').replace(/^0+/,'');
+  window.open(`https://wa.me/${phone}?text=${encodeURIComponent($('waText').textContent)}`,'_blank');
+};
+
+who().then(u => { if (u) render(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>عمارتنا | انضمام</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16202A; --paper:#F3F5F4; --line:#D6DBD9;
+    --teal:#0F766E; --teal-lo:#E3F0EE;
+    --pass:#15803D; --fail:#B4241C; --muted:#6B7A82;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);
+    font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;line-height:1.7;
+    display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+  .card{width:100%;max-width:440px;background:#fff;border:1px solid var(--line);
+    padding:28px 24px;box-shadow:0 4px 24px rgba(22,32,42,.06)}
+  .brand{font-family:'Cairo';font-weight:900;font-size:30px;text-align:center;
+    letter-spacing:-.5px;margin-bottom:2px}
+  .brand span{color:var(--teal)}
+  .tag{text-align:center;color:var(--muted);font-size:13.5px;margin-bottom:22px}
+
+  .banner{background:var(--teal-lo);border-inline-start:4px solid var(--teal);
+    padding:12px 14px;margin-bottom:20px;font-size:14px}
+  .banner b{font-family:'Cairo'}
+  .banner.warn{background:#FDF3E3;border-inline-start-color:#B0762A}
+  .banner.bad{background:#FBE6E4;border-inline-start-color:var(--fail)}
+
+  .field{margin-bottom:14px}
+  label{display:block;font-size:13px;font-weight:600;margin-bottom:5px}
+  .hint{font-size:12px;color:var(--muted);margin-top:4px}
+  input{width:100%;padding:12px 13px;border:1.5px solid var(--line);background:#fff;
+    font-family:'IBM Plex Sans Arabic';font-size:16px}
+  input:focus{outline:2px solid var(--teal);outline-offset:-1px;border-color:var(--teal)}
+  input.code{font-family:'Cairo';font-weight:600;letter-spacing:3px;text-align:center;
+    text-transform:uppercase;font-size:20px}
+
+  button{width:100%;font-family:'Cairo';font-weight:600;font-size:16px;padding:13px;
+    border:1.5px solid var(--teal);background:var(--teal);color:#fff;cursor:pointer;
+    margin-top:6px}
+  button.ghost{background:#fff;color:var(--ink);border-color:var(--line)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+
+  .switch{text-align:center;font-size:13.5px;color:var(--muted);margin-top:16px}
+  .switch a{color:var(--teal);font-weight:600;cursor:pointer;text-decoration:underline}
+
+  .msg{font-size:13.5px;padding:10px 12px;margin-top:14px;display:none}
+  .msg.show{display:block}
+  .msg.ok{background:#E1F0E5;color:var(--pass)}
+  .msg.bad{background:#FBE6E4;color:var(--fail)}
+
+  .done{text-align:center;padding:10px 0}
+  .done .tick{font-size:52px;line-height:1}
+  .done h2{font-family:'Cairo';font-weight:900;font-size:22px;margin:10px 0 6px}
+  .done p{color:var(--muted);font-size:14px}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+
+<div class="card">
+
+  <div id="viewForm">
+    <div class="brand">عمارتنا<span>.</span></div>
+    <p class="tag">Emartna · نظام إدارة اتحاد الملاك</p>
+
+    <div class="banner" id="banner">
+      <b>أهلًا بيك</b><br>
+      اعمل حسابك مرة واحدة، وبعدها تقدر تشوف حسابك ومدفوعاتك في أي وقت.
+    </div>
+
+    <div class="field">
+      <label for="code">كود الدعوة</label>
+      <input id="code" class="code" placeholder="A3F9C2" maxlength="10" autocomplete="off">
+      <p class="hint">اللي وصلك من رئيس الاتحاد</p>
+    </div>
+
+    <div class="field">
+      <label for="phone">رقم الموبايل</label>
+      <input id="phone" type="tel" placeholder="01012345678" autocomplete="tel">
+      <p class="hint">ده اللي هتدخل بيه كل مرة</p>
+    </div>
+
+    <div class="field" id="nameField">
+      <label for="name">اسمك</label>
+      <input id="name" placeholder="محمد أحمد" autocomplete="name">
+    </div>
+
+    <div class="field">
+      <label for="pwd">كلمة السر</label>
+      <input id="pwd" type="password" placeholder="••••••" autocomplete="new-password">
+      <p class="hint">٦ حروف على الأقل — اختار حاجة تفتكرها</p>
+    </div>
+
+    <button id="btnGo">إنشاء الحساب والانضمام</button>
+    <button id="btnMode" class="ghost">عندي حساب بالفعل</button>
+
+    <p class="switch">
+      المشكلة إن الكود مش شغال؟ كلّم رئيس الاتحاد يبعتلك واحد جديد.
+    </p>
+
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div id="viewDone" class="hidden">
+    <div class="done">
+      <div class="tick">✅</div>
+      <h2>تمام، انضممت</h2>
+      <p id="doneMsg"></p>
+      <button id="btnOpen" style="margin-top:18px">افتح البرنامج</button>
+    </div>
+  </div>
+
+</div>
+
+<script type="module">
+import './emartna-cloud.js';
+
+const $ = id => document.getElementById(id);
+let mode = 'signup';   // signup | login
+
+// الكود بييجي من الرابط
+const params = new URLSearchParams(location.search);
+const codeFromUrl = params.get('code');
+if (codeFromUrl){
+  $('code').value = codeFromUrl.toUpperCase();
+  $('code').readOnly = true;
+}
+
+function say(text, kind){
+  const m = $('msg');
+  m.textContent = text;
+  m.className = 'msg show ' + (kind || 'bad');
+}
+function clearMsg(){ $('msg').className = 'msg'; }
+
+$('btnMode').onclick = () => {
+  mode = mode === 'signup' ? 'login' : 'signup';
+  const signup = mode === 'signup';
+  $('nameField').classList.toggle('hidden', !signup);
+  $('btnGo').textContent  = signup ? 'إنشاء الحساب والانضمام' : 'دخول والانضمام';
+  $('btnMode').textContent = signup ? 'عندي حساب بالفعل' : 'أنا جديد، عايز أعمل حساب';
+  $('pwd').setAttribute('autocomplete', signup ? 'new-password' : 'current-password');
+  clearMsg();
+};
+
+$('btnGo').onclick = async () => {
+  clearMsg();
+  const code  = $('code').value.trim().toUpperCase();
+  const phone = $('phone').value.trim();
+  const pwd   = $('pwd').value;
+  const name  = $('name').value.trim();
+
+  if (!phone)       return say('اكتب رقم موبايلك.');
+  if (pwd.length<6) return say('كلمة السر لازم ٦ حروف على الأقل.');
+
+  $('btnGo').disabled = true;
+  $('btnGo').textContent = 'ثانية واحدة…';
+
+  try{
+    if (mode === 'signup'){
+      try{
+        await CLOUD.signUp(phone, pwd, name);
+      }catch(e){
+        // الحساب موجود قبل كده — نحاول ندخل بيه
+        if (!/already|registered|exists/i.test(e.message)) throw e;
+      }
+    }
+
+    await CLOUD.signIn(phone, pwd);
+
+    const res = await CLOUD.invites.accept(code || null);
+    const row = Array.isArray(res) ? res[0] : res;
+
+    $('viewForm').classList.add('hidden');
+    $('viewDone').classList.remove('hidden');
+    $('doneMsg').textContent = row && row.role === 'admin'
+      ? 'دخلت كرئيس اتحاد.'
+      : 'دلوقتي تقدر تشوف حسابك ومدفوعاتك.';
+
+  }catch(e){
+    const m = e.message || '';
+    if (/Invalid login/i.test(m))
+      say('كلمة السر غلط. لو ده أول مرة، اضغط "أنا جديد، عايز أعمل حساب".');
+    else if (/دعوة مطابقة/.test(m))
+      say('مفيش دعوة على الرقم أو الكود ده. اتأكد من الكود أو كلّم رئيس الاتحاد.');
+    else if (/تسجّل دخول/.test(m))
+      say('حصلت مشكلة في تسجيل الدخول. جرّب تاني.');
+    else
+      say(m || 'حصلت مشكلة. جرّب تاني.');
+  }finally{
+    $('btnGo').disabled = false;
+    $('btnGo').textContent = mode==='signup' ? 'إنشاء الحساب والانضمام' : 'دخول والانضمام';
+  }
+};
+
+$('btnOpen').onclick = () => { location.href = './index.html'; };
+</script>
+</body>
+</html>
