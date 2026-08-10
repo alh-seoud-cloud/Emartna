@@ -708,8 +708,14 @@ window.CLOUD = {
     async accept(code){
       const { data, error } = await sb.rpc('accept_invitation', { p_code: code || null });
       if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
       await CLOUD.bootstrap();
-      return data;
+      return row ? {
+        buildingId:  row.out_building_id,
+        apartmentId: row.out_apartment_id,
+        role:        row.out_role,
+        building:    row.out_building,
+      } : null;
     },
   },
 

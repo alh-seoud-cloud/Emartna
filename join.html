@@ -173,13 +173,14 @@ $('btnGo').onclick = async () => {
 
     await CLOUD.signIn(phone, pwd);
 
-    const res = await CLOUD.invites.accept(code || null);
-    const row = Array.isArray(res) ? res[0] : res;
+    const row = await CLOUD.invites.accept(code || null);
 
     $('viewForm').classList.add('hidden');
     $('viewDone').classList.remove('hidden');
-    $('doneMsg').textContent = row && row.role === 'admin'
-      ? 'دخلت كرئيس اتحاد.'
+    $('doneMsg').textContent = row
+      ? (row.role === 'admin'
+          ? `دخلت كرئيس اتحاد في ${row.building}.`
+          : `انضممت لـ${row.building}. دلوقتي تقدر تشوف حسابك ومدفوعاتك.`)
       : 'دلوقتي تقدر تشوف حسابك ومدفوعاتك.';
 
   }catch(e){
