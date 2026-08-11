@@ -611,6 +611,34 @@ const CLOUD = {
     const bs = await sb.from('buildings').select('*').eq('is_deleted', false);
     if (bs.error) throw bs.error;
 
+    // خطط الاشتراك والعروض — من قاعدة البيانات
+    const [plansRes, offersRes] = await Promise.all([
+      sb.from('plans').select('*').order('sort_order'),
+      sb.from('landing_offers').select('*').order('created_at'),
+    ]);
+
+    const plans = (plansRes.data || []).map(p => ({
+      key: p.key, name: p.name, icon: p.features?.icon || '💳',
+      priceBefore: Number(p.price_before) || 0,
+      discountPercent: Number(p.discount_percent) || 0,
+      durationMonths: p.duration_months,
+      maxApartments: p.max_apartments,
+      maxTransactions: p.max_transactions,
+      isTrial: !!p.is_trial, active: p.active !== false,
+    }));
+
+    const offers = (offersRes.data || []).map(o => ({
+      id: o.id, title: o.title,
+      subtitle:  o.description?.subtitle  || '',
+      features:  o.description?.features  || [],
+      ctaText:   o.description?.ctaText   || 'جرب الآن مجانًا',
+      footnote:  o.description?.footnote  || '',
+      targetAudience: o.description?.targetAudience || 'new',
+      trialDays: o.trial_days, planKey: o.plan_key || 'custom',
+      active: o.active !== false,
+      createdAt: o.created_at,
+    }));
+
     // REG لازم يبقى فيه كل الحقول اللي البرنامج بيتوقعها،
     // وإلا دوال ensure* بتقع. الفاضي منها البرنامج بيملاه بنفسه.
     cache.registry = {
@@ -644,7 +672,9 @@ const CLOUD = {
         },
       })),
       // طبقة المنصة — الجولة ٣
-      plans: [], discountCoupons: [], landingOffers: null, landingBanners: [],
+      plans: plans.length ? plans : [],
+      discountCoupons: [], landingBanners: [],
+      landingOffers: offers.length ? offers : null,
       landingSettings: null, brandSettings: null, legalSettings: null,
       marketingCards: [], marketingLeads: [], messageTemplates: [],
       renewalRequests: [], revenueLedger: [], referralRewards: [],
@@ -824,8 +854,90 @@ window.loadRegistry = async function(){
   return window.REG;
 };
 
+/* ---- حفظ بيانات المنصة (خطط · عروض) ---- */
+let __regTimer = null;
+
+async function pushRegistry(){
+  const REG = window.REG;
+  if (!REG) return;
+  try{
+    // الخطط
+    if (Array.isArray(REG.plans) && REG.plans.length){
+      const rows = REG.plans.map((p, i) => ({
+        key: p.key,
+        name: p.name || '',
+        price: Math.max(0, (Number(p.priceBefore)||0) *
+                (1 - (Number(p.discountPercent)||0)/100)),
+        price_before: Number(p.priceBefore) || 0,
+        discount_percent: Number(p.discountPercent) || 0,
+        duration_months: p.durationMonths || null,
+        max_apartments: p.maxApartments || null,
+        max_transactions: p.maxTransactions || null,
+        is_trial: !!p.isTrial,
+        active: p.active !== false,
+        features: { icon: p.icon || '💳' },
+        sort_order: i,
+      }));
+      const r = await sb.from('plans').upsert(rows, { onConflict:'key' });
+      if (r.error) throw r.error;
+
+      // امسح الخطط اللي المستخدم حذفها
+      const keys = rows.map(r => r.key);
+      const ex = await sb.from('plans').select('key');
+      const gone = (ex.data || []).map(x => x.key).filter(k => !keys.includes(k));
+      for (const k of gone) await sb.from('plans').delete().eq('key', k);
+    }
+
+    // العروض
+    if (Array.isArray(REG.landingOffers)){
+      const rows = REG.landingOffers.map(o => ({
+        id: /^[0-9a-f-]{36}$/i.test(String(o.id)) ? o.id : undefined,
+        title: o.title || '',
+        description: {
+          subtitle: o.subtitle || '', features: o.features || [],
+          ctaText: o.ctaText || '', footnote: o.footnote || '',
+          targetAudience: o.targetAudience || 'new',
+        },
+        plan_key: o.planKey || null,
+        trial_days: Number(o.trialDays) || null,
+        active: o.active !== false,
+      }));
+      for (let i = 0; i < rows.length; i++){
+        const row = rows[i];
+        const local = REG.landingOffers[i];
+        if (row.id){
+          const r = await sb.from('landing_offers').update(row).eq('id', row.id);
+          if (r.error) throw r.error;
+        } else {
+          // العرض الافتراضي اللي البرنامج ولّده محليًا — أول حفظ بينشئه
+          const { id, ...body } = row;
+          const ins = await sb.from('landing_offers').insert(body).select('id');
+          if (ins.error) throw ins.error;
+          const newId = ins.data && ins.data[0] && ins.data[0].id;
+          if (newId && local) local.id = newId;   // نربطه بالسحابة
+        }
+      }
+
+      // امسح العروض اللي اتحذفت
+      const keep = REG.landingOffers.map(o => o.id).filter(Boolean);
+      const exo = await sb.from('landing_offers').select('id');
+      for (const r of (exo.data || [])){
+        if (!keep.includes(r.id)) await sb.from('landing_offers').delete().eq('id', r.id);
+      }
+    }
+
+    cache.lastError = null;
+    setStatus('saved');
+  }catch(e){
+    cache.lastError = e;
+    setStatus('error', e.message);
+    console.error('[عمارتنا/سحابة] فشل حفظ بيانات المنصة:', e);
+  }
+}
+
 window.saveRegistry = function(){
-  // بيانات المنصة بتتحدّث من لوحة المسؤول مباشرة — مفيش حاجة تتبعت هنا
+  clearTimeout(__regTimer);
+  __regTimer = setTimeout(pushRegistry, 600);
 };
 
 window.loadBuildingData = function(id){
