@@ -644,12 +644,12 @@ const CLOUD = {
         },
       })),
       // طبقة المنصة — الجولة ٣
-      plans: [], discountCoupons: [], landingOffers: [], landingBanners: [],
+      plans: [], discountCoupons: [], landingOffers: null, landingBanners: [],
       landingSettings: null, brandSettings: null, legalSettings: null,
       marketingCards: [], marketingLeads: [], messageTemplates: [],
       renewalRequests: [], revenueLedger: [], referralRewards: [],
       customerProposals: [], supportTickets: [], supportStaff: [],
-      teamTasks: [], versionHistory: [], sysActivityLog: [],
+      teamTasks: [], versionHistory: null, sysActivityLog: [],
       sysNotifications: [], deletedBuildings: [], demoBuildingId: null,
     };
 
@@ -806,12 +806,12 @@ function emptyRegistry(){
   return {
     sysOwner:{ username:'sys', name:'', paymentMethods:[], aiSettings:null,
                phoneCountry:'+20', phone:'', email:'' },
-    buildings:[], plans:[], discountCoupons:[], landingOffers:[], landingBanners:[],
+    buildings:[], plans:[], discountCoupons:[], landingOffers:null, landingBanners:[],
     landingSettings:null, brandSettings:null, legalSettings:null,
     marketingCards:[], marketingLeads:[], messageTemplates:[],
     renewalRequests:[], revenueLedger:[], referralRewards:[],
     customerProposals:[], supportTickets:[], supportStaff:[],
-    teamTasks:[], versionHistory:[], sysActivityLog:[],
+    teamTasks:[], versionHistory:null, sysActivityLog:[],
     sysNotifications:[], deletedBuildings:[], demoBuildingId:null,
   };
 }

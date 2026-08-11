@@ -164,6 +164,10 @@ window.loginHTML = function(){
   let html = __origLoginHTML.apply(this, arguments);
 
   html = html
+    .replace(
+      '<div class="login-logo"><div class="mark">',
+      '<div class="login-logo" style="cursor:pointer" onclick="goToLanding()" title="الصفحة الرئيسية"><div class="mark">'
+    )
     .replace('<label>اسم المستخدم</label>', '<label>رقم الموبايل أو الإيميل</label>')
     .replace('placeholder="مثال: admin أو shaqa1"', 'placeholder="01012345678"')
     .replace(
@@ -230,6 +234,13 @@ window.doSignup = async function(){
   if (agreeEl && agreeEl.type === 'checkbox' && !agreeEl.checked)
                 return showLoginError('لازم توافق على الشروط أولًا');
 
+  // مدة التجربة: من العرض الترويجي النشط لو موجود
+  let trialDays = 30, offer = null;
+  try{
+    offer = window.activeLandingOffer ? window.activeLandingOffer() : null;
+    if (offer && offer.trialDays) trialDays = Number(offer.trialDays) || 30;
+  }catch(e){}
+
   const btn = document.getElementById('suBtn');
   if (btn){ btn.disabled = true; btn.textContent = 'بيتم الإنشاء…'; }
 
@@ -259,7 +270,7 @@ window.doSignup = async function(){
       p_admin_name: adminName,
       p_phone_country: phoneCountry,
       p_phone: phone,
-      p_trial_days: 30,
+      p_trial_days: trialDays,
     });
     if (error) throw error;
 
@@ -270,7 +281,8 @@ window.doSignup = async function(){
     await establishSession(row.out_code);
     window.curPage = 'dashboard';
     renderRoot(); resetHistoryBase(); resetIdleTimer();
-    toast('تم إنشاء العمارة ✅ كود العمارة: ' + row.out_code);
+    toast('تم إنشاء العمارة ✅ كود العمارة: ' + row.out_code +
+          ' · تجربة مجانية ' + trialDays + ' يوم');
 
   }catch(e){
     showLoginError(e.message || 'حصلت مشكلة في إنشاء العمارة');
