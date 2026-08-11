@@ -244,6 +244,7 @@ function toApp(row, map, ctx){
     }
   }
   item.__uuid = row.id;   // بنحتفظ بيه للتحديث والحذف
+  if (row.__limited) item.__limited = true;   // بيانات عامة بس
   return item;
 }
 
@@ -292,7 +293,23 @@ async function fetchBuilding(buildingUuid, legacyId){
 
   for (const coll of order){
     const map = MAPS[coll];
-    const res = await sb.from(map.table).select('*').eq('building_id', buildingUuid);
+    let res = await sb.from(map.table).select('*').eq('building_id', buildingUuid);
+
+    // الساكن العادي مايقراش جدول الشقق كله — بياخد البيانات العامة
+    // من دالة units_public، وشقته هو بتيجي كاملة من الجدول.
+    if (coll === 'apartments'){
+      const pub = await sb.rpc('units_public', { b_id: buildingUuid });
+      if (!pub.error && pub.data){
+        const mine = new Map((res.data || []).map(r => [r.id, r]));
+        res = { data: pub.data.map(u => mine.get(u.id) || {
+          id: u.id, legacy_id: u.legacy_id, number: u.number,
+          block_name: u.block_name, floor: u.floor, type: u.type,
+          usage_type: u.usage_type, closed: u.closed,
+          owner_name: '', tenant_name: '', phone: '', email: '',
+          monthly_fee: 0, opening_balance: 0, __limited: true,
+        }), error: null };
+      }
+    }
     if (res.error) throw res.error;
 
     ctx.uuidOf[coll] = {}; ctx.legacyOf[coll] = {};
@@ -554,18 +571,23 @@ window.__cloudReady = false;
 window.CLOUD = {
 
   /* تسجيل الدخول */
-  async signIn(idOrEmail, password){
-    const email = toLoginEmail(idOrEmail);
+  async signIn(idOrEmail, password, country='+20'){
+    const email = toLoginEmail(idOrEmail, country);
     const { error } = await sb.auth.signInWithPassword({ email, password });
     if (error) throw error;
     await CLOUD.bootstrap();
   },
 
-  async signUp(idOrEmail, password, fullName){
-    const email = toLoginEmail(idOrEmail);
+  async signUp(idOrEmail, password, fullName, country='+20'){
+    const email = toLoginEmail(idOrEmail, country);
+    const isPhone = !String(idOrEmail).includes('@');
     const { error } = await sb.auth.signUp({
       email, password,
-      options:{ data:{ full_name:fullName || '', phone: idOrEmail.includes('@')?'':idOrEmail } }
+      options:{ data:{
+        full_name: fullName || '',
+        phone: isPhone ? idOrEmail : '',
+        phone_country: country,
+      }}
     });
     if (error) throw error;
   },
