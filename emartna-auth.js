@@ -11,6 +11,25 @@
    ============================================================ */
 
 const CLOUD_AUTH = { ready:false, user:null, session:null, buildings:[] };
+
+/* مناداة دوال البرنامج بشكل آمن (لو الاسم مش متاح في نطاق الموديول) */
+const app = new Proxy({}, {
+  get: (_, k) => (...args) => {
+    const fn = window[k];
+    if (typeof fn === 'function') return fn(...args);
+    console.warn('[عمارتنا/دخول] الدالة ' + String(k) + ' مش متاحة');
+    return undefined;
+  }
+});
+const showLoginError   = m => app.showLoginError(m);
+const toast            = m => app.toast(m);
+const renderRoot       = () => app.renderRoot();
+const resetHistoryBase = () => app.resetHistoryBase();
+const resetIdleTimer   = () => app.resetIdleTimer();
+const heroSkylineSVG   = a => app.heroSkylineSVG(a);
+const appLogoSVG       = a => app.appLogoSVG(a);
+const currentUser      = () => app.currentUser();
+const doSignup         = () => app.doSignup();
 window.CLOUD_AUTH = CLOUD_AUTH;
 
 /* انتظر طبقة البيانات */
@@ -72,7 +91,8 @@ async function establishSession(preferBuildingId){
 
 window.currentUser = function(){
   const s = __sess;
-  if (!s || s.type !== 'building' || !window.D) return null;
+  const D = window.D;
+  if (!s || s.type !== 'building' || !D) return null;
   const uid = s.authId;
   const u = (D.users || []).find(x => x.__authId === uid);
   if (u) return u;
@@ -99,7 +119,7 @@ window.cloudLogin = async function(idOrEmail, password){
     await window.CLOUD.signIn(id, password);
     await establishSession();
     const u = currentUser();
-    curPage = (__sess.type === 'sysowner') ? 'sysdash'
+    window.curPage = (__sess.type === 'sysowner') ? 'sysdash'
             : (u && u.role === 'admin') ? 'dashboard' : 'home';
     renderRoot(); resetHistoryBase(); resetIdleTimer();
   }catch(e){
@@ -248,7 +268,7 @@ window.doSignup = async function(){
     // ٣) ادخل
     window.__viewMode = 'login';
     await establishSession(row.out_code);
-    curPage = 'dashboard';
+    window.curPage = 'dashboard';
     renderRoot(); resetHistoryBase(); resetIdleTimer();
     toast('تم إنشاء العمارة ✅ كود العمارة: ' + row.out_code);
 

@@ -568,7 +568,7 @@ function setStatus(state, msg){
 
 window.__cloudReady = false;
 
-window.CLOUD = {
+const CLOUD = {
 
   /* تسجيل الدخول */
   async signIn(idOrEmail, password, country='+20'){
@@ -779,6 +779,8 @@ window.CLOUD = {
   _cache: cache,
   _sb: sb,
 };
+
+window.CLOUD = CLOUD;
 
 function normPhone(raw, country='+20'){
   let d = (raw || '').replace(/[^\d+]/g,'');
