@@ -296,7 +296,7 @@ tr:hover td{background:#faf8f2}
    ========================================================= */
 const REG_KEY='omaretna_registry_v2';
 const SESSION_KEY='omaretna_session_v2';
-let REG=null, D=null, activeBuildingId=null, curPage='dashboard';
+var REG=null, D=null, activeBuildingId=null, curPage='dashboard';
 
 function uid(){return Date.now()+'_'+Math.floor(Math.random()*99999)}
 function todayISO(){return new Date().toISOString().slice(0,10)}

@@ -611,22 +611,46 @@ window.CLOUD = {
     const bs = await sb.from('buildings').select('*').eq('is_deleted', false);
     if (bs.error) throw bs.error;
 
+    // REG لازم يبقى فيه كل الحقول اللي البرنامج بيتوقعها،
+    // وإلا دوال ensure* بتقع. الفاضي منها البرنامج بيملاه بنفسه.
     cache.registry = {
-      sysOwner: { username:'sys', paymentMethods:[] },
+      sysOwner: {
+        username: 'sys', name: 'مسؤول المنصة',
+        paymentMethods: [], aiSettings: null,
+        phoneCountry: '+20', phone: '', email: '',
+      },
       buildings: bs.data.map(b => ({
         id: b.code || b.id,
         __uuid: b.id,
         name: b.name,
         code: b.code,
         createdAt: b.created_at,
+        city: b.city || '',
+        country: b.country || 'مصر',
+        governorate: b.governorate || '',
+        address: b.address || '',
+        apartmentsCount: b.apartments_count || 0,
+        contactPhoneCountry: b.contact_phone_country || '+20',
+        contactPhone: b.contact_phone || '',
+        referralCode: b.referral_code || '',
+        referredBy: b.referred_by || null,
+        appliedCoupon: b.applied_coupon || null,
+        signupSource: b.signup_source || '',
         license: {
-          plan: b.plan_key,
-          start: b.license_start,
-          end: b.license_end,
+          plan:   b.plan_key,
+          start:  b.license_start,
+          end:    b.license_end,
           status: b.license_status,
         },
       })),
-      plans: [], renewalRequests: [], deletedBuildings: [], sysNotifications: [],
+      // طبقة المنصة — الجولة ٣
+      plans: [], discountCoupons: [], landingOffers: [], landingBanners: [],
+      landingSettings: null, brandSettings: null, legalSettings: null,
+      marketingCards: [], marketingLeads: [], messageTemplates: [],
+      renewalRequests: [], revenueLedger: [], referralRewards: [],
+      customerProposals: [], supportTickets: [], supportStaff: [],
+      teamTasks: [], versionHistory: [], sysActivityLog: [],
+      sysNotifications: [], deletedBuildings: [], demoBuildingId: null,
     };
 
     for (const b of bs.data){
@@ -776,9 +800,26 @@ function toLoginEmail(raw, country='+20'){
 
 /* ---- الدوال الأربعة اللي البرنامج بيناديها ---- */
 
+function emptyRegistry(){
+  return {
+    sysOwner:{ username:'sys', name:'', paymentMethods:[], aiSettings:null,
+               phoneCountry:'+20', phone:'', email:'' },
+    buildings:[], plans:[], discountCoupons:[], landingOffers:[], landingBanners:[],
+    landingSettings:null, brandSettings:null, legalSettings:null,
+    marketingCards:[], marketingLeads:[], messageTemplates:[],
+    renewalRequests:[], revenueLedger:[], referralRewards:[],
+    customerProposals:[], supportTickets:[], supportStaff:[],
+    teamTasks:[], versionHistory:[], sysActivityLog:[],
+    sysNotifications:[], deletedBuildings:[], demoBuildingId:null,
+  };
+}
+
 window.loadRegistry = async function(){
-  if (!cache.registry) await CLOUD.bootstrap();
-  window.REG = cache.registry || { buildings:[], plans:[], sysOwner:{} };
+  if (!cache.registry){
+    try{ await CLOUD.bootstrap(); }catch(e){ console.warn('[عمارتنا/سحابة]', e.message); }
+  }
+  window.REG = cache.registry || emptyRegistry();
+  return window.REG;
 };
 
 window.saveRegistry = function(){
