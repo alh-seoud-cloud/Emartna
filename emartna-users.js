@@ -436,3 +436,80 @@ window.findUserMatches = () => [];
 window.resetUserPassword = () =>
   showMessage('كلمات السر بقت في السحابة — الساكن بيستردها بنفسه من شاشة الدخول.');
 window.sysResetUserPassword = window.resetUserPassword;
+
+
+/* ============================================================
+   5) مطابقة شكل العمارة مع الوحدات الفعلية
+   ------------------------------------------------------------
+   بيحسب من الواقع: عدد الوحدات · المحلات · الأدوار · أسماء الأدوار
+   ============================================================ */
+
+window.syncBuildingShape = async function(silent){
+  const D = window.D;
+  if (!D) return;
+  const uuid = window.CLOUD._cache.buildingUuid[window.activeBuildingId];
+  if (!uuid) return;
+
+  try{
+    const { data, error } = await window.CLOUD._sb
+      .rpc('sync_building_shape', { p_building: uuid });
+    if (error) throw error;
+    const r = Array.isArray(data) ? data[0] : data;
+    if (!r) return;
+
+    await window.CLOUD.bootstrap();
+    window.D = window.loadBuildingData(window.activeBuildingId);
+    if (!silent){
+      renderContent();
+      toast(`تمت المطابقة: ${r.out_units} وحدة · ${r.out_shops} محل · ` +
+            `${r.out_floors} دور` +
+            (r.out_relabeled ? ` · صُحّح دور ${r.out_relabeled} وحدة` : ''));
+    }
+    return r;
+  }catch(e){
+    if (!silent) showMessage(e.message);
+  }
+};
+
+/* زرار المطابقة في شاشة بيانات العمارة */
+const __origPageBuilding = window.pageBuilding;
+if (typeof __origPageBuilding === 'function'){
+  window.pageBuilding = function(){
+    const html = __origPageBuilding.apply(this, arguments);
+    const D = window.D;
+    if (!D) return html;
+
+    const g = Number(D.building.groundFloorCount) || 4;
+    const p = Number(D.building.apartmentsPerFloor) || 4;
+    const units = (D.apartments || []).filter(a => !a.closed).length;
+    const shops = (D.apartments || []).filter(a => !a.closed &&
+                    a.type === 'shop' && Number(a.number) <= g).length;
+    const floors = units <= 0 ? 0
+                 : units <= g ? 1
+                 : 1 + Math.ceil((units - g) / p);
+
+    const declFloors = Number(D.building.floorsCount) || 0;
+    const declShops  = Number(D.building.groundShopsCount) || 0;
+    const mismatch = (declFloors && declFloors !== floors) || declShops !== shops;
+
+    const banner = mismatch ? `
+      <div class="card content-narrow mtop2" style="background:var(--tint-warn)">
+        <h3>⚠️ بيانات العمارة مش مطابقة للوحدات</h3>
+        <table class="mtop" style="width:100%;font-size:13px">
+          <tr><th></th><th>المكتوب</th><th>الواقع</th></tr>
+          <tr><td>عدد الأدوار</td>
+              <td>${declFloors || '—'}</td><td><b>${floors}</b></td></tr>
+          <tr><td>عدد المحلات</td>
+              <td>${declShops}</td><td><b>${shops}</b></td></tr>
+        </table>
+        <p class="small mtop">
+          شكل العمارة بيترسم من الوحدات الفعلية، فالأرقام دي بس هي اللي محتاجة تتظبط.
+        </p>
+        <button class="btn primary mtop" onclick="syncBuildingShape()">
+          🔄 طابق الأرقام مع الوحدات
+        </button>
+      </div>` : '';
+
+    return html + banner;
+  };
+}
