@@ -57,18 +57,33 @@ async function establishSession(preferBuildingId){
   if (!user){ __sess = null; return null; }
   CLOUD_AUTH.user = user;
 
-  // مسؤول منصة؟
-  const pa = await sb.from('platform_admins').select('user_id').eq('user_id', user.id).maybeSingle();
-  const isPlatform = !!(pa.data);
+  // مسؤول منصة؟ موظف دعم؟
+  const plat = window.PLATFORM_AUTH
+    ? await window.PLATFORM_AUTH.resolve()
+    : null;
+  CLOUD_AUTH.isPlatformAdmin = !!(plat && plat.type === 'sysowner');
+  CLOUD_AUTH.supportStaff    = plat && plat.type === 'support' ? plat.staff : null;
 
   const mb = await sb.rpc('my_buildings');
   CLOUD_AUTH.buildings = mb.data || [];
 
   await window.CLOUD.bootstrap();
 
-  if (isPlatform && !preferBuildingId && !CLOUD_AUTH.buildings.length){
-    __sess = { type:'sysowner' };
+  // موظف الدعم مالوش عمارة — لوحته منفصلة
+  if (plat && plat.type === 'support'){
+    __sess = { type:'support', staff: plat.staff,
+               staffUsername: plat.staff.username };
+    if (window.PLATFORM) { try{ await window.PLATFORM.load(); }catch(e){} }
     return __sess;
+  }
+
+  // صاحب البرنامج: لو مالوش عمارة → لوحة المنصة
+  if (plat && plat.type === 'sysowner'){
+    if (window.PLATFORM) { try{ await window.PLATFORM.load(); }catch(e){} }
+    if (!preferBuildingId && !CLOUD_AUTH.buildings.length){
+      __sess = { type:'sysowner' };
+      return __sess;
+    }
   }
 
   const list = CLOUD_AUTH.buildings;
@@ -91,6 +106,7 @@ async function establishSession(preferBuildingId){
 
 window.currentUser = function(){
   const s = __sess;
+  if (s && s.type === 'support') return null;
   const D = window.D;
   if (!s || s.type !== 'building' || !D) return null;
   const uid = s.authId;
@@ -101,7 +117,28 @@ window.currentUser = function(){
 };
 
 window.isSysOwner = () => !!(__sess && __sess.type === 'sysowner');
-window.isSupportStaff = () => false;
+
+/* صاحب البرنامج ممكن يكون رئيس اتحاد كمان — الزرار بيبان له */
+window.isSysOwnerAvailable = function(){
+  return !!(CLOUD_AUTH.user && CLOUD_AUTH.isPlatformAdmin);
+};
+
+window.enterSysOwner = async function(){
+  if (!CLOUD_AUTH.isPlatformAdmin) return;
+  __sess = { type:'sysowner' };
+  if (window.PLATFORM) { try{ await window.PLATFORM.load(); }catch(e){} }
+  window.curPage = 'sysdash';
+  renderRoot(); resetHistoryBase();
+};
+
+window.exitSysOwner = async function(){
+  const list = CLOUD_AUTH.buildings || [];
+  if (!list.length) return;
+  __sess = { type:'building', buildingId:list[0].code,
+             username:CLOUD_AUTH.user.id, authId:CLOUD_AUTH.user.id };
+  window.curPage = 'dashboard';
+  renderRoot(); resetHistoryBase();
+};
 
 /* ============================================================
    3) الدخول
