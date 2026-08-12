@@ -209,7 +209,8 @@ window.doSignup = async function(){
 
   const name = gt('suName');
   const communityType = g('suCommunityType') || 'single';
-  const count = communityType === 'compound' ? 0 : Math.min(24, Number(g('suCount') || 12));
+  const count = communityType === 'compound' ? 0
+              : Math.max(0, Math.min(200, Number(g('suCount') || 12)));
   const groundCount = Math.max(1, Number(g('suGroundCount') || 4));
   const groundShops = Math.min(groundCount, Number(g('suGroundShops') || 0));
   const perFloor = Math.max(1, Number(g('suGroundCount') || 4));
