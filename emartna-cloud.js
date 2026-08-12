@@ -61,6 +61,7 @@ const MAPS = {
     fields: {
       id:'legacy_id', type:'type', amount:'amount', month:'month',
       date:'date', note:'note', project:'project',
+      apartmentLabel:'apartment_label',
       fromPaymentRequestId:'from_payment_request_id', createdAt:'created_at',
     },
     refs: {
@@ -291,9 +292,15 @@ async function fetchBuilding(buildingUuid, legacyId){
                  'announcements','suggestions','paymentRequests','notifications',
                  'buildingChat','activityLog'];
 
-  for (const coll of order){
+  // نجيب كل الجداول مرة واحدة بالتوازي — أسرع بكتير من واحد ورا التاني
+  const fetched = await Promise.all(
+    order.map(coll => sb.from(MAPS[coll].table).select('*').eq('building_id', buildingUuid))
+  );
+
+  for (let oi = 0; oi < order.length; oi++){
+    const coll = order[oi];
     const map = MAPS[coll];
-    let res = await sb.from(map.table).select('*').eq('building_id', buildingUuid);
+    let res = fetched[oi];
 
     // الساكن العادي مايقراش جدول الشقق كله — بياخد البيانات العامة
     // من دالة units_public، وشقته هو بتيجي كاملة من الجدول.
@@ -321,9 +328,22 @@ async function fetchBuilding(buildingUuid, legacyId){
     D[coll] = res.data.map(r => toApp(r, map, ctx));
   }
 
-  // فئات المصروفات محفوظة كنصوص في البرنامج
-  const cats = await sb.from('expense_categories')
-    .select('name').eq('building_id', buildingUuid).order('sort_order');
+  // اسم الدور لازم يطابق صيغة البرنامج بالظبط ("الدور الأول" مش "الأول")
+  // وإلا شكل العمارة مابيعرفش يجمّع الوحدات.
+  (D.apartments || []).forEach(a => {
+    const f = String(a.floor || '').trim();
+    if (f && !f.startsWith('الدور')) a.floor = 'الدور ' + f;
+  });
+
+  // فئات المصروفات + العضويات + الدعوات — كلهم مع بعض
+  const [cats, mem, inv] = await Promise.all([
+    sb.from('expense_categories').select('name')
+      .eq('building_id', buildingUuid).order('sort_order'),
+    sb.from('memberships').select('id,user_id,apartment_id,role,active')
+      .eq('building_id', buildingUuid),
+    sb.from('invitations').select('*')
+      .eq('building_id', buildingUuid).eq('status','pending'),
+  ]);
   D.expenseCategories = (cats.data || []).map(c => c.name);
 
   // ---- المستخدمين ----
@@ -331,9 +351,6 @@ async function fetchBuilding(buildingUuid, legacyId){
   //   1) العضويات = ناس عملوا حساب فعلًا
   //   2) الدعوات   = ناس رئيس الاتحاد سجّل أرقامهم وبيستنوا
   // كل صف فيه inviteStatus عشان الشاشة تعرف تعرض الحالة.
-
-  const mem = await sb.from('memberships')
-    .select('id,user_id,apartment_id,role,active').eq('building_id', buildingUuid);
 
   const authIds = [...new Set((mem.data||[]).map(m => m.user_id))];
   const profiles = {};
@@ -367,9 +384,6 @@ async function fetchBuilding(buildingUuid, legacyId){
   });
 
   // الدعوات اللي لسه مستنية
-  const inv = await sb.from('invitations')
-    .select('*').eq('building_id', buildingUuid).eq('status','pending');
-
   (inv.data || []).forEach(v => {
     const apLegacy = apOf(v.apartment_id);
     const ap = apLegacy ? D.apartments.find(a => a.id === apLegacy) : null;
@@ -683,14 +697,22 @@ const CLOUD = {
       sysNotifications: [], deletedBuildings: [], demoBuildingId: null,
     };
 
-    for (const b of bs.data){
+    // مسؤول المنصة ممكن يشوف عشرات العمارات — مانحمّلش بياناتهم كلها
+    // عند الدخول. بنحمّل بس العمارات اللي هو عضو فيها فعلًا.
+    const mine = await sb.from('memberships')
+      .select('building_id').eq('user_id', user.id).eq('active', true);
+    const myIds = new Set((mine.data || []).map(m => m.building_id));
+
+    const toLoad = bs.data.filter(b => myIds.has(b.id));
+
+    await Promise.all(toLoad.map(async b => {
       const legacyId = b.code || b.id;
       try{
         cache.buildings[legacyId] = await fetchBuilding(b.id, legacyId);
       }catch(e){
         console.warn('[عمارتنا/سحابة] تعذّر تحميل عمارة', b.name, e.message);
       }
-    }
+    }));
 
     window.__cloudReady = true;
     return true;
@@ -793,6 +815,16 @@ const CLOUD = {
         building:    row.out_building,
       } : null;
     },
+  },
+
+  /* تحميل عمارة عند الطلب — لمسؤول المنصة */
+  async loadBuilding(codeOrUuid){
+    const b = (cache.registry?.buildings || []).find(
+      x => x.id === codeOrUuid || x.__uuid === codeOrUuid || x.code === codeOrUuid);
+    if (!b) throw new Error('العمارة مش موجودة');
+    if (cache.buildings[b.id]) return cache.buildings[b.id];
+    cache.buildings[b.id] = await fetchBuilding(b.__uuid, b.id);
+    return cache.buildings[b.id];
   },
 
   status(){
