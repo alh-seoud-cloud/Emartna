@@ -371,7 +371,9 @@ async function fetchBuilding(buildingUuid, legacyId){
       id: m.id,
       username: apLegacy || (p.phone_e164 || '').replace('+','') || m.user_id.slice(0,8),
       name: p.full_name || (ap ? ap.ownerName : ''),
-      role: m.role === 'admin' ? 'admin' : (m.role === 'tenant' ? 'tenant' : 'owner'),
+      role: m.role || 'owner',
+      permissions: m.permissions || null,
+      roleTemplate: m.role_template || null,
       apartmentId: apLegacy,
       phoneCountry: p.phone_country || '+20',
       phone: p.phone || '',
@@ -392,7 +394,8 @@ async function fetchBuilding(buildingUuid, legacyId){
       id: 'inv_' + v.id,
       username: apLegacy || v.phone_e164 || v.email || '',
       name: ap ? ap.ownerName : '',
-      role: v.role === 'admin' ? 'admin' : (v.role === 'tenant' ? 'tenant' : 'owner'),
+      role: v.role || 'owner',
+      permissions: v.permissions || null,
       apartmentId: apLegacy,
       phoneCountry: v.phone_country || '+20',
       phone: v.phone || '',
@@ -722,7 +725,8 @@ const CLOUD = {
   invites: {
 
     /* دعوة واحدة لشقة */
-    async create(legacyBuildingId, { apartmentId, phone, phoneCountry='+20', email, role='owner' }){
+    async create(legacyBuildingId, { apartmentId, phone, phoneCountry='+20',
+                                     email, role='owner', permissions=null }){
       const bUuid = cache.buildingUuid[legacyBuildingId];
       if (!bUuid) throw new Error('العمارة مش محمّلة');
       if (!phone && !email) throw new Error('لازم رقم موبايل أو إيميل');
@@ -739,6 +743,7 @@ const CLOUD = {
         phone_e164: phone ? normPhone(phone, phoneCountry) : null,
         email: email || null,
         role,
+        permissions,
       }).select().single();
       if (error) throw error;
       return data;

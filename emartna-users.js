@@ -513,3 +513,257 @@ if (typeof __origPageBuilding === 'function'){
     return html + banner;
   };
 }
+
+
+/* ============================================================
+   6) نظام الصلاحيات
+   ------------------------------------------------------------
+   أدوار العمارة:
+     admin      ⭐ رئيس اتحاد   — كل الأقسام
+     accountant 💰 محاسب        — الماليات بس
+     manager    📋 إداري        — كل حاجة ما عدا الماليات
+     owner      🏠 صاحب شقة
+     tenant     🔑 مستأجر
+   + صلاحيات مخصصة لكل شخص على حدة
+   ============================================================ */
+
+const PERM_GROUPS = [
+  { key:'building', icon:'🏢', label:'العمارة والملاك',
+    note:'الشقق · المستخدمين · المقاولين · الصيانة' },
+  { key:'finance',  icon:'💰', label:'الماليات',
+    note:'التحصيل · المصروفات · الخزينة · المشاريع' },
+  { key:'engage',   icon:'💬', label:'التواصل مع الملاك',
+    note:'المحادثة · الاستطلاعات · الإعلانات · الاجتماعات' },
+  { key:'settings', icon:'⚙️', label:'الإعدادات والأدوات',
+    note:'الإعدادات · الرخصة · سجل النشاط · الدعم' },
+];
+
+const CLOUD_ROLES = {
+  admin:      { label:'⭐ رئيس اتحاد العمارة', hint:'كل الصلاحيات', perms:null },
+  accountant: { label:'💰 محاسب العمارة', hint:'الماليات بس',
+                perms:{ building:false, finance:true,  engage:false, settings:false } },
+  manager:    { label:'📋 إداري العمارة', hint:'كل حاجة ما عدا الماليات',
+                perms:{ building:true,  finance:false, engage:true,  settings:true } },
+  owner:      { label:'🏠 صاحب الشقة/المحل', hint:'حسابه وشقته', perms:null },
+  tenant:     { label:'🔑 مستأجر', hint:'التواصل بس',
+                perms:{ building:false, finance:false, engage:true, settings:false } },
+};
+
+window.CLOUD_ROLES = CLOUD_ROLES;
+window.PERM_GROUPS = PERM_GROUPS;
+
+/* مودال تعديل المستخدم — بالأدوار والصلاحيات */
+window.openUserModal = function(id){
+  const D = window.D;
+  const u = id ? (D.users||[]).find(x => x.id === id) : null;
+  const me = currentUser();
+
+  if (!u){
+    return openModal(`
+      <h3>+ مستخدم إداري إضافي</h3>
+      <p class="small mtop">
+        اكتب رقم موبايله واختار صلاحياته — هيوصله كود دعوة ويسجّل بنفسه.
+      </p>
+      <div class="field2 mtop"><label>الاسم</label>
+        <input id="nuName" placeholder="محمد أحمد"></div>
+      <div class="field2"><label>رقم الموبايل</label>
+        <input id="nuPhone" placeholder="01012345678"></div>
+      <div class="field2"><label>الصلاحية</label>
+        <select id="nuRole" onchange="applyRoleTemplate('nu')">
+          ${['admin','accountant','manager'].map(k =>
+            `<option value="${k}">${CLOUD_ROLES[k].label} — ${CLOUD_ROLES[k].hint}</option>`
+           ).join('')}
+        </select></div>
+      <div id="nuPerms">${permCheckboxes('nu', CLOUD_ROLES.admin.perms)}</div>
+      <div class="modal-actions">
+        <button class="btn primary" onclick="createAdminInvite()">📨 ولّد الدعوة</button>
+        <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+      </div>`);
+  }
+
+  const isSelf = me && u.id === me.id;
+  const ap = u.apartmentId ? D.apartments.find(a => a.id === u.apartmentId) : null;
+  const perms = u.permissions || (CLOUD_ROLES[u.role] || {}).perms;
+
+  openModal(`
+    <h3>تعديل صلاحيات</h3>
+    <div class="card mtop" style="background:var(--tint)">
+      <p class="small"><b>${esc(u.name || '-')}</b>
+        ${ap ? ` · ${esc(unitLabel(ap))}` : ''}
+        · ${esc(phoneFull(u.phoneCountry, u.phone) || '-')}</p>
+      <p class="small" style="color:var(--muted)">
+        ${u.inviteStatus === 'pending' ? '⏳ لسه مسجّلش' : '✅ عنده حساب'}</p>
+    </div>
+
+    <div class="field2 mtop"><label>الصلاحية</label>
+      <select id="uRole" ${isSelf?'disabled':''} onchange="applyRoleTemplate('u')">
+        ${Object.entries(CLOUD_ROLES).map(([k,v]) =>
+          `<option value="${k}" ${u.role===k?'selected':''}>${v.label} — ${v.hint}</option>`
+         ).join('')}
+      </select>
+      ${isSelf ? '<p class="small" style="color:var(--muted)">مش هتقدر تغيّر صلاحيتك بنفسك</p>' : ''}
+    </div>
+
+    <div id="uPerms">${permCheckboxes('u', perms)}</div>
+
+    <div class="field2"><label class="checkline">
+      <input type="checkbox" id="uActive" ${u.active!==false?'checked':''}
+             ${isSelf?'disabled':''}> الحساب نشط</label></div>
+
+    <div class="card mtop" style="background:var(--tint-warn)">
+      <p class="small">🔐 كلمة السر سرّ صاحبها — إنت مش بتشوفها ولا بتحددها.</p>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn primary" onclick="saveUser('${u.id}')">حفظ</button>
+      <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+    </div>`);
+};
+
+function permCheckboxes(prefix, perms){
+  const roleSel = document.getElementById(prefix + 'Role');
+  const role = roleSel ? roleSel.value : 'admin';
+  if (role === 'owner' || role === 'tenant'){
+    return `<p class="small" style="color:var(--muted)">
+      ${CLOUD_ROLES[role].label} — صلاحياته ثابتة على حسابه وشقته.</p>`;
+  }
+  return `
+    <div class="card mtop" style="background:var(--tint)">
+      <p class="small"><b>الأقسام المسموحة</b> — تقدر تظبطها زي ما تحب</p>
+      ${PERM_GROUPS.map(g => {
+        const on = !perms || perms[g.key] !== false;
+        return `<label class="checkline mtop">
+          <input type="checkbox" id="${prefix}P_${g.key}" ${on?'checked':''}>
+          ${g.icon} ${g.label}
+          <span class="small" style="color:var(--muted)"> — ${g.note}</span>
+        </label>`;
+      }).join('')}
+    </div>`;
+}
+
+window.applyRoleTemplate = function(prefix){
+  const role = document.getElementById(prefix + 'Role').value;
+  const box  = document.getElementById(prefix + 'Perms');
+  if (box) box.innerHTML = permCheckboxes(prefix, (CLOUD_ROLES[role]||{}).perms);
+};
+
+function readPerms(prefix){
+  const role = document.getElementById(prefix + 'Role').value;
+  if (role === 'admin') return null;              // كل الصلاحيات
+  if (role === 'owner' || role === 'tenant')
+    return (CLOUD_ROLES[role] || {}).perms || null;
+  const out = { home:true };
+  PERM_GROUPS.forEach(g => {
+    const el = document.getElementById(prefix + 'P_' + g.key);
+    out[g.key] = el ? el.checked : false;
+  });
+  return out;
+}
+
+window.saveUser = async function(id){
+  const D = window.D;
+  const u = (D.users||[]).find(x => x.id === id);
+  if (!u) return closeModal();
+
+  const roleEl = document.getElementById('uRole');
+  const actEl  = document.getElementById('uActive');
+  const role   = roleEl && !roleEl.disabled ? roleEl.value : u.role;
+  const active = actEl && !actEl.disabled ? actEl.checked : u.active;
+  const perms  = roleEl && !roleEl.disabled ? readPerms('u') : (u.permissions || null);
+
+  if (u.role === 'admin' && role !== 'admin'){
+    const admins = (D.users||[]).filter(x => x.role==='admin' && x.active!==false);
+    if (admins.length <= 1) return showMessage('مينفعش تشيل آخر رئيس اتحاد نشط');
+  }
+
+  try{
+    if (u.__membershipId){
+      const r = await window.CLOUD._sb.from('memberships')
+        .update({ role, active, permissions: perms }).eq('id', u.__membershipId);
+      if (r.error) throw r.error;
+    } else if (u.__inviteId){
+      const r = await window.CLOUD._sb.from('invitations')
+        .update({ role, permissions: perms }).eq('id', u.__inviteId);
+      if (r.error) throw r.error;
+    }
+    if (u.role !== role)
+      logActivity('تغيير صلاحية', `${u.name}: ${u.role} → ${role}`);
+    closeModal();
+    await window.refreshUsers();
+    toast('تم الحفظ');
+  }catch(e){ showMessage(e.message); }
+};
+
+window.createAdminInvite = async function(){
+  const name  = (document.getElementById('nuName').value || '').trim();
+  const phone = (document.getElementById('nuPhone').value || '').trim();
+  const role  = document.getElementById('nuRole').value;
+  const perms = readPerms('nu');
+  if (!name)  return showMessage('اكتب الاسم');
+  if (!phone) return showMessage('اكتب رقم الموبايل');
+
+  try{
+    const inv = await window.CLOUD.invites.create(window.activeBuildingId,
+      { phone, phoneCountry:'+20', role, permissions: perms });
+    closeModal();
+    await window.refreshUsers();
+    openModal(`
+      <h3>📨 دعوة ${esc(name)}</h3>
+      <div class="card mtop" style="background:var(--tint-success);text-align:center">
+        <p class="small">${CLOUD_ROLES[role].label}</p>
+        <h2 style="letter-spacing:6px;font-family:monospace">${esc(inv.invite_code)}</h2>
+      </div>
+      <p class="small mtop">ابعتله الكود ورابط الانضمام، وهو يسجّل بنفسه.</p>
+      <div class="modal-actions">
+        <button class="btn primary" onclick="closeModal()">تمام</button>
+      </div>`);
+  }catch(e){ showMessage(e.message); }
+};
+
+/* شارة الدور في الجدول */
+window.roleBadge = function(role){
+  const r = CLOUD_ROLES[role];
+  if (!r) return '-';
+  const cls = role==='admin' ? 'b' : role==='accountant' ? 'g'
+            : role==='manager' ? 'y' : 'n';
+  return `<span class="badge ${cls}">${r.label}</span>`;
+};
+
+
+/* ------------------------------------------------------------
+   القائمة الجانبية تحترم الدور والصلاحيات
+   البرنامج كان بيفرّق بين admin وأي حد تاني.
+   دلوقتي: admin · accountant · manager → قائمة الإدارة
+           owner · tenant               → قائمة الساكن
+   ------------------------------------------------------------ */
+
+const STAFF_ROLES = ['admin', 'accountant', 'manager'];
+
+window.visibleNavGroups = function(u){
+  if (!u) return [];
+  const isStaff = STAFF_ROLES.includes(u.role);
+  const groups = isStaff ? window.ADMIN_NAV_GROUPS : window.OWNER_NAV_GROUPS;
+  if (!groups) return [];
+
+  const isCompound = window.D && window.D.building &&
+                     window.D.building.communityType === 'compound';
+
+  return groups
+    .filter(g => hasGroupPermission(u, g.key))
+    .map(g => ({ ...g, items: g.items.filter(it =>
+        it[0] !== 'blocks' || isCompound) }));
+};
+
+function hasGroupPermission(u, key){
+  if (key === 'home') return true;
+  const p = u.permissions || (CLOUD_ROLES[u.role] || {}).perms;
+  if (!p) return true;                 // مفيش قيود = كل الصلاحيات
+  return p[key] !== false;
+}
+window.hasGroupPermission = hasGroupPermission;
+
+/* البرنامج بيستخدم isAdmin في 53 موضع — نوسّعها للموظفين */
+window.isBuildingStaff = function(u){
+  const usr = u || currentUser();
+  return !!(usr && STAFF_ROLES.includes(usr.role));
+};

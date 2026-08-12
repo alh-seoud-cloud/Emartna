@@ -5620,19 +5620,19 @@ function submitRenewalRequest(){
   closeModal(); toast('تم إرسال طلب التجديد، هيراجعه مسؤول البرنامج قريبًا'); renderContent();
 }
 /* ---------- هيكل تطبيق العمارة ---------- */
-const ADMIN_NAV_GROUPS=[
+var ADMIN_NAV_GROUPS=[
   {key:'home',icon:'🏠',label:'الرئيسية',items:[['dashboard','📊','لوحة التحكم'],['analytics','📈','التحليلات والاتجاهات']]},
-  {key:'building',icon:'🏢',label:'العمارة والملاك',items:[['building','🏢','بيانات العمارة'],['blocks','🏘️','مباني وفلل الكمبوند'],['apartments','🚪','الشقق والملاك'],['users','👥','المستخدمون'],['vendors','🛠️','مقاولون وموردون'],['maintenance','🔧','بلاغات الصيانة']]},
+  {key:'building',icon:'🏢',label:'العمارة والملاك',items:[['building','🏢','بيانات العمارة'],['blocks','🏘️','مباني وفلل الكمبوند'],['apartments','🚪','الشقق والملاك'],['users','👥','المستخدمون'],['vendors','🛠️','مقاولون وموردون'],['maintenance','🔧','بلاغات الصيانة'],['floors','🏗️','تقرير الأدوار']]},
   {key:'finance',icon:'💰',label:'الماليات',items:[['collections','🧾','التحصيل والدفعات'],['paymentRequests','📥','طلبات دفع من الملاك'],['projects','🏗️','المشاريع'],['treasury','🏦','الخزينة والحسابات'],['expenses','💳','المصروفات'],['expenseCategories','📋','بنود الصرف'],['distweights','⚖️','نسب توزيع المصروفات']]},
   {key:'engage',icon:'💬',label:'التواصل مع الملاك',items:[['chat','💬','محادثة السكان'],['polls','🗳️','استطلاعات الرأي'],['announcements','📢','الإعلانات'],['suggestions','💡','المقترحات'],['meetings','🗓️','الاجتماعات']]},
   {key:'settings',icon:'⚙️',label:'الإعدادات والأدوات',items:[['settings','⚙️','الإعدادات'],['aireports','🤖','تقارير الذكاء الاصطناعي'],['license','🪪','الرخصة والاشتراك'],['referral','🎁','برنامج الإحالة'],['activity','📜','سجل النشاط'],['myproposals','💡','مقترحاتي لصاحب البرنامج'],['support','🎫','الدعم الفني'],['whatsnew','🆕','ما الجديد']]},
 ];
-const OWNER_NAV_GROUPS=[
+var OWNER_NAV_GROUPS=[
   {key:'home',icon:'🏠',label:'الرئيسية',items:[['home','🏠','حسابي وشقتي']]},
   {key:'engage',icon:'💬',label:'التواصل مع العمارة',items:[['chat','💬','محادثة السكان'],['expenses','💳','مصروفات العمارة'],['polls','🗳️','استطلاعات الرأي'],['announcements','📢','الإعلانات'],['suggestions','💡','المقترحات'],['meetings','🗓️','الاجتماعات'],['maintenance','🔧','بلاغات الصيانة']]},
   {key:'profile',icon:'👤',label:'حسابي',items:[['profile','👤','بياناتي'],['paymentRequests','💸','تسجيل دفعة'],['myproposals','💡','مقترحاتي لصاحب البرنامج']]},
 ];
-const SYS_NAV_GROUPS=[
+var SYS_NAV_GROUPS=[
   {key:'overview',icon:'🏙️',label:'نظرة عامة',items:[['sysdash','🏙️','كل العمارات'],['sysusers','👥','كل المستخدمين'],['sysdailysummary','📊','الملخص اليومي'],['sysreports','📈','تقارير الفترات'],['sysactivitylog','📜','سجل نشاطي']]},
   {key:'marketing',icon:'📣',label:'التسويق والمبيعات',items:[['syspipeline','🎯','قمع المبيعات'],['sysleads','📋','أرقام تسويقية'],['sysoffers','🎉','عروض العملاء الجدد'],['sysreferrals','🎁','برنامج الإحالة'],['syscoupons','🎟️','أكواد الخصم'],['sysmessages','💬','قوالب الرسائل']]},
   {key:'subscriptions',icon:'🪪',label:'الاشتراكات والتراخيص',items:[['syslicenses','🪪','التراخيص والاشتراكات'],['sysrenewals','📥','طلبات التجديد'],['sysplans','💲','خطط الاشتراك والأسعار'],['syslicensehistory','📜','سجل حركات الاشتراكات'],['sysrevenue','💰','كشف حساب التحصيلات']]},
@@ -5749,13 +5749,13 @@ function renderContent(){
   if(pg&&!hasGroupPermission(u,pg)){curPage=defaultPage;toast('ليس لديك صلاحية الوصول لهذه الشاشة');}
   window.__navExpandedGroup=findGroupKeyForPage(visibleNavGroups(u),curPage)||window.__navExpandedGroup;
   const nc=document.getElementById('navContainer'); if(nc)nc.innerHTML=renderNavGroups(visibleNavGroups(u));
-  const titleMap={dashboard:'لوحة التحكم',building:'بيانات العمارة',blocks:'مباني وفلل الكمبوند',apartments:'الشقق والملاك',collections:'التحصيل والدفعات',paymentRequests:'طلبات الدفع',projects:'المشاريع',treasury:'الخزينة والحسابات',expenses:'المصروفات',expenseCategories:'بنود الصرف',distweights:'نسب توزيع المصروفات',polls:'استطلاعات الرأي',announcements:'الإعلانات',suggestions:'المقترحات',meetings:'الاجتماعات',chat:'محادثة السكان',users:'المستخدمون',vendors:'مقاولون وموردون',maintenance:'بلاغات الصيانة',analytics:'التحليلات والاتجاهات',settings:'الإعدادات',aireports:'تقارير الذكاء الاصطناعي',license:'الرخصة والاشتراك',referral:'برنامج الإحالة',activity:'سجل النشاط',myproposals:'مقترحاتي لصاحب البرنامج',support:'الدعم الفني',whatsnew:'ما الجديد',home:'حسابي وشقتي',profile:'بياناتي'};
+  const titleMap={dashboard:'لوحة التحكم',building:'بيانات العمارة',blocks:'مباني وفلل الكمبوند',apartments:'الشقق والملاك',collections:'التحصيل والدفعات',paymentRequests:'طلبات الدفع',projects:'المشاريع',treasury:'الخزينة والحسابات',expenses:'المصروفات',expenseCategories:'بنود الصرف',distweights:'نسب توزيع المصروفات',polls:'استطلاعات الرأي',announcements:'الإعلانات',suggestions:'المقترحات',meetings:'الاجتماعات',chat:'محادثة السكان',users:'المستخدمون',vendors:'مقاولون وموردون',maintenance:'بلاغات الصيانة',floors:'تقرير الأدوار',analytics:'التحليلات والاتجاهات',settings:'الإعدادات',aireports:'تقارير الذكاء الاصطناعي',license:'الرخصة والاشتراك',referral:'برنامج الإحالة',activity:'سجل النشاط',myproposals:'مقترحاتي لصاحب البرنامج',support:'الدعم الفني',whatsnew:'ما الجديد',home:'حسابي وشقتي',profile:'بياناتي'};
   const t=document.getElementById('pageTitle'); if(t)t.textContent=titleMap[curPage]||'';
   const c=document.getElementById('content');
   const fn={
     dashboard:pageAdminDashboard,building:pageBuilding,apartments:pageApartments,collections:pageCollections,paymentRequests:pagePaymentRequests,projects:pageProjects,
     treasury:pageTreasury,expenses:pageExpenses,expenseCategories:pageExpenseCategories,distweights:pageDistributionWeights,polls:pagePolls,announcements:pageAnnouncements,suggestions:pageSuggestions,meetings:pageMeetings,users:pageUsers,
-    settings:pageSettings,aireports:pageAIReports,blocks:pageCompoundBlocks,vendors:pageVendors,maintenance:pageMaintenance,analytics:pageAnalytics,chat:pageBuildingChat,license:pageLicense,referral:pageReferralProgram,activity:pageActivity,myproposals:pageMyProposals,support:pageMySupportTickets,whatsnew:pageWhatsNew,home:pageOwnerHome,profile:pageProfile
+    settings:pageSettings,aireports:pageAIReports,blocks:pageCompoundBlocks,vendors:pageVendors,maintenance:pageMaintenance,floors:()=>pageFloorsReport(),analytics:pageAnalytics,chat:pageBuildingChat,license:pageLicense,referral:pageReferralProgram,activity:pageActivity,myproposals:pageMyProposals,support:pageMySupportTickets,whatsnew:pageWhatsNew,home:pageOwnerHome,profile:pageProfile
   }[curPage]||pageAdminDashboard;
   c.innerHTML=(u.role==='admin'?licenseBannerHTML():'')+fn(u);
   const bw=document.getElementById('notifBellWrap'); if(bw)bw.innerHTML=renderNotifBell();
@@ -9257,6 +9257,8 @@ document.addEventListener('DOMContentLoaded',async()=>{
 <script type="module" src="emartna-cloud.js"></script>
 <script type="module" src="emartna-auth.js"></script>
 <script type="module" src="emartna-users.js"></script>
+<script type="module" src="emartna-recycle.js"></script>
+<script type="module" src="emartna-floors.js"></script>
 
 </body>
 </html>
