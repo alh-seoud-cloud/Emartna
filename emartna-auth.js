@@ -176,6 +176,14 @@ window.cloudLogin = async function(idOrEmail, password){
 const __origLogout = window.logout;
 window.logout = async function(){
   try{ clearTimeout(window.__idleTimer); clearTimeout(window.__idleWarnTimer); }catch(e){}
+
+  // عمارة تجريبية؟ تتمسح بكل بياناتها
+  if (window.isDemoSession && window.isDemoSession()){
+    try{ await window.CLOUD._sb.rpc('drop_my_demo_building'); }catch(e){}
+    window.__isDemoSession = false;
+    try{ sessionStorage.removeItem('emartna_demo'); }catch(e){}
+  }
+
   try{ await window.CLOUD.signOut(); }catch(e){}
   __sess = null;
   window.D = null; window.activeBuildingId = null;
@@ -183,9 +191,56 @@ window.logout = async function(){
   renderRoot(); resetHistoryBase();
 };
 
-/* الحساب التجريبي */
-window.loginAsDemo = async function(){
-  showLoginError('الحسابات التجريبية اتوقفت مؤقتًا في النسخة السحابية. أنشئ حساب جديد — التجربة مجانية ٣٠ يوم.');
+/* ============================================================
+   الحسابات التجريبية
+   ------------------------------------------------------------
+   الزائر بياخد عمارة تجريبية مستقلة بالكامل، مليانة بيانات.
+   أي تعديل بيعمله بيتمسح لما يخرج — زي النسخة المحلية بالظبط.
+   بنستخدم حساب مجهول من Supabase عشان مايحتاجش يسجّل.
+   ============================================================ */
+
+window.loginAsDemo = async function(role){
+  const btn = document.querySelector(
+    role === 'admin' ? '.demo-btn-admin' : '.demo-btn-owner');
+  const label = btn ? btn.textContent : '';
+  if (btn){ btn.disabled = true; btn.textContent = 'بيجهّز العمارة…'; }
+
+  try{
+    const sb = window.CLOUD._sb;
+
+    // حساب مؤقت للزائر
+    let { data:{ user } } = await sb.auth.getUser();
+    if (!user){
+      const anon = await sb.auth.signInAnonymously();
+      if (anon.error) throw new Error(
+        'التجربة السريعة مش متاحة دلوقتي. تقدر تنشئ حساب — التجربة مجانية ٣٠ يوم.');
+      user = anon.data.user;
+    }
+
+    const { data, error } = await sb.rpc('create_demo_building',
+      { p_role: role === 'admin' ? 'admin' : 'owner' });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+
+    window.__isDemoSession = true;
+    try{ sessionStorage.setItem('emartna_demo', '1'); }catch(e){}
+
+    await establishSession(row.out_code);
+    const u = currentUser();
+    window.curPage = (u && u.role === 'admin') ? 'dashboard' : 'home';
+    renderRoot(); resetHistoryBase(); resetIdleTimer();
+    toast('دخلت بحساب تجريبي — أي تعديل هيترجع تلقائي لما تخرج');
+
+  }catch(e){
+    showLoginError(e.message || 'تعذّر تجهيز العمارة التجريبية');
+  }finally{
+    if (btn){ btn.disabled = false; btn.textContent = label; }
+  }
+};
+
+window.isDemoSession = function(){
+  if (window.__isDemoSession) return true;
+  try{ return sessionStorage.getItem('emartna_demo') === '1'; }catch(e){ return false; }
 };
 
 /* البصمة — مش مدعومة في النسخة السحابية دلوقتي */
@@ -201,6 +256,10 @@ window.loginHTML = function(){
   let html = __origLoginHTML.apply(this, arguments);
 
   html = html
+    .replace(/onclick="loginAsDemo\('admin'\)"/g,
+             'onclick="loginAsDemo(\'admin\')" class="demo-btn-admin"')
+    .replace(/onclick="loginAsDemo\('owner'\)"/g,
+             'onclick="loginAsDemo(\'owner\')" class="demo-btn-owner"')
     .replace(
       '<div class="login-logo"><div class="mark">',
       '<div class="login-logo" style="cursor:pointer" onclick="goToLanding()" title="الصفحة الرئيسية"><div class="mark">'
