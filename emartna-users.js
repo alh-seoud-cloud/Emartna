@@ -767,3 +767,143 @@ window.isBuildingStaff = function(u){
   const usr = u || currentUser();
   return !!(usr && STAFF_ROLES.includes(usr.role));
 };
+
+
+/* ============================================================
+   7) كود العمارة — عرض وتوليد
+   ------------------------------------------------------------
+   المشكلة: البرنامج بيقرا الكود من REG.buildings، و saveRegistry
+   مكانش بيحفظ العمارات — فتوليد كود جديد كان بيضيع.
+   ============================================================ */
+
+window.buildingCode = function(){
+  const D = window.D;
+  if (D && D.building && D.building.code) return D.building.code;
+  const rec = (window.REG?.buildings || [])
+    .find(x => x.id === window.activeBuildingId);
+  return rec ? rec.code : null;
+};
+
+window.regenerateBuildingCode = function(){
+  app2.confirmAction(
+    'هيتم إلغاء الكود القديم فورًا، ولازم تبلّغ كل الملاك بالكود الجديد. متابعة؟',
+    async () => {
+      const uuid = window.D?.building?.__uuid ||
+                   window.CLOUD._cache.buildingUuid[window.activeBuildingId];
+      if (!uuid) return showMessage('العمارة مش محمّلة');
+      try{
+        const { data, error } = await window.CLOUD._sb
+          .rpc('regenerate_building_code', { p_building: uuid });
+        if (error) throw error;
+        window.D.building.code = data;
+        const rec = (window.REG?.buildings || [])
+          .find(x => x.id === window.activeBuildingId);
+        if (rec) rec.code = data;
+        logActivity('تغيير كود العمارة', data);
+        renderContent();
+        toast('الكود الجديد: ' + data);
+      }catch(e){ showMessage(e.message); }
+    }, 'متابعة');
+};
+
+/* الكود يظهر دايمًا حتى لو REG اتأخر */
+const __pbWithCode = window.pageBuilding;
+if (typeof __pbWithCode === 'function'){
+  window.pageBuilding = function(){
+    let html = __pbWithCode.apply(this, arguments);
+    const code = window.buildingCode();
+    if (code) html = html.replace(
+      />-<\/div>\s*<\/div>/,
+      `>${esc(code)}</div></div>`
+    ).replace("writeText('')", `writeText('${code}')`);
+    return html;
+  };
+}
+
+
+/* ============================================================
+   8) دعوات المنصة — تسويق ومبيعات
+   ============================================================ */
+
+window.PLATFORM_INVITES = {
+
+  async send({ name, phone, phoneCountry='+20', email, city, note,
+               planKey, trialDays=60, channel='whatsapp' }){
+    const sb = window.CLOUD._sb;
+    const { data:{ user } } = await sb.auth.getUser();
+    const me = window.REG?.sysOwner?.name || 'فريق عمارتنا';
+
+    const { data, error } = await sb.from('platform_invites').insert({
+      lead_name: name || '', phone: phone || '', phone_country: phoneCountry,
+      email: email || null, city: city || '', note: note || '',
+      plan_key: planKey || null, trial_days: Number(trialDays) || 60,
+      sent_by: user.id, sent_by_name: me, channel,
+    }).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async list(){
+    const { data, error } = await window.CLOUD._sb
+      .from('v_platform_invites').select('*');
+    if (error) throw error;
+    return data || [];
+  },
+
+  async performance(){
+    const { data, error } = await window.CLOUD._sb
+      .from('v_invite_performance').select('*');
+    if (error) throw error;
+    return data || [];
+  },
+
+  async cancel(id){
+    const { error } = await window.CLOUD._sb.from('platform_invites')
+      .update({ status:'cancelled' }).eq('id', id);
+    if (error) throw error;
+  },
+
+  link(code){
+    const base = location.origin + location.pathname.replace(/[^/]*$/, '');
+    return base + 'emartna-cloud.html?invite=' + encodeURIComponent(code);
+  },
+
+  message(inv){
+    return [
+      `أهلًا ${inv.lead_name || ''} 👋`.trim(),
+      ``,
+      `"عمارتنا" برنامج إدارة اتحاد الملاك — تحصيل الاشتراكات، المصروفات،`,
+      `الخزينة، والتواصل مع السكان، كله من موبايلك.`,
+      ``,
+      `🎁 دعوتك: تجربة مجانية ${inv.trial_days} يوم`,
+      `كود الدعوة: ${inv.code}`,
+      `الرابط: ${window.PLATFORM_INVITES.link(inv.code)}`,
+      ``,
+      `مش محتاج بطاقة ائتمان — سجّل وابدأ على طول.`,
+    ].join('\n');
+  },
+
+  whatsapp(inv){
+    const p = (inv.phone_country || '+20').replace('+','') +
+              String(inv.phone || '').replace(/^0+/, '');
+    window.open(`https://wa.me/${p}?text=` +
+      encodeURIComponent(window.PLATFORM_INVITES.message(inv)), '_blank');
+  },
+};
+
+/* التقاط كود الدعوة من الرابط */
+(function captureInvite(){
+  try{
+    const c = new URLSearchParams(location.search).get('invite');
+    if (c){
+      sessionStorage.setItem('emartna_platform_invite', c.toUpperCase());
+      window.CLOUD?._sb?.rpc('mark_invite_opened', { p_code: c.toUpperCase() })
+        .catch(()=>{});
+    }
+  }catch(e){}
+})();
+
+window.pendingPlatformInvite = function(){
+  try{ return sessionStorage.getItem('emartna_platform_invite'); }
+  catch(e){ return null; }
+};

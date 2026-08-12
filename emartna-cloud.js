@@ -285,6 +285,8 @@ async function fetchBuilding(buildingUuid, legacyId){
   for (const [appKey, col] of Object.entries(BUILDING_FIELDS)){
     if (b.data[col] !== null && b.data[col] !== undefined) D.building[appKey] = b.data[col];
   }
+  D.building.code  = b.data.code;      // كود دخول الملاك
+  D.building.__uuid = b.data.id;
 
   // الترتيب مهم: الجداول المرجعية الأول
   const order = ['accounts','apartments','projects','vendors','expenses',

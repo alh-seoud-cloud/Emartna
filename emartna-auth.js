@@ -235,11 +235,14 @@ window.doSignup = async function(){
   if (agreeEl && agreeEl.type === 'checkbox' && !agreeEl.checked)
                 return showLoginError('لازم توافق على الشروط أولًا');
 
-  // مدة التجربة: من العرض الترويجي النشط لو موجود
-  let trialDays = 30, offer = null;
+  // مدة التجربة: أولوية لكود الدعوة، بعدين العرض النشط
+  let trialDays = 30, offer = null, inviteCode = null;
   try{
     offer = window.activeLandingOffer ? window.activeLandingOffer() : null;
     if (offer && offer.trialDays) trialDays = Number(offer.trialDays) || 30;
+  }catch(e){}
+  try{
+    inviteCode = window.pendingPlatformInvite ? window.pendingPlatformInvite() : null;
   }catch(e){}
 
   const btn = document.getElementById('suBtn');
@@ -253,6 +256,16 @@ window.doSignup = async function(){
       if (!/already|registered|exists/i.test(e.message || '')) throw e;
     }
     await window.CLOUD.signIn(loginId, password, phoneCountry);
+
+    // ١-ب) كود دعوة من فريق المبيعات؟ ياخد أولوية في مدة التجربة
+    if (inviteCode){
+      try{
+        const cl = await window.CLOUD._sb.rpc('claim_platform_invite',
+          { p_code: inviteCode });
+        const row = Array.isArray(cl.data) ? cl.data[0] : cl.data;
+        if (!cl.error && row && row.out_trial) trialDays = Number(row.out_trial);
+      }catch(e){ console.warn('[عمارتنا/دعوة]', e.message); }
+    }
 
     // ٢) العمارة
     const sb = window.CLOUD._sb;
@@ -276,6 +289,15 @@ window.doSignup = async function(){
     if (error) throw error;
 
     const row = Array.isArray(data) ? data[0] : data;
+
+    // ٢-ب) سجّل إن الدعوة اتحوّلت لعمارة فعلًا
+    if (inviteCode && row){
+      try{
+        await window.CLOUD._sb.rpc('convert_platform_invite',
+          { p_code: inviteCode, p_building: row.out_building_id });
+        sessionStorage.removeItem('emartna_platform_invite');
+      }catch(e){}
+    }
 
     // ٣) ادخل
     window.__viewMode = 'login';
