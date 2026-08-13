@@ -33,10 +33,17 @@ const doSignup         = () => app.doSignup();
 window.CLOUD_AUTH = CLOUD_AUTH;
 
 /* انتظر طبقة البيانات */
-function waitCloud(){
-  return new Promise(res => {
+function waitCloud(timeoutMs = 15000){
+  return new Promise((res, rej) => {
     if (window.CLOUD) return res();
-    const t = setInterval(() => { if (window.CLOUD){ clearInterval(t); res(); } }, 50);
+    const started = Date.now();
+    const t = setInterval(() => {
+      if (window.CLOUD){ clearInterval(t); return res(); }
+      if (Date.now() - started > timeoutMs){
+        clearInterval(t);
+        rej(new Error('تعذّر الاتصال بالخادم. اتأكد من الإنترنت وحدّث الصفحة.'));
+      }
+    }, 50);
   });
 }
 
@@ -466,7 +473,23 @@ function bindCloudRecover(){
    ============================================================ */
 
 window.cloudAuthBoot = async function(){
-  await waitCloud();
+  try{
+    await waitCloud();
+  }catch(e){
+    // طبقة البيانات ماحمّلتش خالص — منسبش الشاشة معلّقة
+    CLOUD_AUTH.ready = true;
+    const root = document.getElementById('root');
+    if (root) root.innerHTML =
+      '<div style="max-width:420px;margin:80px auto;padding:24px;text-align:center;'
+      + 'font-family:system-ui,sans-serif;line-height:1.9">'
+      + '<div style="font-size:44px">📡</div>'
+      + '<h3 style="margin:12px 0">تعذّر الاتصال بالخادم</h3>'
+      + '<p style="color:#666">اتأكد إن الإنترنت شغال وحدّث الصفحة.</p>'
+      + '<button onclick="location.reload()" style="margin-top:14px;padding:10px 22px;'
+      + 'border:0;border-radius:8px;background:#159A8C;color:#fff;font-size:15px;'
+      + 'cursor:pointer">🔄 تحديث الصفحة</button></div>';
+    return;
+  }
   try{
     const sb = window.CLOUD._sb;
     const { data:{ session } } = await sb.auth.getSession();
