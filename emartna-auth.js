@@ -162,9 +162,13 @@ window.cloudLogin = async function(idOrEmail, password){
   try{
     await window.CLOUD.signIn(id, password);
     await establishSession();
-    const u = currentUser();
+    // نفس السبب: D لسه ماتحمّلتش، فبناخد الدور من العضوية اللي رجعت
+    // من الخادم بدل currentUser() اللي بترجّع null هنا.
+    const myRole = (__sess && __sess.type === 'building')
+      ? ((CLOUD_AUTH.buildings || []).find(b => b.code === __sess.buildingId) || {}).role
+      : null;
     window.curPage = (__sess.type === 'sysowner') ? 'sysdash'
-            : (u && u.role === 'admin') ? 'dashboard' : 'home';
+            : (myRole === 'admin') ? 'dashboard' : 'home';
     renderRoot(); resetHistoryBase(); resetIdleTimer();
   }catch(e){
     const m = e.message || '';
@@ -233,8 +237,10 @@ window.loginAsDemo = async function(role){
     try{ sessionStorage.setItem('emartna_demo', '1'); }catch(e){}
 
     await establishSession(row.out_code);
-    const u = currentUser();
-    window.curPage = (u && u.role === 'admin') ? 'dashboard' : 'home';
+    // الصفحة الأولى بتتحدد من الدور المطلوب مباشرة — مش من currentUser()،
+    // لأن بيانات العمارة (D) لسه ماتحمّلتش هنا، فـcurrentUser() بترجّع null
+    // ورئيس الاتحاد كان بيقع على شاشة "حسابي وشقتي" الفاضية.
+    window.curPage = (role === 'admin') ? 'dashboard' : 'home';
     renderRoot(); resetHistoryBase(); resetIdleTimer();
     toast('دخلت بحساب تجريبي — أي تعديل هيترجع تلقائي لما تخرج');
 
