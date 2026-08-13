@@ -36,6 +36,14 @@
     width: 96vw !important;  max-width: 96vw !important;
     height: 94vh !important; max-height: 94vh !important;
   }
+  /* أزرار الحفظ/الإلغاء فوق — تفضل ظاهرة مهما نزلت في النافذة */
+  .modal .modal-actions{
+    position: sticky; top: 0; z-index: 4;
+    background: var(--panel, #fff);
+    padding: 10px 0 12px;
+    margin: 0 0 12px;
+    border-bottom: 1px solid var(--line, #e3e8e6);
+  }
   /* مقبض السحب في الركن */
   .modal::-webkit-resizer{ background: transparent; }
   .modal-sizer{
@@ -136,6 +144,12 @@
       `<button type="button" onclick="toggleModalMaximize()" title="${max ? 'استعادة الحجم' : 'تكبير النافذة'}">${max ? '🗗' : '⛶'}</button>`
     + `<button type="button" onclick="resetModalSize()" title="رجوع للحجم الافتراضي">↺</button>`;
 
+    // انقل شريط الأزرار لأعلى النافذة (كان في الآخر، وبيضيع لو المحتوى طويل)
+    const actions = box.querySelector('.modal-actions');
+    if (actions && actions.previousElementSibling !== bar){
+      bar.insertAdjacentElement('afterend', actions);
+    }
+
     if (!box.querySelector('.modal-grip')){
       const g = document.createElement('span');
       g.className = 'modal-grip';
@@ -155,7 +169,9 @@
   // كل ما المحتوى يتغيّر (openModal بتستبدل innerHTML) رجّع الأزرار
   new MutationObserver(() => {
     if (!overlay.classList.contains('show')) return;
-    if (!box.querySelector('.modal-sizer')) paintButtons(box);
+    // openModal بتستبدل المحتوى بالكامل، فلازم نرجّع الأزرار ونرفع شريط
+    // الحفظ/الإلغاء لأعلى في كل مرة
+    paintButtons(box);
   }).observe(box, { childList: true });
 
   // أول ما النافذة تفتح: رجّع آخر حجم + الأزرار

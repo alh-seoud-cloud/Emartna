@@ -275,6 +275,24 @@ window.addEventListener('offline', () => { cache.online = false; });
    4) التحميل من السحابة
    ============================================================ */
 
+/* قراءة كل صفوف جدول لعمارة معيّنة — على صفحات، عشان حد الـ١٠٠٠ صف */
+const PAGE = 1000;
+async function fetchAllRows(table, buildingUuid){
+  const all = [];
+  for (let from = 0; ; from += PAGE){
+    const res = await sb.from(table).select('*')
+      .eq('building_id', buildingUuid)
+      .order('id', { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (res.error) return { data: all, error: res.error };
+    const batch = res.data || [];
+    all.push(...batch);
+    if (batch.length < PAGE) break;
+    if (all.length > 200000) break;   // صمام أمان
+  }
+  return { data: all, error: null };
+}
+
 async function fetchBuilding(buildingUuid, legacyId){
   const ctx = { buildingId: buildingUuid, uuidOf:{}, legacyOf:{} };
 
@@ -294,10 +312,12 @@ async function fetchBuilding(buildingUuid, legacyId){
                  'announcements','suggestions','paymentRequests','notifications',
                  'buildingChat','activityLog'];
 
-  // نجيب كل الجداول مرة واحدة بالتوازي — أسرع بكتير من واحد ورا التاني
-  const fetched = await Promise.all(
-    order.map(coll => sb.from(MAPS[coll].table).select('*').eq('building_id', buildingUuid))
-  );
+  // نجيب كل الجداول مرة واحدة بالتوازي — أسرع بكتير من واحد ورا التاني.
+  // مهم: Supabase بيرجّع ١٠٠٠ صف كحد أقصى للطلب الواحد من غير أي رسالة خطأ،
+  // فلازم نقسّم القراءة على صفحات لحد ما الجدول يخلص. من غير كده، عمارة
+  // عندها أكتر من ١٠٠٠ حركة كانت هتتحمّل ناقصة، وأول حفظ بعدها كان هيمسح
+  // الحركات الناقصة من الخادم نهائيًا.
+  const fetched = await Promise.all(order.map(coll => fetchAllRows(MAPS[coll].table, buildingUuid)));
 
   for (let oi = 0; oi < order.length; oi++){
     const coll = order[oi];
@@ -489,6 +509,15 @@ async function pushBuilding(legacyId){
       if (!uuid) continue;
       const r = await sb.from(map.table).update(toDB(item, map, ctx)).eq('id', uuid);
       if (r.error) throw r.error;
+    }
+
+    // صمام أمان: لو الحذف طال أكتر من نص الصفوف مرة واحدة، ده على الأرجح
+    // تحميل ناقص مش حذف حقيقي من المستخدم — نوقف بدل ما نمسح بيانات صح.
+    const prevCount = (prev[coll] || []).length;
+    if (removed.length > 20 && prevCount && removed.length > prevCount / 2){
+      throw new Error(
+        'تم إيقاف الحفظ للحماية: الحفظ ده كان هيمسح ' + removed.length +
+        ' سجل من "' + map.table + '". حدّث الصفحة وجرّب تاني، ولو تكرر بلّغ الدعم.');
     }
 
     for (const item of removed){
