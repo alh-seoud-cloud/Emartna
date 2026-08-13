@@ -315,7 +315,7 @@ function timeBasedGreeting(){
   return'🌙 مساء الخير';
 }
 function upgradeAlertBannerHTML(){
-  const lic=ensureLicense(REG.buildings.find(b=>b.id===activeBuildingId)); if(!lic)return'';
+  const lic=ensureLicense(findBuildingRec(activeBuildingId)); if(!lic)return'';
   const today=todayISO();
   const dismissedKey='__upgradeAlertDismissed_'+activeBuildingId;
   if(localStorage.getItem(dismissedKey)===today)return'';
@@ -885,7 +885,7 @@ function migrateBuildingData(){
   checkMonthlyChargeReminder();
 }
 function fixDuplicateUsernamesInActiveBuilding(){
-  const rec=REG.buildings.find(b=>b.id===activeBuildingId); if(!rec)return;
+  const rec=findBuildingRec(activeBuildingId); if(!rec)return;
   const prefix=usernamePrefixFromCode(rec.code);
   let changed=false;
   D.users.forEach(u=>{
@@ -3954,8 +3954,9 @@ function buildLicense(planKey){
   const start=todayISO();
   return{plan:def.key,status:'active',startDate:start,endDate:def.durationMonths?addMonths(start,def.durationMonths):null,maxApartments:def.maxApartments,maxTransactions:def.maxTransactions,notes:''};
 }
-function ensureLicense(rec){if(!rec.license)rec.license=buildLicense('custom');return rec.license}
-function licenseRec(){return REG.buildings.find(b=>b.id===activeBuildingId)}
+function ensureLicense(rec){if(!rec)return null;if(!rec.license)rec.license=buildLicense('custom');return rec.license}
+function findBuildingRec(key){key=key||activeBuildingId;if(!key||!REG||!REG.buildings)return null;return REG.buildings.find(b=>b.id===key)||REG.buildings.find(b=>b.__uuid===key)||REG.buildings.find(b=>b.code===key)||null}
+function licenseRec(){return findBuildingRec(activeBuildingId)}
 function licenseInfo(){const rec=licenseRec();return rec?ensureLicense(rec):null}
 function usedTransactionsCount(){return(D.ledger||[]).length+(D.expenses||[]).length}
 function licenseStatusCheck(){
@@ -4657,7 +4658,7 @@ function maybeShowOfferPopup(){
 }
 /* ---------- بانر عرض للعملاء الحاليين ---------- */
 function existingOfferBannerHTML(){
-  const rec=REG.buildings.find(b=>b.id===activeBuildingId); if(!rec)return'';
+  const rec=findBuildingRec(activeBuildingId); if(!rec)return'';
   if(rec.claimedOfferId)return'';
   const o=activeExistingCustomerOffer(); if(!o)return'';
   if(localStorage.getItem('__offerBannerDismissed_'+activeBuildingId)===todayISO())return'';
@@ -4676,7 +4677,7 @@ function dismissExistingOfferBanner(){
 }
 function claimExistingOffer(offerId){
   const o=ensureLandingOffers().find(x=>x.id===offerId); if(!o)return;
-  const rec=REG.buildings.find(b=>b.id===activeBuildingId); if(!rec)return;
+  const rec=findBuildingRec(activeBuildingId); if(!rec)return;
   if(rec.claimedOfferId)return toast('العرض ده اتفعّل بالفعل على حسابك من قبل');
   confirmAction('هل تريد تفعيل هذا العرض؟ سيتم تحديث اشتراكك مجانًا للمدة المحددة.',()=>{
     const lic=ensureLicense(rec);
@@ -5478,7 +5479,7 @@ function licenseBannerHTML(){
   </div>`;
 }
 function pageReferralProgram(){
-  const rec=REG.buildings.find(b=>b.id===activeBuildingId); if(!rec)return'';
+  const rec=findBuildingRec(activeBuildingId); if(!rec)return'';
   if(!rec.referralCode){rec.referralCode=generateReferralCode(rec.name);saveRegistry();}
   const referred=REG.buildings.filter(b=>b.referredBy===rec.id);
   const rewards=ensureReferralRewards().filter(r=>r.referrerBuildingId===rec.id);
@@ -5611,7 +5612,7 @@ function submitRenewalRequest(){
   const planKey=document.getElementById('rrPlan').value;
   const note=document.getElementById('rrNote').value.trim();
   if(!window.__rrImageData)return showMessage('أرفق صورة إثبات التحويل أولًا');
-  const rec=REG.buildings.find(b=>b.id===activeBuildingId);
+  const rec=findBuildingRec(activeBuildingId)||{name:''};
   REG.renewalRequests=REG.renewalRequests||[];
   REG.renewalRequests.push({id:uid(),buildingId:activeBuildingId,buildingName:rec.name,planKey,imageDataUrl:window.__rrImageData,note,status:'pending',requestedAt:new Date().toISOString()});
   pushSysNotification('طلب تجديد اشتراك جديد',`"${rec.name}" - الخطة المطلوبة: ${planName(planKey)}`,'sysrenewals');
@@ -6911,7 +6912,7 @@ async function createBuildingBlock(){
   const unitsCount=isVilla?1:groundCount+floors*perFloor;
   const fee=Number(document.getElementById('blkFee').value||0);
   if(!enforceLicenseOrAlert('apartment'))return;
-  const prefix=usernamePrefixFromCode(REG.buildings.find(b=>b.id===activeBuildingId).code);
+  const prefix=usernamePrefixFromCode((findBuildingRec(activeBuildingId)||{}).code||'');
   const safeBlock=blockName.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g,'').toLowerCase().slice(0,10)||'blk';
   for(let i=1;i<=unitsCount;i++){
     const newId=uid();
@@ -7078,7 +7079,7 @@ async function confirmApartmentsImport(){
   await runApartmentsImport(rows);
 }
 async function runApartmentsImport(rows){
-  const prefix=usernamePrefixFromCode(REG.buildings.find(b=>b.id===activeBuildingId).code);
+  const prefix=usernamePrefixFromCode((findBuildingRec(activeBuildingId)||{}).code||'');
   const existingUsernames=new Set(D.users.map(u=>u.username));
   const uniqueUsername=(base)=>{let u=base,n=1;while(existingUsernames.has(u)){u=base+n;n++;}existingUsernames.add(u);return u;};
   let imported=0;
@@ -7163,7 +7164,7 @@ function openAddTenantAccountModal(apartmentId){
   if(!a.tenantName)return showMessage('اكتب اسم المستأجر في الحقل بالأعلى الأول');
   openModal(`<h3>حساب دخول للمستأجر</h3>
     <p class="small">المستأجر: ${esc(a.tenantName)} - ${unitLabel(a)}</p>
-    <div class="field2 mtop"><label>اسم المستخدم</label><input id="taUser" value="${esc(usernamePrefixFromCode(REG.buildings.find(b=>b.id===activeBuildingId).code)+'tenant'+unitTypeIndex(a))}"></div>
+    <div class="field2 mtop"><label>اسم المستخدم</label><input id="taUser" value="${esc(usernamePrefixFromCode((findBuildingRec(activeBuildingId)||{}).code||'')+'tenant'+unitTypeIndex(a))}"></div>
     <div class="field2"><label>كلمة المرور</label>${pwField('taPass','','','new-password')}<p class="small" style="margin-top:4px">8 حروف على الأقل، حرف ورقم ورمز</p></div>
     <div class="modal-actions"><button class="btn primary" onclick="addTenantAccount('${apartmentId}')">✅ إنشاء الحساب</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
 }
@@ -7229,7 +7230,7 @@ function openApartmentModal(id){
       <div class="field2"><label>البريد الإلكتروني (اختياري)</label><input id="mEmail" type="email" value="${a?esc(a.email||''):''}"></div>
       <div class="field2"><label>الاشتراك الشهري <span style="color:var(--red)">*</span></label><input id="mFee" type="number" value="${a?a.monthlyFee:''}" placeholder="أدخل القيمة" min="0"></div>
       <div class="field2"><label>رصيد افتتاحي <span style="font-weight:400">(موجب = عليه من قبل، سالب = دائن/دفع مقدمًا)</span></label><input id="mOpeningBalance" type="number" value="${a?(a.openingBalance||0):0}"></div>
-      <div class="field2"><label>اسم المستخدم (دخول)</label><input id="mUser" value="${a?esc(a.username):usernamePrefixFromCode(REG.buildings.find(b=>b.id===activeBuildingId).code)+'shaqa'+nextNum}"></div>
+      <div class="field2"><label>اسم المستخدم (دخول)</label><input id="mUser" value="${a?esc(a.username):usernamePrefixFromCode((findBuildingRec(activeBuildingId)||{}).code||'')+'shaqa'+nextNum}"></div>
       <div class="field2"><label>كلمة مرور جديدة (اتركها فارغة للإبقاء)</label>${pwField('mPass','اختياري')}</div>
     </div>
     <div class="field2"><label>ملاحظات</label><textarea id="mNotes">${a?esc(a.notes||''):''}</textarea></div>
@@ -9102,7 +9103,7 @@ function importBackup(file){
 function resetAllData(){
   confirmDelete('سيتم حذف كل بيانات هذه العمارة نهائيًا (الشقق، الحركات، المصروفات، الاستطلاعات، كل شيء) والبدء من جديد. لا يمكن التراجع عن هذا الإجراء إطلاقًا.',async()=>{
     const perFloor=D.building.apartmentsPerFloor||4, groundCount=D.building.groundFloorCount||4, count=D.apartments.length, name=D.building.name;
-    const rec=REG.buildings.find(b=>b.id===activeBuildingId);
+    const rec=findBuildingRec(activeBuildingId);
     const curAdmin=D.users.find(u=>u.role==='admin');
     D=await seedBuildingData(name,count,perFloor,curAdmin?curAdmin.username:'admin','Admin@1234',null,null,null,null,null,usernamePrefixFromCode(rec?rec.code:''));
     D.building.groundFloorCount=groundCount;
