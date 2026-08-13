@@ -61,7 +61,6 @@ const MAPS = {
     fields: {
       id:'legacy_id', type:'type', amount:'amount', month:'month',
       date:'date', note:'note', project:'project',
-      apartmentLabel:'apartment_label',
       fromPaymentRequestId:'from_payment_request_id', createdAt:'created_at',
     },
     refs: {
@@ -163,6 +162,7 @@ const MAPS = {
       id:'legacy_id', paymentFor:'payment_for', projectName:'project_name',
       amount:'amount', note:'note', status:'status',
       requestedAt:'created_at', reviewNote:'review_note',
+      imageDataUrl:'proof_url', username:'legacy_username',
     },
     refs: { apartmentId:['apartment_id','apartments'] },
   },
