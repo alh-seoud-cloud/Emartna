@@ -17,6 +17,7 @@
 
   const R = () => (window.__rep = window.__rep || { from:'', to:'', cmp:'prev' });
 
+  const prevDay = d => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate()-1); return x.toISOString().slice(0,10); };
   const addDays = (d, n) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toISOString().slice(0,10); };
   const daysBetween = (a, b) => Math.round((new Date(b+'T00:00:00') - new Date(a+'T00:00:00')) / 86400000);
 
@@ -180,7 +181,8 @@
     const cur = movements(from, to);
     const cmp = comparePeriod(from, to);
     const prev = cmp ? movements(cmp.from, cmp.to) : null;
-    const bal = balancesAsOf(to);
+    const bal  = balancesAsOf(to);
+    const open = balancesAsOf(prevDay(from));   // أرصدة أول المدة
     const checks = integrityChecks();
 
     const pct = (a,b) => b === 0 ? (a > 0 ? 100 : 0) : Math.round(((a-b)/b)*100);
@@ -197,6 +199,14 @@
         <td style="padding:7px;border-bottom:1px solid var(--line);font-weight:700">${cash(val)}</td>
         ${prev ? `<td style="padding:7px;border-bottom:1px solid var(--line);color:var(--muted)">${cash(prevVal)}</td>
                   <td style="padding:7px;border-bottom:1px solid var(--line)">${chg(val,prevVal)}</td>` : ''}
+      </tr>`;
+
+    const bRow = (label, o, c) => `
+      <tr>
+        <td style="padding:7px;border-bottom:1px solid var(--line)">${label}</td>
+        <td style="padding:7px;border-bottom:1px solid var(--line);color:var(--muted)">${cash(o)}</td>
+        <td style="padding:7px;border-bottom:1px solid var(--line)">${(c-o)>=0?'+':'−'}${cash(Math.abs(c-o))}</td>
+        <td style="padding:7px;border-bottom:1px solid var(--line);font-weight:700">${cash(c)}</td>
       </tr>`;
 
     const head = `<tr>
@@ -240,13 +250,19 @@
       </tbody>
     </table></div>
 
-    <div class="section-title"><h3>الأرصدة في ${esc2(to)}</h3></div>
+    <div class="section-title"><h3>ميزان المراجعة — أول المدة · الحركة · آخر المدة</h3></div>
     <div class="card"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr>
+        <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">الحساب</th>
+        <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">رصيد ${esc2(from)}</th>
+        <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">حركة الفترة</th>
+        <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">رصيد ${esc2(to)}</th>
+      </tr></thead>
       <tbody>
-        ${row('ذمم الملاك (مستحق لم يُحصّل)', bal.receivables, null)}
-        ${row('أرصدة الحسابات (خزينة + بنوك)', bal.treasury, null)}
-        ${row('<b>إجمالي أصول العمارة</b>', bal.receivables + bal.treasury, null)}
-        ${row('حقوق العمارة (الافتتاحي + المستحقات − المصروفات)', bal.fund, null)}
+        ${bRow('ذمم الملاك (مستحق لم يُحصّل)', open.receivables, bal.receivables)}
+        ${bRow('أرصدة الحسابات (خزينة + بنوك)', open.treasury, bal.treasury)}
+        ${bRow('<b>إجمالي أصول العمارة</b>', open.receivables + open.treasury, bal.receivables + bal.treasury)}
+        ${bRow('حقوق العمارة (الافتتاحي + المستحقات − المصروفات)', open.fund, bal.fund)}
       </tbody>
     </table>
     <p class="small mtop">${Math.abs(bal.diff) < 0.01
