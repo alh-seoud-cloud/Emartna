@@ -48,8 +48,9 @@
   .modal::-webkit-resizer{ background: transparent; }
   .modal-sizer{
     position: sticky; top: 0; float: left;
-    display: flex; gap: 6px; z-index: 5;
-    margin: -8px -6px 0 0;
+    display: flex; gap: 6px; z-index: 6;
+    direction: ltr;                 /* × الأول من الشمال زي نوافذ الويندوز */
+    margin: -8px 0 0 -4px;
   }
   .modal-sizer button{
     border: 1px solid var(--line, #e3e8e6);
@@ -64,6 +65,15 @@
     color: var(--accent, #159A8C);
     border-color: var(--accent, #159A8C);
   }
+  .modal-sizer button.mclose{ font-size: 18px; font-weight: 700; }
+  .modal-sizer button.mclose:hover{
+    background: var(--red, #c23b3b); color: #fff; border-color: var(--red, #c23b3b);
+  }
+  /* زرار الإغلاق/الإلغاء القديم اتشال — الـ× بديله */
+  .modal .modal-actions button.emartna-hidden-close{ display: none; }
+  /* لو شريط الأزرار فضي بعد إخفاء الإغلاق، مانسيبش فراغ */
+  .modal .modal-actions:empty,
+  .modal .modal-actions.emartna-empty{ display: none; }
   /* تلميح إن الركن بيتسحب */
   .modal-grip{
     position: absolute; left: 4px; bottom: 4px;
@@ -140,8 +150,29 @@
       box.insertBefore(bar, box.firstChild);
     }
     const max = box.classList.contains('emartna-max');
+
+    // دوّر على زرار "إغلاق" أو "إلغاء" جوه النافذة عشان الـ× ياخد نفس وظيفته
+    let closeAction = 'closeModal()';
+    const actionsEl = box.querySelector('.modal-actions');
+    if (actionsEl){
+      const btns = [...actionsEl.querySelectorAll('button')];
+      const closeBtn = btns.find(b => {
+        const t = (b.textContent || '').trim();
+        return t === 'إغلاق' || t === 'إلغاء' || t === 'رجوع';
+      });
+      if (closeBtn){
+        const oc = closeBtn.getAttribute('onclick');
+        if (oc) closeAction = oc;
+        closeBtn.classList.add('emartna-hidden-close');
+      }
+      // لو مفضلش أزرار ظاهرة، اخفي الشريط كله
+      const visible = btns.filter(b => !b.classList.contains('emartna-hidden-close'));
+      actionsEl.classList.toggle('emartna-empty', visible.length === 0);
+    }
+
     bar.innerHTML =
-      `<button type="button" onclick="toggleModalMaximize()" title="${max ? 'استعادة الحجم' : 'تكبير النافذة'}">${max ? '🗗' : '⛶'}</button>`
+      `<button type="button" class="mclose" onclick="${closeAction.replace(/"/g,'&quot;')}" title="إغلاق (Esc)">×</button>`
+    + `<button type="button" onclick="toggleModalMaximize()" title="${max ? 'استعادة الحجم' : 'تكبير النافذة'}">${max ? '🗗' : '⛶'}</button>`
     + `<button type="button" onclick="resetModalSize()" title="رجوع للحجم الافتراضي">↺</button>`;
 
     // انقل شريط الأزرار لأعلى النافذة (كان في الآخر، وبيضيع لو المحتوى طويل)
@@ -192,6 +223,14 @@
       t = setTimeout(() => saveSize(box), 400);
     }).observe(box);
   }
+
+  // Esc يقفل النافذة المفتوحة
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (!overlay.classList.contains('show')) return;
+    const x = box.querySelector('.modal-sizer button.mclose');
+    if (x) x.click();
+  });
 
   console.log('[عمارتنا] التحكم في حجم النوافذ جاهز');
 })();
