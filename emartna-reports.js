@@ -136,6 +136,45 @@
              receivables, treasury, fund, diff: (receivables + treasury) - fund };
   }
 
+  /* أرصدة الوحدات حتى تاريخ: مدينون (مستحق) ودائنون (دفع مقدم) */
+  function unitBalances(to){
+    const D = window.D;
+    const upto = d => !d || d <= to;
+    let debit = 0, credit = 0;
+    (D.apartments || []).forEach(a => {
+      let b = Number(a.openingBalance) || 0;
+      (D.ledger || []).forEach(l => {
+        if (l.apartmentId !== a.id || !upto(l.date)) return;
+        const amt = Number(l.amount) || 0;
+        if (l.type === 'دفعة') b -= amt; else b += amt;
+      });
+      if (b > 0) debit += b; else credit += -b;
+    });
+    return { debit, credit };
+  }
+
+  /* أرصدة كل حساب على حدة حتى تاريخ */
+  function accountBalances(to){
+    const D = window.D;
+    const upto = d => !d || d <= to;
+    return (D.accounts || []).map(a => {
+      let b = Number(a.opening) || 0;
+      (D.ledger || []).forEach(l => {
+        if (l.accountId !== a.id || !upto(l.date)) return;
+        const amt = Number(l.amount) || 0;
+        if (l.type === 'دفعة') b += amt;
+        if (l.type === 'صرف')  b -= amt;
+      });
+      (D.expenses || []).forEach(e => { if (e.accountId === a.id && upto(e.date)) b -= Number(e.amount)||0; });
+      (D.transfers || []).forEach(t => {
+        if (!upto(t.date)) return;
+        if (t.to === a.id)   b += Number(t.amount)||0;
+        if (t.from === a.id) b -= Number(t.amount)||0;
+      });
+      return { name:a.name, type:a.type, balance:b };
+    });
+  }
+
   /* فحص سلامة القيود — بيدوّر على الحركات الناقصة أو الغريبة */
   function integrityChecks(){
     const D = window.D;
@@ -292,7 +331,13 @@
     const open = Number(a && a.openingBalance) || 0;
     if (open > 0) dues.unshift({ date: (dues[0] && dues[0].date) || asOf, amount: open, type:'رصيد افتتاحي' });
 
-    let paid = rows.filter(l => l.type === 'دفعة').reduce((s,l) => s + (Number(l.amount)||0), 0);
+    // المدفوع = الدفعات + أي تسوية بالسالب (خصم) — الاتنين بيقلّلوا المستحق.
+    // من غير التسويات السالبة، إجمالي أعمار الديون كان بيطلع أكبر من
+    // إجمالي أرصدة الوحدات بقيمة الخصومات.
+    let paid = rows.filter(l => l.type === 'دفعة')
+                   .reduce((s,l) => s + (Number(l.amount)||0), 0)
+             + rows.filter(l => Number(l.amount) < 0)
+                   .reduce((s,l) => s + Math.abs(Number(l.amount)||0), 0);
 
     const buckets = { d30:0, d60:0, d90:0, more:0 };
     let oldest = null;
@@ -360,6 +405,195 @@
     })}</div>`;
   };
 
+
+  /* ---------- ٣) قائمة الدخل ---------- */
+
+  function expensesByCategory(from, to){
+    const D = window.D;
+    const map = {};
+    (D.expenses || []).forEach(e => {
+      const d = e.date || '';
+      if (d < from || d > to) return;
+      const c = e.category || 'أخرى';
+      map[c] = (map[c] || 0) + (Number(e.amount) || 0);
+    });
+    return Object.keys(map).map(c => ({ category:c, amount:map[c] }))
+                 .sort((a,b) => b.amount - a.amount);
+  }
+
+  window.pageIncomeStatement = function(){
+    if (!window.D) return '<p class="small">مفيش بيانات</p>';
+    const { from, to } = bounds();
+    const cur = movements(from, to);
+    const cmp = comparePeriod(from, to);
+    const prev = cmp ? movements(cmp.from, cmp.to) : null;
+
+    // أساس الاستحقاق: الإيراد وقت ما يستحق. الأساس النقدي: وقت ما يتحصّل.
+    const accIncome = cur.charges + cur.projects + cur.adjust;
+    const accResult = accIncome - cur.expenses;
+    const cashIn    = cur.payments - cur.refunds;
+    const cashResult= cashIn - cur.expenses;
+
+    const pAccIncome = prev ? prev.charges + prev.projects + prev.adjust : 0;
+    const pAccResult = prev ? pAccIncome - prev.expenses : 0;
+
+    const cats  = expensesByCategory(from, to);
+    const pCats = prev ? expensesByCategory(cmp.from, cmp.to) : [];
+    const pCat  = c => (pCats.find(x => x.category === c) || {}).amount || 0;
+    const maxCat = Math.max(...cats.map(c => c.amount), 1);
+
+    const pct = (a,b) => b === 0 ? (a > 0 ? 100 : 0) : Math.round(((a-b)/b)*100);
+    const chg = (a,b) => {
+      if (!prev) return '';
+      const p = pct(a,b);
+      if (p === 0) return '<span class="badge n">=</span>';
+      return p > 0 ? `<span class="badge g">▲ ${p}%</span>` : `<span class="badge r">▼ ${Math.abs(p)}%</span>`;
+    };
+    const line = (label, v, pv, bold, hint) => `
+      <tr>
+        <td style="padding:7px;border-bottom:1px solid var(--line)">${bold?`<b>${label}</b>`:label}
+          ${hint?`<div class="small" style="color:var(--muted)">${hint}</div>`:''}</td>
+        <td style="padding:7px;border-bottom:1px solid var(--line);${bold?'font-weight:700':''}">${cash(v)}</td>
+        ${prev ? `<td style="padding:7px;border-bottom:1px solid var(--line);color:var(--muted)">${cash(pv)}</td>
+                  <td style="padding:7px;border-bottom:1px solid var(--line)">${chg(v,pv)}</td>` : ''}
+      </tr>`;
+    const th = `<tr>
+      <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">البيان</th>
+      <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">الفترة</th>
+      ${prev ? `<th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">${esc2(cmp.label)}</th>
+                <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">التغيّر</th>` : ''}
+    </tr>`;
+
+    return `
+    <p class="small">إيرادات العمارة مقابل مصروفاتها خلال الفترة، وفائض أو عجز الفترة. معروضة بالأساسين: الاستحقاق (المستحق) والنقدي (المحصّل فعلًا).</p>
+    ${periodBar(true)}
+    <p class="small mtop" style="color:var(--muted)">الفترة: ${esc2(from)} → ${esc2(to)}</p>
+
+    <div class="grid g3 mtop">
+      <div class="kpi ok"><div class="ic">📥</div><div class="lbl">إجمالي الإيرادات المستحقة</div><div class="val" style="font-size:15px">${cash(accIncome)}</div></div>
+      <div class="kpi owe"><div class="ic">📤</div><div class="lbl">إجمالي المصروفات</div><div class="val" style="font-size:15px">${cash(cur.expenses)}</div></div>
+      <div class="kpi ${accResult>=0?'ok':'owe'}"><div class="ic">${accResult>=0?'📈':'📉'}</div><div class="lbl">${accResult>=0?'فائض الفترة':'عجز الفترة'}</div><div class="val" style="font-size:15px">${cash(Math.abs(accResult))}</div></div>
+    </div>
+
+    <div class="section-title"><h3>الإيرادات</h3></div>
+    <div class="card"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>${th}</thead><tbody>
+        ${line('اشتراكات شهرية', cur.charges, prev&&prev.charges)}
+        ${line('مساهمات مشاريع', cur.projects, prev&&prev.projects)}
+        ${line('تسويات', cur.adjust, prev&&prev.adjust, false, 'خصومات أو إضافات على الملاك')}
+        ${line('إجمالي الإيرادات', accIncome, pAccIncome, true)}
+      </tbody></table></div>
+
+    <div class="section-title"><h3>المصروفات حسب البند</h3></div>
+    <div class="card">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>${th}</thead><tbody>
+          ${cats.length ? cats.map(c => `
+          <tr>
+            <td style="padding:7px;border-bottom:1px solid var(--line)">
+              ${esc2(c.category)}
+              <div style="height:6px;background:var(--line);border-radius:4px;margin-top:5px;overflow:hidden">
+                <div style="width:${(c.amount/maxCat*100).toFixed(0)}%;height:100%;background:var(--gold)"></div>
+              </div>
+              <div class="small" style="color:var(--muted)">${cur.expenses?Math.round(c.amount/cur.expenses*100):0}% من المصروفات</div>
+            </td>
+            <td style="padding:7px;border-bottom:1px solid var(--line)">${cash(c.amount)}</td>
+            ${prev ? `<td style="padding:7px;border-bottom:1px solid var(--line);color:var(--muted)">${cash(pCat(c.category))}</td>
+                      <td style="padding:7px;border-bottom:1px solid var(--line)">${chg(c.amount, pCat(c.category))}</td>` : ''}
+          </tr>`).join('') : `<tr><td colspan="4" class="small" style="padding:10px">مفيش مصروفات في الفترة دي</td></tr>`}
+          ${line('إجمالي المصروفات', cur.expenses, prev&&prev.expenses, true)}
+        </tbody></table></div>
+
+    <div class="section-title"><h3>النتيجة</h3></div>
+    <div class="card"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>${th}</thead><tbody>
+        ${line(accResult>=0?'فائض الفترة (أساس الاستحقاق)':'عجز الفترة (أساس الاستحقاق)', accResult, pAccResult, true,
+               'الإيرادات المستحقة − المصروفات')}
+        ${line('التدفق النقدي الفعلي', cashResult, prev ? (prev.payments-prev.refunds-prev.expenses) : 0, true,
+               'المحصّل فعلًا − المستردات − المصروفات')}
+        ${line('الفرق بين الاتنين', accResult - cashResult, null, false,
+               'ده مقدار المستحق اللي لسه ما اتحصّلش في الفترة')}
+      </tbody></table>
+      <p class="small mtop">${accResult >= 0
+        ? '✅ العمارة حققت فائض في الفترة دي على أساس الاستحقاق.'
+        : '⚠️ المصروفات زادت عن الإيرادات المستحقة في الفترة دي.'}
+        ${cashResult < 0 && accResult >= 0 ? ' لاحظ إن التدفق النقدي سالب رغم الفائض — يعني في مستحقات ما اتحصّلتش.' : ''}</p>
+    </div>`;
+  };
+
+  /* ---------- ٤) الميزانية المصغرة ---------- */
+
+  window.pageBalanceSheet = function(){
+    if (!window.D) return '<p class="small">مفيش بيانات</p>';
+    const { from, to } = bounds();
+    const u  = unitBalances(to);
+    const uo = unitBalances(prevDay(from));
+    const accs  = accountBalances(to);
+    const accsO = accountBalances(prevDay(from));
+
+    const cashNow = accs.reduce((s,a) => s + a.balance, 0);
+    const cashOld = accsO.reduce((s,a) => s + a.balance, 0);
+
+    const assetsNow = cashNow + u.debit;
+    const assetsOld = cashOld + uo.debit;
+    const liabNow = u.credit, liabOld = uo.credit;
+    const netNow = assetsNow - liabNow, netOld = assetsOld - liabOld;
+
+    const m = movements(from, to);
+    const surplus = m.charges + m.projects + m.adjust - m.expenses;
+    const check = netNow - netOld - surplus;
+
+    const r = (label, now, old, bold) => `
+      <tr>
+        <td style="padding:7px;border-bottom:1px solid var(--line)">${bold?`<b>${label}</b>`:label}</td>
+        <td style="padding:7px;border-bottom:1px solid var(--line);color:var(--muted)">${cash(old)}</td>
+        <td style="padding:7px;border-bottom:1px solid var(--line);${bold?'font-weight:700':''}">${cash(now)}</td>
+      </tr>`;
+    const th2 = `<tr>
+      <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">البند</th>
+      <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">${esc2(from)}</th>
+      <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">${esc2(to)}</th>
+    </tr>`;
+
+    return `
+    <p class="small">مركز العمارة المالي: إيه اللي عندها، وإيه اللي عليها، وصافي حقوقها — في بداية الفترة ونهايتها.</p>
+    ${periodBar(false)}
+
+    <div class="grid g3 mtop">
+      <div class="kpi ok"><div class="ic">🏦</div><div class="lbl">النقدية والبنوك</div><div class="val" style="font-size:15px">${cash(cashNow)}</div></div>
+      <div class="kpi ${u.debit>0?'owe':''}"><div class="ic">📄</div><div class="lbl">مستحق على الملاك</div><div class="val" style="font-size:15px">${cash(u.debit)}</div></div>
+      <div class="kpi"><div class="ic">🧮</div><div class="lbl">صافي أصول العمارة</div><div class="val" style="font-size:15px">${cash(netNow)}</div></div>
+    </div>
+
+    <div class="section-title"><h3>الأصول (اللي للعمارة)</h3></div>
+    <div class="card"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>${th2}</thead><tbody>
+        ${accs.map((a,i) => r((a.type==='نقدي'?'💵 ':'🏦 ') + esc2(a.name), a.balance, (accsO[i]||{}).balance || 0)).join('')}
+        ${r('مستحقات على الملاك (مدينون)', u.debit, uo.debit)}
+        ${r('إجمالي الأصول', assetsNow, assetsOld, true)}
+      </tbody></table></div>
+
+    <div class="section-title"><h3>الالتزامات (اللي على العمارة)</h3></div>
+    <div class="card"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>${th2}</thead><tbody>
+        ${r('دفعات مقدمة من الملاك (دائنون)', liabNow, liabOld)}
+        ${r('إجمالي الالتزامات', liabNow, liabOld, true)}
+      </tbody></table>
+      <p class="small mtop">دي مبالغ دفعها ملاك زيادة عن المستحق عليهم، فهي حق ليهم على العمارة.</p></div>
+
+    <div class="section-title"><h3>صافي حقوق العمارة</h3></div>
+    <div class="card"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tbody>
+        ${r('صافي الأصول أول المدة', netOld, netOld)}
+        ${r((surplus>=0?'+ فائض الفترة':'− عجز الفترة'), Math.abs(surplus), Math.abs(surplus))}
+        ${r('= صافي الأصول آخر المدة', netNow, netNow, true)}
+      </tbody></table>
+      <p class="small mtop">${Math.abs(check) < 0.01
+        ? '✅ <b>الميزانية متوازنة</b> — صافي الأصول أول المدة + نتيجة الفترة = صافي الأصول آخر المدة.'
+        : `⚠️ <b>فرق ${cash(check)}</b> — في حركة تاريخها برّه الفترة أو قيد ناقص. راجع "فحص سلامة القيود" في ميزان المراجعة.`}</p>
+    </div>`;
+  };
+
   /* ---------- ربط التبويب في القائمة ---------- */
 
   function installNav(){
@@ -376,7 +610,10 @@
     }
 
     const item = { key:'reports', icon:'📑', label:'التقارير المحاسبية',
-      items:[ ['trialBalance','⚖️','ميزان المراجعة'], ['aging','⏳','أعمار الديون'] ] };
+      items:[ ['trialBalance','⚖️','ميزان المراجعة'],
+              ['incomeStatement','📈','قائمة الدخل'],
+              ['balanceSheet','🧮','الميزانية المصغرة'],
+              ['aging','⏳','أعمار الديون'] ] };
     const at = G.findIndex(g => g.key === 'finance');
     G.splice(at >= 0 ? at + 1 : G.length, 0, item);
 
@@ -391,11 +628,17 @@
   const origRender = window.renderContent;
   window.renderContent = function(){
     const p = (typeof curPage !== 'undefined') ? curPage : '';
-    if (p === 'trialBalance' || p === 'aging'){
+    const REPORTS = {
+      trialBalance:    ['ميزان المراجعة',    pageTrialBalance],
+      incomeStatement: ['قائمة الدخل',        pageIncomeStatement],
+      balanceSheet:    ['الميزانية المصغرة',  pageBalanceSheet],
+      aging:           ['أعمار الديون',       pageAging],
+    };
+    if (REPORTS[p]){
       const t = document.getElementById('pageTitle');
-      if (t) t.textContent = (p === 'aging' ? 'أعمار الديون' : 'ميزان المراجعة');
+      if (t) t.textContent = REPORTS[p][0];
       const c = document.getElementById('content');
-      if (c) c.innerHTML = (p === 'aging' ? pageAging() : pageTrialBalance());
+      if (c) c.innerHTML = REPORTS[p][1]();
       return;
     }
     return origRender.apply(this, arguments);
