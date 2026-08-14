@@ -1012,6 +1012,16 @@ window.loadBuildingData = function(id){
   return cache.buildings[id] || null;      // متزامن، من الكاش
 };
 
+/* تحميل عمارة مش متحمّلة (لصاحب البرنامج اللي بيشوف عمارات مش عضو فيها) */
+window.CLOUD.loadBuilding = async function(legacyId){
+  if (cache.buildings[legacyId]) return cache.buildings[legacyId];
+  const rec = ((window.REG && window.REG.buildings) || []).find(b => b.id === legacyId);
+  const uuid = (rec && rec.__uuid) || cache.buildingUuid[legacyId];
+  if (!uuid) throw new Error('العمارة مش معروفة: ' + legacyId);
+  cache.buildings[legacyId] = await fetchBuilding(uuid, legacyId);
+  return cache.buildings[legacyId];
+};
+
 window.saveBuildingData = function(id, data){
   cache.buildings[id] = data;              // فوري في الذاكرة
   queue(id);                               // والسحابة في الخلفية

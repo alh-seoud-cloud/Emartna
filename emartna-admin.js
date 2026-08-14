@@ -157,6 +157,66 @@
     }
   }
 
+
+  /* ============================================================
+     ٣) عمارات صاحب البرنامج — تحميل عند الطلب
+     ------------------------------------------------------------
+     عند الدخول بنحمّل بيانات العمارات اللي هو عضو فيها بس (عشان
+     مانحملش عشرات العمارات كل مرة). النتيجة إن العمارات التانية
+     كانت بتظهر في لوحة المنصة بصفر وحدات وصفر حركات، وزرار "فتح"
+     كان بيقول "تعذر تحميل العمارة". دلوقتي بنحمّلها عند الحاجة.
+     ============================================================ */
+
+  const MAX_AUTO_LOAD = 30;      // فوق كده بنحمّل عند الفتح بس
+
+  window.__loadingBuildings = false;
+
+  async function loadMissingBuildings(){
+    if (window.__loadingBuildings) return;
+    if (!window.CLOUD || !window.CLOUD.loadBuilding) return;
+    if (!window.REG || !window.REG.buildings) return;
+
+    const missing = window.REG.buildings
+      .filter(b => !window.loadBuildingData(b.id))
+      .slice(0, MAX_AUTO_LOAD);
+    if (!missing.length) return;
+
+    window.__loadingBuildings = true;
+    let done = 0;
+    try{
+      await Promise.all(missing.map(async b => {
+        try{ await window.CLOUD.loadBuilding(b.id); done++; }
+        catch(e){ console.warn('[عمارتنا] تعذّر تحميل', b.name, e.message); }
+      }));
+    } finally {
+      window.__loadingBuildings = false;
+    }
+    if (done && window.isSysOwner && isSysOwner() && window.renderSysContent){
+      renderSysContent();
+    }
+  }
+  window.reloadPlatformBuildings = loadMissingBuildings;
+
+  /* لوحة المنصة: حمّل الناقص في الخلفية أول ما تتفتح */
+  const origSysContent = window.renderSysContent;
+  if (origSysContent) window.renderSysContent = function(){
+    const out = origSysContent.apply(this, arguments);
+    setTimeout(loadMissingBuildings, 0);
+    return out;
+  };
+
+  /* زرار "فتح" لعمارة: حمّلها الأول لو مش متحمّلة */
+  const origImpersonate = window.impersonateBuilding;
+  if (origImpersonate) window.impersonateBuilding = function(buildingId){
+    if (window.loadBuildingData(buildingId)) return origImpersonate(buildingId);
+    if (window.toast) toast('بيحمّل بيانات العمارة…');
+    window.CLOUD.loadBuilding(buildingId)
+      .then(() => origImpersonate(buildingId))
+      .catch(e => {
+        if (window.showMessage) showMessage('تعذّر تحميل العمارة: ' + (e.message || ''));
+      });
+  };
+
   /* ============================================================
      التشغيل
      ============================================================ */
@@ -178,6 +238,7 @@
       seeded = true;
       clearInterval(t2);
       seedChangelog();
+      loadMissingBuildings();
     }
   }, 1000);
   setTimeout(() => clearInterval(t2), 15 * 60 * 1000);
