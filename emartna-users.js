@@ -108,12 +108,14 @@ window.pageUsers = function(){
         if (s === 'pending')
           return `<div class="flexrow">
             <button class="btn sm primary" onclick="sendInviteWhatsApp('${r.ap ? r.ap.id : ''}')">📱 واتساب</button>
+            <button class="btn sm ghost" onclick="resendInvite('${r.ap ? r.ap.id : ''}')" title="يلغي الكود القديم ويولّد كود جديد">🔄 كود جديد</button>
             <button class="btn sm ghost" onclick="revokeInvite('${r.u.__inviteId}')">إلغاء</button></div>`;
         if (s === 'none' && r.ap)
           return `<button class="btn sm" onclick="createInvite('${r.ap.id}')">📨 ولّد دعوة</button>`;
         if (r.u)
           return `<div class="flexrow">
             <button class="btn sm" onclick="openUserModal('${r.u.id}')">تعديل</button>
+            ${r.ap ? `<button class="btn sm gold" onclick="resendInvite('${r.ap.id}')" title="ابعت دعوة جديدة لصاحب الوحدة">📨 دعوة جديدة</button>` : ''}
             ${!r.u.apartmentId && r.u.role!=='admin'
               ? `<button class="btn sm red" onclick="deleteUser('${r.u.id}')">حذف</button>` : ''}
           </div>`;
@@ -187,6 +189,65 @@ window.createInvite = async function(apId){
     window.sendInviteWhatsApp(apId);
   }catch(e){ showMessage(e.message); }
 };
+
+/* ولّد دعوة جديدة لأي وحدة — سواء عندها حساب، أو دعوة مستنية، أو لسه مفيش.
+   بيلغي أي دعوة قديمة الأول عشان مايفضلش أكتر من كود شغّال لنفس الوحدة. */
+window.resendInvite = async function(apId){
+  const D = window.D;
+  const ap = (D.apartments || []).find(a => a.id === apId);
+  if (!ap) return;
+  if (!ap.phone && !ap.email)
+    return showMessage(`الوحدة ${ap.number} مالهاش رقم موبايل. ضيف الرقم من شاشة "الشقق والملاك" الأول.`);
+
+  const u = (D.users || []).find(x => x.apartmentId === apId);
+  const hasAccount = u && (u.inviteStatus || 'joined') === 'joined';
+  const pendingId  = u && u.inviteStatus === 'pending' ? u.__inviteId : null;
+
+  const go = async () => {
+    try{
+      if (pendingId) await window.CLOUD.invites.revoke(pendingId);
+      await window.CLOUD.invites.create(window.activeBuildingId, {
+        apartmentId: apId,
+        phone: ap.phone || null,
+        phoneCountry: ap.phoneCountry || '+20',
+        email: ap.email || null,
+        role: 'owner',
+      });
+      logActivity('دعوة', `ولّد دعوة جديدة للوحدة ${ap.number}`);
+      await window.refreshUsers();
+      window.sendInviteWhatsApp(apId);
+    }catch(e){ showMessage(e.message); }
+  };
+
+  if (hasAccount){
+    return confirmAction(
+      `الوحدة ${ap.number} عندها حساب بالفعل (${esc(u.username || u.name || '')}).\n\n` +
+      `الدعوة الجديدة هتخلّي صاحبها يعمل حساب جديد بنفسه بدل ما يستنى منك اسم دخول وكلمة سر. ` +
+      `الحساب القديم هيفضل شغّال — تقدر تشيله بعدين لو مش محتاجه. متابعة؟`,
+      go);
+  }
+  if (pendingId){
+    return confirmAction(
+      `في كود دعوة شغّال للوحدة ${ap.number}. الكود القديم هيتلغي وهيتولّد كود جديد. متابعة؟`,
+      go);
+  }
+  return go();
+};
+
+/* تأكيد بسيط — بيستخدم نافذة البرنامج لو موجودة */
+function confirmAction(msg, onYes){
+  if (typeof window.openModal === 'function'){
+    window.__confirmAct = onYes;
+    return window.openModal(`
+      <h3>تأكيد</h3>
+      <p class="small mtop" style="white-space:pre-line">${esc(msg)}</p>
+      <div class="modal-actions">
+        <button class="btn primary" onclick="(function(){const f=window.__confirmAct;closeModal();f&&f()})()">متابعة</button>
+        <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+      </div>`);
+  }
+  if (confirm(msg)) onYes();
+}
 
 window.inviteAllUnits = async function(){
   const D = window.D;
