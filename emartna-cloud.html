@@ -1327,7 +1327,8 @@ function totalExpenses(){return D.expenses.reduce((s,e)=>s+Number(e.amount),0)}
 
 /* ---------- مودال ---------- */
 function openModal(html,wide){
-  document.getElementById('modalBox').innerHTML=html;document.getElementById('modalBox').classList.toggle('wide',!!wide);
+  document.getElementById('modalBox').innerHTML=html;
+  if(window.hydrateStorageImages) hydrateStorageImages(document.getElementById('modalBox'));document.getElementById('modalBox').classList.toggle('wide',!!wide);
   document.getElementById('modalOverlay').classList.add('show');
   history.pushState({modal:true},'',location.href);
 }
@@ -5834,6 +5835,7 @@ function renderContent(){
     settings:pageSettings,aireports:pageAIReports,blocks:pageCompoundBlocks,vendors:pageVendors,maintenance:pageMaintenance,floors:()=>pageFloorsReport(),analytics:pageAnalytics,chat:pageBuildingChat,license:pageLicense,referral:pageReferralProgram,activity:pageActivity,myproposals:pageMyProposals,support:pageMySupportTickets,whatsnew:pageWhatsNew,home:pageOwnerHome,profile:pageProfile
   }[curPage]||pageAdminDashboard;
   c.innerHTML=(u.role==='admin'?licenseBannerHTML():'')+fn(u);
+  if(window.hydrateStorageImages) hydrateStorageImages(c);
   const bw=document.getElementById('notifBellWrap'); if(bw)bw.innerHTML=renderNotifBell();
   bindPageEvents(curPage,u);
 }
@@ -8462,7 +8464,7 @@ function pagePaymentRequests(u){
       {key:'amount',label:'المبلغ',value:r=>r.amount,cell:r=>money(r.amount)},
       {key:'date',label:'تاريخ الطلب',value:r=>r.requestedAt,cell:r=>esc(new Date(r.requestedAt).toLocaleString('ar-EG'))},
       {key:'status',label:'الحالة',value:r=>r.status,cell:r=>r.status==='pending'?'<span class="badge y">بانتظار المراجعة</span>':r.status==='approved'?'<span class="badge g">تم القبول</span>':'<span class="badge r">مرفوض</span>'},
-      {key:'proof',label:'الإثبات',value:null,cell:r=>r.imageDataUrl?`<img src="${r.imageDataUrl}" style="width:50px;height:50px;object-fit:cover;border-radius:6px;cursor:pointer" onclick="viewPaymentRequestImage('${r.id}')">`:'-'},
+      {key:'proof',label:'الإثبات',value:null,cell:r=>r.imageDataUrl?imgTag(r.imageDataUrl,'width:50px;height:50px;object-fit:cover;border-radius:6px;cursor:pointer').replace('<img ',`<img onclick="viewPaymentRequestImage('${r.id}')" `):'-'},
       {key:'x',label:'',value:null,cell:r=>r.status==='pending'?`<div class="flexrow"><button class="btn sm primary" onclick="approvePaymentRequest('${r.id}')">✅ قبول</button><button class="btn sm ghost" onclick="rejectPaymentRequest('${r.id}')">رفض</button></div>`:(r.reviewNote?`<span class="small">${esc(r.reviewNote)}</span>`:'')},
     ];
     return `
@@ -8499,14 +8501,14 @@ function paymentRequestCardHTML(r,isAdmin){
     <p class="small mtop">المبلغ: <b>${money(r.amount)}</b></p>
     <p class="small">تاريخ الطلب: ${esc(new Date(r.requestedAt).toLocaleString('ar-EG'))}</p>
     ${r.note?`<p class="small">ملاحظة: ${esc(r.note)}</p>`:''}
-    <img src="${r.imageDataUrl}" style="width:100%;max-height:180px;object-fit:contain;border-radius:8px;border:1px solid var(--line);cursor:pointer;margin-top:8px" onclick="viewPaymentRequestImage('${r.id}')">
+    ${imgTag(r.imageDataUrl,'width:100%;max-height:180px;object-fit:contain;border-radius:8px;border:1px solid var(--line);cursor:pointer;margin-top:8px').replace('<img ',`<img onclick="viewPaymentRequestImage('${r.id}')" `)}
     ${r.reviewNote?`<p class="small mtop" style="color:var(--gold-dark)">رد رئيس الاتحاد: ${esc(r.reviewNote)}</p>`:''}
     ${isAdmin&&r.status==='pending'?`<div class="flexrow mtop"><button class="btn sm primary" onclick="approvePaymentRequest('${r.id}')">✅ قبول وتسجيل الدفعة</button><button class="btn sm ghost" onclick="rejectPaymentRequest('${r.id}')">رفض</button></div>`:''}
   </div>`;
 }
 function viewPaymentRequestImage(id){
   const r=(D.paymentRequests||[]).find(x=>x.id===id); if(!r)return;
-  openModal(`<h3>صورة إثبات الدفع</h3><img src="${r.imageDataUrl}" style="width:100%;border-radius:8px;margin-top:10px"><div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`,true);
+  openModal(`<h3>صورة إثبات الدفع</h3>${imgTag(r.imageDataUrl,'width:100%;border-radius:8px;margin-top:10px')}<div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`,true);
 }
 function openSubmitPaymentModal(){
   const ap=myApartment(); if(!ap)return;
@@ -8535,7 +8537,7 @@ function syncPaymentAmountDefault(){
     if(bal>0)document.getElementById('prAmount').value=bal;
   }
 }
-function submitPaymentRequest(){
+async function submitPaymentRequest(){
   const ap=myApartment(); if(!ap)return;
   const paymentFor=document.getElementById('prFor').value;
   const projectName=paymentFor==='project'?document.getElementById('prProjectName').value.trim():'';
@@ -8546,7 +8548,20 @@ function submitPaymentRequest(){
   if(!window.__prImageData)return showMessage('أرفق صورة إثبات التحويل أولًا');
   const u=currentUser();
   D.paymentRequests=D.paymentRequests||[];
-  D.paymentRequests.push({id:uid(),apartmentId:ap.id,username:u.username,paymentFor,projectName,amount,imageDataUrl:window.__prImageData,note,status:'pending',requestedAt:new Date().toISOString()});
+
+  // الصورة بتترفع في Storage (مجلد العمارة → مجلد الشقة) مش في قاعدة البيانات
+  let proof=window.__prImageData;
+  if(window.CLOUD&&CLOUD.storage){
+    try{
+      const bU=CLOUD.storage.uuidOfBuilding(activeBuildingId);
+      const aU=CLOUD.storage.uuidOfApartment(activeBuildingId,ap.id);
+      if(bU&&aU) proof=await CLOUD.storage.uploadDataUrl('proofs',[bU,aU],proof);
+    }catch(err){
+      return showMessage('تعذّر رفع الصورة: '+(window.cloudErrorText?cloudErrorText(err):err.message));
+    }
+  }
+
+  D.paymentRequests.push({id:uid(),apartmentId:ap.id,username:u.username,paymentFor,projectName,amount,imageDataUrl:proof,note,status:'pending',requestedAt:new Date().toISOString()});
   window.__prImageData=null;
   save();closeModal();toast('تم إرسال الدفعة للمراجعة');
   pushNotification({type:'payment',title:'طلب دفعة جديد',message:`${unitLabel(ap)} - ${money(amount)} - ${paymentForLabel({paymentFor,projectName})}`,audience:'admins',link:'paymentRequests'});

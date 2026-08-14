@@ -957,6 +957,97 @@ const CLOUD = {
   _sb: sb,
 };
 
+/* ============================================================
+   التخزين — الصور في Supabase Storage مش في قاعدة البيانات
+   المسار: proofs/{عمارة}/{شقة}/{ملف}
+   ============================================================ */
+
+const STORAGE_PREFIX = 'storage:';
+const signedCache = new Map();          // ref → { url, exp }
+
+function dataUrlToBlob(dataUrl){
+  const [head, b64] = String(dataUrl).split(',');
+  const mime = (head.match(/data:([^;]+)/) || [])[1] || 'image/jpeg';
+  const bin = atob(b64 || '');
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return new Blob([buf], { type: mime });
+}
+
+CLOUD.storage = {
+  /* هل المرجع ده متخزّن في Storage؟ */
+  isRef: v => typeof v === 'string' && v.startsWith(STORAGE_PREFIX),
+
+  /* يرفع صورة (dataURL) ويرجّع مرجع نصّي يتخزّن في قاعدة البيانات */
+  async uploadDataUrl(bucket, folders, dataUrl, ext){
+    if (!dataUrl) return null;
+    if (CLOUD.storage.isRef(dataUrl)) return dataUrl;        // مرفوعة قبل كده
+    const blob = dataUrlToBlob(dataUrl);
+    const name = Date.now() + '-' + Math.random().toString(36).slice(2, 8) +
+                 '.' + (ext || (blob.type === 'application/pdf' ? 'pdf' : 'jpg'));
+    const path = folders.filter(Boolean).join('/') + '/' + name;
+    const { error } = await sb.storage.from(bucket)
+      .upload(path, blob, { contentType: blob.type, upsert: false });
+    if (error) throw error;
+    return STORAGE_PREFIX + bucket + '/' + path;
+  },
+
+  /* يحوّل المرجع لرابط مؤقت للعرض */
+  async url(ref){
+    if (!ref) return null;
+    if (!CLOUD.storage.isRef(ref)) return ref;               // dataURL قديمة — تتعرض زي ما هي
+    const hit = signedCache.get(ref);
+    if (hit && hit.exp > Date.now()) return hit.url;
+    const rest = ref.slice(STORAGE_PREFIX.length);
+    const bucket = rest.slice(0, rest.indexOf('/'));
+    const path   = rest.slice(rest.indexOf('/') + 1);
+    const { data, error } = await sb.storage.from(bucket).createSignedUrl(path, 3600);
+    if (error) throw error;
+    signedCache.set(ref, { url: data.signedUrl, exp: Date.now() + 3000 * 1000 });
+    return data.signedUrl;
+  },
+
+  async remove(ref){
+    if (!CLOUD.storage.isRef(ref)) return;
+    const rest = ref.slice(STORAGE_PREFIX.length);
+    const bucket = rest.slice(0, rest.indexOf('/'));
+    const path   = rest.slice(rest.indexOf('/') + 1);
+    await sb.storage.from(bucket).remove([path]);
+    signedCache.delete(ref);
+  },
+
+  uuidOfBuilding: legacyId => cache.buildingUuid[legacyId] || null,
+  uuidOfApartment(legacyBuildingId, apLegacyId){
+    const m = cache.uuid[legacyBuildingId];
+    return (m && m.apartments && m.apartments[apLegacyId]) || null;
+  },
+};
+
+/* أي <img data-ref="storage:..."> بيتحوّل لرابط مؤقت بعد الرسم */
+window.hydrateStorageImages = async function(root){
+  const els = (root || document).querySelectorAll('img[data-ref],a[data-ref]');
+  for (const el of els){
+    const ref = el.getAttribute('data-ref');
+    el.removeAttribute('data-ref');
+    try{
+      const u = await CLOUD.storage.url(ref);
+      if (el.tagName === 'IMG') el.src = u; else el.href = u;
+    }catch(e){
+      if (el.tagName === 'IMG') el.alt = 'تعذّر تحميل الصورة';
+      console.warn('[عمارتنا/تخزين]', window.cloudErrorText(e));
+    }
+  }
+};
+
+/* وسم صورة: بيشتغل مع الصور القديمة (dataURL) والجديدة (Storage) */
+window.imgTag = function(ref, style){
+  if (!ref) return '';
+  const st = style || 'width:100%;border-radius:8px';
+  return CLOUD.storage.isRef(ref)
+    ? `<img data-ref="${ref}" style="${st}" alt="جاري التحميل…">`
+    : `<img src="${ref}" style="${st}">`;
+};
+
 window.CLOUD = CLOUD;
 
 function normPhone(raw, country='+20'){
