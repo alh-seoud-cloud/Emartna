@@ -42,6 +42,22 @@ const DOC_COLLECTIONS = [
 
 const DOC_KEY = c => 'reg:' + c;
 
+/* بيانات صاحب البرنامج اللي بتظهر للعملاء — بتتخزن في مستند منفصل.
+   مابنحفظش كلمة السر ولا سؤال الاسترداد هنا لأن platform_settings
+   مقروء للجميع. */
+const SYSOWNER_PUBLIC_FIELDS = [
+  'contactPhoneCountry','contactPhone','contactEmail',
+  'paymentLink','siteUrl','paymentMethods','bankInfo','notes',
+];
+const SYSOWNER_DOC = 'reg:sysOwnerPublic';
+
+function pickSysOwnerPublic(so){
+  const out = {};
+  if (!so) return out;
+  SYSOWNER_PUBLIC_FIELDS.forEach(k => { if (so[k] !== undefined) out[k] = so[k]; });
+  return out;
+}
+
 
 /* ============================================================
    2) الجداول الحقيقية
@@ -171,6 +187,11 @@ const PLATFORM = {
     if (docs['brand'])   REG.__brand   = docs['brand'];
     if (docs['contact']) REG.__contact = docs['contact'];
 
+    // بيانات التواصل والدفع بتاعت صاحب البرنامج
+    if (docs[SYSOWNER_DOC] && typeof docs[SYSOWNER_DOC] === 'object'){
+      REG.sysOwner = Object.assign({}, REG.sysOwner || {}, docs[SYSOWNER_DOC]);
+    }
+
     // الجداول
     Object.keys(TABLE_COLLECTIONS).forEach((coll, i) => {
       const m = TABLE_COLLECTIONS[coll];
@@ -202,6 +223,16 @@ const PLATFORM = {
         const { error } = await sb3.rpc('save_platform_doc',
           { p_key: DOC_KEY(coll), p_value: REG[coll] ?? null });
         if (error) throw error;
+      }
+
+      // بيانات التواصل والدفع
+      {
+        const nowSO = JSON.stringify(pickSysOwnerPublic(REG.sysOwner));
+        if (nowSO !== prev['doc:sysOwnerPublic']){
+          const { error } = await sb3.rpc('save_platform_doc',
+            { p_key: SYSOWNER_DOC, p_value: pickSysOwnerPublic(REG.sysOwner) });
+          if (error) throw error;
+        }
       }
 
       // الجداول: إضافة/تعديل/حذف
@@ -258,6 +289,7 @@ window.PLATFORM = PLATFORM;
 function snapshot(REG){
   const s = {};
   DOC_COLLECTIONS.forEach(c => { s['doc:' + c] = JSON.stringify(REG[c] ?? null); });
+  s['doc:sysOwnerPublic'] = JSON.stringify(pickSysOwnerPublic(REG.sysOwner));
   Object.keys(TABLE_COLLECTIONS).forEach(c => {
     s['tbl:' + c] = JSON.parse(JSON.stringify(REG[c] || []));
   });
