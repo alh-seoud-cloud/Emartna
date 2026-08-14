@@ -217,6 +217,83 @@
       });
   };
 
+
+  /* ============================================================
+     ٤) إعدادات حساب صاحب البرنامج — النسخة السحابية
+     ------------------------------------------------------------
+     الشاشة القديمة بتعدّل حساب محلي مالوش وجود في السحابة، فأي
+     تغيير فيها مكانش بيتحفظ على الخادم — وبعدين الدخول بيفشل
+     لأنه لسه بيتم برقم الموبايل وكلمة السر الحقيقيين.
+     ============================================================ */
+
+  function loginIdentity(){
+    const u = (window.CLOUD_AUTH && CLOUD_AUTH.user) || null;
+    if (!u) return { phone:'', email:'' };
+    const em = u.email || '';
+    if (em.endsWith('@emartna.local')){
+      const d = em.split('@')[0];
+      return { phone: '+' + d, email: '' };
+    }
+    return { phone:'', email: em };
+  }
+
+  window.changeMyCloudPassword = async function(){
+    const p1 = (document.getElementById('cpNew')  || {}).value || '';
+    const p2 = (document.getElementById('cpNew2') || {}).value || '';
+    if (p1.length < 8) return showMessage('كلمة السر لازم ٨ حروف على الأقل');
+    if (p1 !== p2)     return showMessage('كلمتا السر مش متطابقتين');
+    try{
+      const { error } = await window.CLOUD._sb.auth.updateUser({ password: p1 });
+      if (error) throw error;
+      const f1 = document.getElementById('cpNew'), f2 = document.getElementById('cpNew2');
+      if (f1) f1.value = ''; if (f2) f2.value = '';
+      if (window.toast) toast('اتغيرت كلمة السر — استخدمها في الدخول الجاي');
+    }catch(e){ showMessage(e.message || 'تعذّر تغيير كلمة السر'); }
+  };
+
+  window.changeMyDisplayName = async function(){
+    const name = ((document.getElementById('cpName') || {}).value || '').trim();
+    if (!name) return showMessage('اكتب الاسم');
+    try{
+      const sb = window.CLOUD._sb;
+      const { error } = await sb.from('profiles')
+        .update({ full_name: name }).eq('id', CLOUD_AUTH.user.id);
+      if (error) throw error;
+      if (window.toast) toast('اتحفظ الاسم');
+    }catch(e){ showMessage(e.message || 'تعذّر حفظ الاسم'); }
+  };
+
+  const origSysSettings = window.pageSysSettings;
+  if (origSysSettings) window.pageSysSettings = function(){
+    const id = loginIdentity();
+    const orig = origSysSettings.apply(this, arguments);
+    // نشيل كارت "تغيير بيانات مسؤول النظام" القديم ونحط السحابي مكانه
+    const cleaned = orig.replace(
+      /<div class="card content-narrow"><h3>تغيير بيانات مسؤول النظام<\/h3>[\s\S]*?<\/div>\s*(?=<div class="card content-narrow mtop2">)/,
+      '');
+
+    return `
+    <div class="card content-narrow">
+      <h3>🔑 بيانات دخولك</h3>
+      <p class="small mtop">الدخول بيتم برقم الموبايل أو الإيميل — مفيش اسم مستخدم.</p>
+      <div class="field2 mtop"><label>بتدخل بـ</label>
+        <input value="${esc(id.phone || id.email || '—')}" disabled
+               style="background:var(--line);cursor:not-allowed"></div>
+      <p class="small">لتغيير الرقم أو الإيميل نفسه، كلّم الدعم الفني — التغيير بيحتاج تأكيد الرقم الجديد.</p>
+
+      <div class="field2 mtop2"><label>الاسم اللي بيظهر</label>
+        <input id="cpName" value="${esc((window.CLOUD_AUTH && CLOUD_AUTH.user && CLOUD_AUTH.user.user_metadata && CLOUD_AUTH.user.user_metadata.full_name) || '')}" placeholder="مثال: حسن محمد"></div>
+      <button class="btn sm" onclick="changeMyDisplayName()">💾 حفظ الاسم</button>
+
+      <h3 class="mtop2">تغيير كلمة السر</h3>
+      <div class="field2 mtop"><label>كلمة سر جديدة</label><input id="cpNew" type="password" autocomplete="new-password"></div>
+      <div class="field2"><label>تأكيد كلمة السر</label><input id="cpNew2" type="password" autocomplete="new-password"></div>
+      <button class="btn primary mtop" onclick="changeMyCloudPassword()">🔒 غيّر كلمة السر</button>
+      <p class="small mtop">٨ حروف على الأقل. التغيير بيسري فورًا على كل أجهزتك.</p>
+    </div>
+    ${cleaned}`;
+  };
+
   /* ============================================================
      التشغيل
      ============================================================ */
