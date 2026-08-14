@@ -85,7 +85,11 @@
   }
   @media (max-width: 820px){
     .modal{ resize: none; max-width: 100%; min-width: 0; }
-    .modal-sizer, .modal-grip{ display: none; }
+    .modal-grip{ display: none; }
+    /* على الموبايل: زرار الإغلاق × يفضل ظاهر، وأزرار الحجم بس هي اللي تختفي */
+    .modal-sizer button:not(.mclose){ display: none; }
+    .modal-sizer{ margin: -4px 0 6px -2px; }
+    .modal-sizer button.mclose{ width: 38px; height: 38px; font-size: 22px; }
   }
   /* عند الطباعة منعرضش أزرار التحكم */
   @media print{ .modal-sizer, .modal-grip{ display: none !important; } }

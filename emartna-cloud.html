@@ -776,7 +776,7 @@ async function seedBuildingData(name,apartmentsCount,perFloor,adminUsername,admi
   const groundCount=groundFloorCountIn||perFloor;
   groundShopsCount=Math.min(groundShopsCount||0,groundCount);
   const apartments=[],users=[];
-  const adminUser={id:uid(),username:adminUsername,password:await hashPassword(adminPassword),role:'admin',name:'رئيس اتحاد الملاك',phoneCountry:adminPhoneCountry||'+20',phone:adminPhone||'',email:adminEmail||'',apartmentId:null,active:true};
+  const adminUser={id:uid(),username:adminUsername,password:await hashPassword(adminPassword),role:'admin',name:(window.__signupAdminName||'رئيس اتحاد الملاك'),phoneCountry:adminPhoneCountry||'+20',phone:adminPhone||'',email:adminEmail||'',apartmentId:null,active:true};
   if(recoveryQ&&recoveryA){adminUser.recoveryQ=recoveryQ;adminUser.recoveryA=await hashPassword(recoveryA.trim().toLowerCase());}
   users.push(adminUser);
   for(let i=1;i<=apartmentsCount;i++){
@@ -1041,9 +1041,9 @@ async function loginBuilding(buildingId,username,password){
   const rec=REG.buildings.find(b=>b.id===buildingId);
   if(rec&&rec.license&&rec.license.status==='suspended')return showLoginError('تم إيقاف الاشتراك الخاص بهذه العمارة، تواصل مع مسؤول النظام');
   const u=(data.users||[]).find(x=>x.username===username.trim());
-  if(!u||u.active===false)return showLoginError('اسم المستخدم أو كلمة المرور غير صحيحة');
+  if(!u||u.active===false)return showLoginError('رقم الموبايل أو الإيميل أو كلمة المرور غير صحيحة');
   const ok=await verifyAndUpgrade(password,u.password,rec=>{u.password=rec;saveBuildingData(buildingId,data);});
-  if(!ok)return showLoginError('اسم المستخدم أو كلمة المرور غير صحيحة');
+  if(!ok)return showLoginError('رقم الموبايل أو الإيميل أو كلمة المرور غير صحيحة');
   window.__cameFromSysOwner=false;
   activeBuildingId=buildingId; D=data; migrateBuildingData();
   setSession({type:'building',buildingId,username:u.username});
@@ -2012,7 +2012,7 @@ function loginHTML(){
       <div style="text-align:center;margin-top:-8px"><a href="javascript:void(0)" onclick="goToLanding()" class="small">← الصفحة الرئيسية</a></div>
       <div class="login-error" id="loginErr"></div>
       <form id="loginForm" autocomplete="on">
-      <div class="field"><label>اسم المستخدم</label><input id="lgUser" name="username" autocomplete="username" placeholder="مثال: admin أو shaqa1"></div>
+      <div class="field"><label>رقم الموبايل أو الإيميل</label><input id="lgUser" name="username" autocomplete="username" inputmode="email" placeholder="مثال: 01012345678"></div>
       <div class="field"><label>كلمة المرور</label>${pwField('lgPass','','','current-password')}</div>
       <button class="login-btn" id="lgBtn" type="submit">تسجيل الدخول</button>
       </form>
@@ -2067,14 +2067,14 @@ function signupHTML(){
         <div class="field"><label>رابط الموقع على خرائط جوجل <span style="font-weight:400">(اختياري)</span></label><input id="suLocation" placeholder="https://maps.google.com/..." type="url"></div>
       </div>
       <div class="wizard-step hidden" id="wizStep2">
-        <div class="field"><label>اسم المستخدم (لك أنت كرئيس اتحاد)</label><input id="suUser" name="username" autocomplete="username" placeholder="مثال: admin"></div>
-        <div class="field"><label>كلمة المرور</label>${pwField('suPass','','','new-password')}<p class="small" style="margin-top:4px">8 حروف على الأقل، تحتوي على حرف ورقم ورمز واحد على الأقل (مثل !@#$%)</p></div>
-        <div class="field"><label>تأكيد كلمة المرور</label>${pwField('suPassConfirm','','','new-password')}<p class="small" id="suPassMatchMsg" style="margin-top:4px"></p></div>
+        <div class="field"><label>اسمك <span style="color:var(--red)">*</span></label><input id="suUser" name="name" autocomplete="name" placeholder="مثال: حسن محمد"><p class="small" style="margin-top:4px">الاسم ده بيظهر للسكان — مش اسم دخول.</p></div>
         <div class="field" style="display:flex;gap:8px">
           <div style="flex:1"><label>مفتاح الدولة</label><select id="suCountry">${countryOptions('+20')}</select></div>
-          <div style="flex:2"><label>رقم الهاتف <span style="color:var(--red)">*</span></label><input id="suPhone" placeholder="مطلوب"></div>
+          <div style="flex:2"><label>رقم الهاتف <span style="color:var(--red)">*</span></label><input id="suPhone" name="username" autocomplete="username" inputmode="tel" placeholder="ده اللي هتدخل بيه"></div>
         </div>
-        <div class="field"><label>البريد الإلكتروني <span style="font-weight:400">(اختياري)</span></label><input id="suEmail" type="email" placeholder="غير إلزامي"></div>
+        <div class="field"><label>البريد الإلكتروني <span style="font-weight:400">(اختياري — تقدر تدخل بيه كمان)</span></label><input id="suEmail" type="email" placeholder="غير إلزامي"></div>
+        <div class="field"><label>كلمة المرور</label>${pwField('suPass','','','new-password')}<p class="small" style="margin-top:4px">8 حروف على الأقل، تحتوي على حرف ورقم ورمز واحد على الأقل (مثل !@#$%)</p></div>
+        <div class="field"><label>تأكيد كلمة المرور</label>${pwField('suPassConfirm','','','new-password')}<p class="small" id="suPassMatchMsg" style="margin-top:4px"></p></div>
       </div>
       <div class="wizard-step hidden" id="wizStep3">
         <p class="small">لو نسيت كلمة المرور بعدين، هتحتاج تجاوب على السؤال ده عشان تسترجع حسابك.</p>
@@ -2187,7 +2187,7 @@ async function doSignup(){
   const countrySel=document.getElementById('suNationCountry').value;
   const country=countrySel==='أخرى'?document.getElementById('suOtherCountry').value.trim():countrySel;
   const governorate=document.getElementById('suGovernorate').value.trim();
-  const username=document.getElementById('suUser').value.trim();
+  let username=document.getElementById('suUser').value.trim();
   const password=document.getElementById('suPass').value;
   const passwordConfirm=document.getElementById('suPassConfirm')?document.getElementById('suPassConfirm').value:password;
   if(password!==passwordConfirm)return showLoginError('كلمة المرور وتأكيدها مش متطابقين');
@@ -2197,7 +2197,7 @@ async function doSignup(){
   const rq=document.getElementById('suRQ').value.trim();
   const ra=document.getElementById('suRA').value.trim();
   if(!name)return showLoginError('اسم العمارة / الاتحاد مطلوب');
-  if(!username)return showLoginError('اسم المستخدم مطلوب');
+  if(!username)return showLoginError('اكتب اسمك');
   if(!password)return showLoginError('كلمة المرور مطلوبة');
   if(!document.getElementById('suAgree').checked)return showLoginError('لازم توافق على سياسة الخصوصية وشروط الاستخدام للمتابعة');
   if(!phone)return showLoginError('رقم الهاتف مطلوب');
@@ -2209,12 +2209,22 @@ async function doSignup(){
   }
   window.__signupPhoneConfirmed=false;
   const pwErr=passwordPolicyError(password); if(pwErr)return showLoginError(pwErr);
-  if(isUsernameTaken(username))return showLoginError('اسم المستخدم ده محجوز، اختر اسمًا آخر');
+  // الدخول برقم الموبايل — فالمعرّف بياخد الرقم، والاسم بيفضل اسم العرض
+  window.__signupAdminName=username;   // الاسم اللي هيظهر للسكان
+  (function(){
+    let d=String(phone||'').replace(/[^\d+]/g,'');
+    if(d.startsWith('00')) d='+'+d.slice(2);
+    const cc=(document.getElementById('suCountry')||{}).value||'+20';
+    const e164=d.startsWith('+')?d:(cc+d.replace(/^0+/,''));
+    let base=e164.replace(/\D/g,'')||username, n=1, u=base;
+    while(isUsernameTaken(u)){u=base+'_'+(++n);}
+    username=u;
+  })();
   const referralCodeUsed=document.getElementById('suReferral').value.trim();
   const couponCodeUsed=document.getElementById('suCoupon').value.trim();
   const signupSource=getCampaignSource();
   const{code,id:newBuildingId}=await createBuildingRecord(name,count,4,username,password,rq,ra,phoneCountry,phone,email,trialPlan().key,{groundShopsCount:groundShops,groundFloorCount:groundCount,address,locationUrl,city,country,governorate,communityType,referralCodeUsed,couponCodeUsed,signupSource});
-  pushSysNotification('عمارة جديدة سجّلت بنفسها',`"${name}" - خطة تجريبية - يوزر الأدمن: ${username}`,'sysdash');
+  pushSysNotification('عمارة جديدة سجّلت بنفسها',`"${name}" - خطة تجريبية - دخول رئيس الاتحاد: ${phoneFull(phoneCountry,phone)}`,'sysdash');
   window.__viewMode='login';
   try{history.pushState({viewMode:'login'},'',location.href);}catch(e){}
   showCodeConfirmModal(name,code,username,true);
@@ -2240,10 +2250,10 @@ function recoverHTML(){
   <div class="login-wrap">
     <div class="skyline-bg">${heroSkylineSVG(true)}</div>
     <div class="login-card">
-    <div class="login-logo"><div class="mark">${appLogoSVG(92)}</div><h1>استرداد الدخول</h1><p>ابحث بحساب اسم المستخدم بتاعك</p></div>
+    <div class="login-logo"><div class="mark">${appLogoSVG(92)}</div><h1>استرداد الدخول</h1><p>ابحث برقم الموبايل أو الإيميل</p></div>
     <div class="login-error" id="loginErr"></div>
     ${step===1?`
-      <div class="field"><label>اسم المستخدم</label><input id="rcUser" placeholder="اسم المستخدم اللي بتدخل بيه"></div>
+      <div class="field"><label>رقم الموبايل أو الإيميل</label><input id="rcUser" inputmode="email" placeholder="اللي بتدخل بيه"></div>
       <button class="login-btn" id="rcSearchBtn">بحث</button>
       <div class="login-hint"><a href="javascript:void(0)" onclick="closeRecover()">العودة لتسجيل الدخول</a></div>
     `:step===2?recoverResultsHTML():step===4?recoverVerifyHTML():step===5?recoverContactResetHTML():recoverContactFailHTML()}
@@ -2342,7 +2352,7 @@ function bindLogin(){
     if(window.__recoveryStep===1){
       const go=()=>{
         const username=document.getElementById('rcUser').value.trim();
-        if(!username)return showLoginError('أدخل اسم المستخدم');
+        if(!username)return showLoginError('أدخل رقم الموبايل أو الإيميل');
         window.__recoveryMatches=findUserMatches(username);
         window.__recoveryStep=2; renderRoot();
       };
@@ -2358,9 +2368,9 @@ function bindLogin(){
   const go=()=>{
     const username=document.getElementById('lgUser').value.trim();
     const password=document.getElementById('lgPass').value;
-    if(!username||!password)return showLoginError('أدخل اسم المستخدم وكلمة المرور');
+    if(!username||!password)return showLoginError('أدخل رقم الموبايل أو الإيميل وكلمة المرور');
     const matches=findUserMatches(username);
-    if(!matches.length)return showLoginError('اسم المستخدم أو كلمة المرور غير صحيحة');
+    if(!matches.length)return showLoginError('مفيش حساب بالرقم أو الإيميل ده');
     const sysMatch=matches.find(m=>m.type==='sysowner');
     if(sysMatch){loginSysOwner(username,password);return;}
     loginBuilding(matches[0].buildingId,username,password);
@@ -6935,7 +6945,7 @@ function pageBuilding(){
     <div class="spacer"></div>
     <button class="btn sm gold" onclick="navigator.clipboard&&navigator.clipboard.writeText('${regRec?regRec.code:''}');toast('تم نسخ الكود')">📋 نسخ</button>
     <button class="btn sm red" onclick="regenerateBuildingCode()">🔄 إعادة توليد</button></div>
-    <p class="small mtop">شارك الكود ده مع كل ملاك الشقق - محتاجينه مع اسم المستخدم وكلمة المرور بتاعتهم لتسجيل الدخول. إعادة التوليد بتلغي الكود القديم فورًا.</p>
+    <p class="small mtop">شارك الكود ده مع كل ملاك الشقق - محتاجينه مع رقم الموبايل وكلمة المرور بتاعتهم لتسجيل الدخول. إعادة التوليد بتلغي الكود القديم فورًا.</p>
   </div>
   <div class="card content-narrow mtop2">
     <h3>بيانات العمارة</h3>
@@ -7164,7 +7174,7 @@ function openAddTenantAccountModal(apartmentId){
   if(!a.tenantName)return showMessage('اكتب اسم المستأجر في الحقل بالأعلى الأول');
   openModal(`<h3>حساب دخول للمستأجر</h3>
     <p class="small">المستأجر: ${esc(a.tenantName)} - ${unitLabel(a)}</p>
-    <div class="field2 mtop"><label>اسم المستخدم</label><input id="taUser" value="${esc(usernamePrefixFromCode((findBuildingRec(activeBuildingId)||{}).code||'')+'tenant'+unitTypeIndex(a))}"></div>
+    <div class="field2 mtop"><label>معرّف المستأجر <span class="small" style="color:var(--muted)">(الدخول بيتم برقم موبايله)</span></label><input id="taUser" value="${esc(usernamePrefixFromCode((findBuildingRec(activeBuildingId)||{}).code||'')+'tenant'+unitTypeIndex(a))}"></div>
     <div class="field2"><label>كلمة المرور</label>${pwField('taPass','','','new-password')}<p class="small" style="margin-top:4px">8 حروف على الأقل، حرف ورقم ورمز</p></div>
     <div class="modal-actions"><button class="btn primary" onclick="addTenantAccount('${apartmentId}')">✅ إنشاء الحساب</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
 }
@@ -7230,7 +7240,7 @@ function openApartmentModal(id){
       <div class="field2"><label>البريد الإلكتروني (اختياري)</label><input id="mEmail" type="email" value="${a?esc(a.email||''):''}"></div>
       <div class="field2"><label>الاشتراك الشهري <span style="color:var(--red)">*</span></label><input id="mFee" type="number" value="${a?a.monthlyFee:''}" placeholder="أدخل القيمة" min="0"></div>
       <div class="field2"><label>رصيد افتتاحي <span style="font-weight:400">(موجب = عليه من قبل، سالب = دائن/دفع مقدمًا)</span></label><input id="mOpeningBalance" type="number" value="${a?(a.openingBalance||0):0}"></div>
-      <div class="field2"><label>اسم المستخدم (دخول)</label><input id="mUser" value="${a?esc(a.username):usernamePrefixFromCode((findBuildingRec(activeBuildingId)||{}).code||'')+'shaqa'+nextNum}"></div>
+      <div class="field2"><label>معرّف الوحدة <span class="small" style="color:var(--muted)">(اختياري — الدخول بيتم برقم الموبايل)</span></label><input id="mUser" value="${a?esc(a.username):''}" placeholder="سيبه فاضي — هيتسجّل برقم الموبايل"></div>
       <div class="field2"><label>كلمة مرور جديدة (اتركها فارغة للإبقاء)</label>${pwField('mPass','اختياري')}</div>
     </div>
     <div class="field2"><label>ملاحظات</label><textarea id="mNotes">${a?esc(a.notes||''):''}</textarea></div>
@@ -7243,15 +7253,30 @@ function openApartmentModal(id){
 }
 async function saveApartment(id){
   const number=Number(document.getElementById('mNumber').value);
-  const username=document.getElementById('mUser').value.trim();
+  let username=document.getElementById('mUser').value.trim();
   const ownerName=document.getElementById('mOwner').value.trim();
   const phone=document.getElementById('mPhone').value.trim();
   const fee=Number(document.getElementById('mFee').value||0);
-  if(!number||!username||!ownerName)return showMessage('برجاء ملء رقم الوحدة واسم المالك واسم المستخدم');
+  if(!number||!ownerName)return showMessage('برجاء ملء رقم الوحدة واسم المالك');
   if(!phone)return showMessage('رقم الهاتف مطلوب');
   if(!id&&fee<=0)return showMessage('أدخل قيمة الاشتراك الشهري لهذه الوحدة');
   if(!id&&!enforceLicenseOrAlert('apartment'))return;
   const ownerUserId=id?(D.users.find(u=>u.apartmentId===id)||{}).id:null;
+  // اسم الدخول اختياري: لو فاضي بنولّد واحد تلقائي، والمالك يقدر يغيّره
+  // بعدين أو يدخل عن طريق رابط الدعوة من غير ما يعرفه أصلًا.
+  if(!username){
+    // الدخول بيتم برقم الموبايل أو الإيميل — فالمعرّف بياخد رقم الموبايل نفسه.
+    // (لو الوحدة مالهاش رقم بنستخدم رقم الوحدة كحل أخير)
+    const cc=(document.getElementById('mCountry').value||'+20');
+    // نفس تطبيع الرقم اللي بيستخدمه تسجيل الدخول: بنشيل الصفر الأول
+    // ونضيف كود الدولة — عشان المعرّف يطابق اللي هيدخل بيه صاحب الوحدة.
+    let d=String(phone||'').replace(/[^\d+]/g,'');
+    if(d.startsWith('00')) d='+'+d.slice(2);
+    const e164 = d.startsWith('+') ? d : (cc + d.replace(/^0+/,''));
+    const digits = e164.replace(/\D/g,'');
+    let base=digits||('unit'+number), n=1; username=base;
+    while(isUsernameTaken(username,activeBuildingId,ownerUserId)){username=base+'_'+(++n);}
+  }
   if(isUsernameTaken(username,activeBuildingId,ownerUserId))return showMessage('اسم المستخدم هذا مستخدم بالفعل، اختر اسمًا آخر');
   const blockNameEl=document.getElementById('mBlockName');
   const data={number,blockName:blockNameEl?blockNameEl.value.trim():'',type:document.getElementById('mType').value,usageType:document.getElementById('mUsage').value,closed:document.getElementById('mClosed').checked,openingBalance:Number(document.getElementById('mOpeningBalance').value||0),floor:document.getElementById('mFloor').value.trim(),ownerName,tenantName:document.getElementById('mTenant').value.trim(),phoneCountry:document.getElementById('mCountry').value,phone,email:document.getElementById('mEmail').value.trim(),monthlyFee:fee,username,notes:document.getElementById('mNotes').value.trim()};
@@ -9266,6 +9291,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
 <script type="module" src="emartna-statement.js"></script>
 <script type="module" src="emartna-reports.js"></script>
 <script type="module" src="emartna-admin.js"></script>
+<script type="module" src="emartna-ui.js"></script>
 
 </body>
 </html>
