@@ -433,12 +433,14 @@ function nationOptions(selected,allowOther){
   return opts;
 }
 const EGYPT_GOVERNORATES=['القاهرة','الجيزة','القليوبية','الإسكندرية','البحيرة','مطروح','الغربية','المنوفية','كفر الشيخ','الدقهلية','دمياط','بورسعيد','الإسماعيلية','السويس','شمال سيناء','جنوب سيناء','الشرقية','الفيوم','بني سويف','المنيا','أسيوط','سوهاج','قنا','الأقصر','أسوان','البحر الأحمر','الوادي الجديد'];
+/* سياسة كلمة المرور — واحدة في البرنامج كله: ٨ خانات فأكتر.
+   الطول أهم من تعقيد الرموز، والحماية الإضافية من الخادم (منع كلمات
+   السر المسرّبة) بتتفعّل من إعدادات Supabase. */
+const PASSWORD_MIN=8;
+const PASSWORD_RULE_TEXT='٨ خانات على الأقل';
 function passwordPolicyError(pw){
   pw=String(pw||'');
-  if(pw.length<8)return'كلمة المرور لازم تكون 8 حروف على الأقل';
-  if(!/[A-Za-z]/.test(pw))return'كلمة المرور لازم تحتوي على حرف واحد على الأقل';
-  if(!/[0-9]/.test(pw))return'كلمة المرور لازم تحتوي على رقم واحد على الأقل';
-  if(!/[^A-Za-z0-9]/.test(pw))return'كلمة المرور لازم تحتوي على رمز واحد على الأقل (مثل !@#$%)';
+  if(pw.length<PASSWORD_MIN)return'كلمة المرور لازم تكون '+PASSWORD_MIN+' خانات على الأقل';
   return null;
 }
 function toggleGovernorateField(prefix){
@@ -451,6 +453,16 @@ function toggleGovernorateField(prefix){
   }else{
     wrap.innerHTML=`<label>المحافظة / المنطقة</label><input id="${prefix}Governorate" placeholder="اكتب المحافظة أو المنطقة">`;
   }
+}
+/* حقل هاتف موحّد — مفتاح الدولة والرقم في تابة واحدة */
+function phoneField(ccId,phId,ccVal,phVal,label,required,placeholder){
+  return `<div class="field2">
+    <label>${label||'رقم الهاتف'}${required?' <span style="color:var(--red)">*</span>':''}</label>
+    <div style="display:flex;gap:0;align-items:stretch">
+      <select id="${ccId}" style="flex:0 0 42%;border-top-left-radius:0;border-bottom-left-radius:0">${countryOptions(ccVal||'+20')}</select>
+      <input id="${phId}" type="tel" inputmode="tel" dir="ltr" style="flex:1;text-align:right;border-top-right-radius:0;border-bottom-right-radius:0;border-right:0"
+             placeholder="${esc(placeholder||'01xxxxxxxxx')}" value="${esc(phVal||'')}">
+    </div></div>`;
 }
 function countryOptions(selected){selected=selected||'+20';return COUNTRY_CODES.map(c=>`<option value="${c.code}" ${c.code===selected?'selected':''}>${c.name} ${c.code}</option>`).join('')}
 function phoneFull(country,phone){phone=String(phone||'').trim();country=country||'+20';return phone?`${country} ${phone}`:''}
@@ -1245,9 +1257,13 @@ function closeModal(){
   if(history.state&&history.state.modal){history.back();}else{hideModalUI();}
 }
 /* ---------- تأكيد الحذف بكتابة كلمة "حذف" ---------- */
-function promptModal(title,placeholder,defaultValue,onSubmit,submitLabel){
+function promptModal(title,placeholder,defaultValue,onSubmit,submitLabel,isPassword){
+  // لو النافذة بتطلب كلمة سر، بتيجي بزرار إظهار زي باقي البرنامج
+  const pw = isPassword || /كلمة\s*(ال)?(مرور|سر)/.test(String(title||''));
   openModal(`<h3>${esc(title)}</h3>
-    <div class="field2 mtop"><input id="promptModalInput" placeholder="${esc(placeholder||'')}" value="${esc(defaultValue||'')}"></div>
+    <div class="field2 mtop">${pw
+      ? pwField('promptModalInput',placeholder||'','','new-password')
+      : `<input id="promptModalInput" placeholder="${esc(placeholder||'')}" value="${esc(defaultValue||'')}">`}</div>
     <div class="modal-actions"><button class="btn primary" id="promptModalBtn">${esc(submitLabel||'تأكيد')}</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
   const input=document.getElementById('promptModalInput');
   input.focus();
@@ -2069,11 +2085,10 @@ function signupHTML(){
       <div class="wizard-step hidden" id="wizStep2">
         <div class="field"><label>اسمك <span style="color:var(--red)">*</span></label><input id="suUser" name="name" autocomplete="name" placeholder="مثال: حسن محمد"><p class="small" style="margin-top:4px">الاسم ده بيظهر للسكان — مش اسم دخول.</p></div>
         <div class="field" style="display:flex;gap:8px">
-          <div style="flex:1"><label>مفتاح الدولة</label><select id="suCountry">${countryOptions('+20')}</select></div>
-          <div style="flex:2"><label>رقم الهاتف <span style="color:var(--red)">*</span></label><input id="suPhone" name="username" autocomplete="username" inputmode="tel" placeholder="ده اللي هتدخل بيه"></div>
+          ${phoneField('suCountry','suPhone','+20','','رقم الهاتف',true,'ده اللي هتدخل بيه')}
         </div>
         <div class="field"><label>البريد الإلكتروني <span style="font-weight:400">(اختياري — تقدر تدخل بيه كمان)</span></label><input id="suEmail" type="email" placeholder="غير إلزامي"></div>
-        <div class="field"><label>كلمة المرور</label>${pwField('suPass','','','new-password')}<p class="small" style="margin-top:4px">8 حروف على الأقل، تحتوي على حرف ورقم ورمز واحد على الأقل (مثل !@#$%)</p></div>
+        <div class="field"><label>كلمة المرور</label>${pwField('suPass','','','new-password')}<p class="small" style="margin-top:4px">٨ خانات على الأقل</p></div>
         <div class="field"><label>تأكيد كلمة المرور</label>${pwField('suPassConfirm','','','new-password')}<p class="small" id="suPassMatchMsg" style="margin-top:4px"></p></div>
       </div>
       <div class="wizard-step hidden" id="wizStep3">
@@ -2610,7 +2625,7 @@ function validateBldImportRow(r){
   if(!name)return{ok:false,reason:'اسم العمارة مفقود'};
   if(!username)return{ok:false,reason:'اسم دخول الأدمن مفقود'};
   if(isUsernameTaken(username))return{ok:false,reason:'اسم الدخول ده محجوز بالفعل'};
-  if(!pass||pass.length<8)return{ok:false,reason:'كلمة المرور لازم تكون 8 حروف على الأقل'};
+  if(!pass||pass.length<8)return{ok:false,reason:'كلمة المرور لازم تكون ٨ خانات على الأقل'};
   return{ok:true};
 }
 function renderBldImportPreview(rows){
@@ -2772,7 +2787,7 @@ function applyColCustomizer(){
 async function resetBuildingAdminPasswordPrompt(buildingId){
   const d=loadBuildingData(buildingId); if(!d)return;
   const admin=d.users.find(u=>u.role==='admin'); if(!admin)return showMessage('لا يوجد حساب رئيس اتحاد لهذه العمارة');
-  promptModal('كلمة مرور جديدة','8 حروف على الأقل، حرف ورقم ورمز','',async(newPass)=>{
+  promptModal('كلمة مرور جديدة','٨ خانات على الأقل','',async(newPass)=>{
     if(!newPass)return;
     const pwErr=passwordPolicyError(newPass); if(pwErr)return showMessage(pwErr);
     admin.password=await hashPassword(newPass); saveBuildingData(buildingId,d);
@@ -2803,8 +2818,7 @@ function openNewBuildingModal(){
       <div class="field2"><label>رابط الموقع على خرائط جوجل (اختياري)</label><input id="nbLocation" type="url" placeholder="https://maps.google.com/..."></div>
       <div class="field2"><label>اسم مستخدم رئيس الاتحاد</label><input id="nbAdminUser" value="admin"></div>
       <div class="field2"><label>كلمة مرور رئيس الاتحاد</label>${pwField('nbAdminPass','',"Admin@1234")}</div>
-      <div class="field2"><label>مفتاح الدولة</label><select id="nbCountry">${countryOptions('+20')}</select></div>
-      <div class="field2"><label>رقم الهاتف <span style="color:var(--red)">*</span></label><input id="nbPhone"></div>
+      ${phoneField('nbCountry','nbPhone','+20','','رقم الهاتف',true)}
       <div class="field2"><label>البريد الإلكتروني (اختياري)</label><input id="nbEmail" type="email"></div>
       <div class="field2"><label>خطة الاشتراك</label><select id="nbPlan">${activePlans().map(p=>`<option value="${p.key}" ${p.isTrial?'selected':''}>${p.icon} ${p.name}${p.priceBefore?' - '+money(planPriceAfter(p)):''}</option>`).join('')}</select></div>
       <div class="field2"><label>سؤال استرداد (اختياري)</label><input id="nbRQ" placeholder="مثال: اسم شارع العمارة؟"></div>
@@ -2963,8 +2977,7 @@ function pageSysSettings(){
   </div>
   <div class="card content-narrow mtop2"><h3>بيانات التواصل (تظهر لعملائك عند الترقية أو انتهاء التجربة)</h3>
     <div class="grid g2 mtop">
-      <div class="field2"><label>مفتاح الدولة</label><select id="soCountry">${countryOptions(so.contactPhoneCountry||'+20')}</select></div>
-      <div class="field2"><label>رقم الهاتف/واتساب</label><input id="soPhone" value="${esc(so.contactPhone||'')}"></div>
+      ${phoneField('soCountry','soPhone',so.contactPhoneCountry||'+20',esc(so.contactPhone||''),'رقم الهاتف/واتساب',false)}
       <div class="field2"><label>البريد الإلكتروني</label><input id="soEmail" type="email" value="${esc(so.contactEmail||'')}"></div>
     </div>
     <div class="field2"><label>رابط دفع مباشر (اختياري)</label><input id="soPayLink" placeholder="مثال: رابط فوري أو إنستاباي أو أي بوابة دفع" value="${esc(so.paymentLink||'')}"><p class="small mtop">لو موجود، هيظهر زرار "💳 ادفع الآن" واضح لعملائك في شاشة الترقية، بدل ما يدوروا على بيانات التحويل يدويًا.</p></div>
@@ -3045,7 +3058,7 @@ function pageSysUsers(){
 }
 async function sysResetUserPassword(buildingId,username){
   const d=loadBuildingData(buildingId); const u=d.users.find(x=>x.username===username); if(!u)return;
-  promptModal('كلمة مرور جديدة','8 حروف على الأقل، حرف ورقم ورمز','',async(newPass)=>{
+  promptModal('كلمة مرور جديدة','٨ خانات على الأقل','',async(newPass)=>{
     if(!newPass)return;
     const pwErr=passwordPolicyError(newPass); if(pwErr)return showMessage(pwErr);
     u.password=await hashPassword(newPass); saveBuildingData(buildingId,d);
@@ -3745,7 +3758,7 @@ function validateStaffImportRow(r){
   if(!name)return{ok:false,reason:'الاسم مفقود'};
   if(!username)return{ok:false,reason:'اسم الدخول مفقود'};
   if(username===REG.sysOwner.username||ensureSupportStaff().some(s=>s.username===username))return{ok:false,reason:'اسم الدخول محجوز بالفعل'};
-  if(!pass||pass.length<8)return{ok:false,reason:'كلمة المرور لازم تكون 8 حروف على الأقل'};
+  if(!pass||pass.length<8)return{ok:false,reason:'كلمة المرور لازم تكون ٨ خانات على الأقل'};
   return{ok:true};
 }
 function renderStaffImportPreview(rows){
@@ -3809,13 +3822,13 @@ async function saveStaffAccount(id){
     const s=ensureSupportStaff().find(x=>x.id===id); if(!s)return;
     s.name=name; s.username=username;
     if(password){
-      if(password.length<8)return showMessage('كلمة المرور لازم تكون 8 حروف على الأقل');
+      if(password.length<8)return showMessage('كلمة المرور لازم تكون ٨ خانات على الأقل');
       s.password=await hashPassword(password);
     }
     logSysActivity('تعديل عضو فريق',name+' ('+username+')');
     saveRegistry();closeModal();toast('تم حفظ التعديل');renderSysContent();
   }else{
-    if(!password||password.length<8)return showMessage('كلمة المرور لازم تكون 8 حروف على الأقل');
+    if(!password||password.length<8)return showMessage('كلمة المرور لازم تكون ٨ خانات على الأقل');
     const permissions={};
     SUPPORT_PERMISSION_GROUPS.forEach(g=>{const el=document.getElementById('stPerm_'+g.key);permissions[g.key]=el?el.checked:false;});
     ensureSupportStaff().push({id:uid(),name,username,password:await hashPassword(password),active:true,permissions});
@@ -3850,7 +3863,7 @@ function openResetStaffPassModal(id){
 async function resetStaffPassword(id){
   const s=ensureSupportStaff().find(x=>x.id===id); if(!s)return;
   const pass=document.getElementById('stNewPass').value;
-  if(!pass||pass.length<8)return showMessage('كلمة المرور لازم تكون 8 حروف على الأقل');
+  if(!pass||pass.length<8)return showMessage('كلمة المرور لازم تكون ٨ خانات على الأقل');
   s.password=await hashPassword(pass);
   saveRegistry();closeModal();toast('تم تغيير كلمة المرور');
 }
@@ -4253,8 +4266,7 @@ function openAddLeadModal(id){
   openModal(`<h3>${lead?'تعديل رقم':'+ إضافة رقم يدويًا'}</h3>
     <div class="field2 mtop"><label>الاسم (اختياري)</label><input id="leadName" value="${lead?esc(lead.name||''):''}"></div>
     <div class="grid g2">
-      <div class="field2"><label>مفتاح الدولة</label><select id="leadPhoneCountry">${countryOptions(lead?lead.phoneCountry:null)}</select></div>
-      <div class="field2"><label>رقم الهاتف/واتساب</label><input id="leadPhone" placeholder="01xxxxxxxxx" value="${lead?esc(lead.phone):''}"></div>
+      ${phoneField('leadPhoneCountry','leadPhone',lead?lead.phoneCountry:null,lead?esc(lead.phone):'','رقم الهاتف/واتساب',false)}
     </div>
     <div class="field2"><label>المصدر (اختياري)</label><input id="leadSource" placeholder="مثال: فيسبوك، معرض، توصية" value="${lead?esc(lead.source||''):''}"></div>
     <div class="modal-actions"><button class="btn primary" onclick="saveNewLead(${id?`'${id}'`:'null'})">✅ ${lead?'حفظ التعديل':'إضافة'}</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
@@ -6403,8 +6415,7 @@ function openVendorModal(id){
     <div class="field2"><label>الاسم / اسم الشركة</label><input id="vName" value="${v?esc(v.name):''}"></div>
     <div class="field2"><label>التخصص</label><select id="vCategory">${VENDOR_CATEGORIES.map(c=>`<option ${v&&v.category===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
     <div class="grid g2">
-      <div class="field2"><label>مفتاح الدولة</label><select id="vPhoneCountry">${countryOptions(v?v.phoneCountry:'+20')}</select></div>
-      <div class="field2"><label>رقم الهاتف</label><input id="vPhone" value="${v?esc(v.phone||''):''}"></div>
+      ${phoneField('vPhoneCountry','vPhone',v?v.phoneCountry:'+20',v?esc(v.phone||''):'','رقم الهاتف',false)}
     </div>
     <div class="field2"><label>البريد الإلكتروني (اختياري)</label><input id="vEmail" type="email" value="${v?esc(v.email||''):''}"></div>
     <div class="grid g2">
@@ -7175,7 +7186,7 @@ function openAddTenantAccountModal(apartmentId){
   openModal(`<h3>حساب دخول للمستأجر</h3>
     <p class="small">المستأجر: ${esc(a.tenantName)} - ${unitLabel(a)}</p>
     <div class="field2 mtop"><label>معرّف المستأجر <span class="small" style="color:var(--muted)">(الدخول بيتم برقم موبايله)</span></label><input id="taUser" value="${esc(usernamePrefixFromCode((findBuildingRec(activeBuildingId)||{}).code||'')+'tenant'+unitTypeIndex(a))}"></div>
-    <div class="field2"><label>كلمة المرور</label>${pwField('taPass','','','new-password')}<p class="small" style="margin-top:4px">8 حروف على الأقل، حرف ورقم ورمز</p></div>
+    <div class="field2"><label>كلمة المرور</label>${pwField('taPass','','','new-password')}<p class="small" style="margin-top:4px">٨ خانات على الأقل</p></div>
     <div class="modal-actions"><button class="btn primary" onclick="addTenantAccount('${apartmentId}')">✅ إنشاء الحساب</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
 }
 async function addTenantAccount(apartmentId){
@@ -7191,7 +7202,7 @@ async function addTenantAccount(apartmentId){
   openApartmentModal(apartmentId);
 }
 async function resetTenantPassword(userId){
-  promptModal('كلمة مرور جديدة للمستأجر','8 حروف على الأقل، حرف ورقم ورمز','',async(newPass)=>{
+  promptModal('كلمة مرور جديدة للمستأجر','٨ خانات على الأقل','',async(newPass)=>{
     if(!newPass)return;
     const pwErr=passwordPolicyError(newPass); if(pwErr)return showMessage(pwErr);
     const u=D.users.find(x=>x.id===userId); if(!u)return;
@@ -7235,8 +7246,7 @@ function openApartmentModal(id){
       <div class="field2"><label>الدور</label>${floorSelectHTML('mFloor',a?(allFloorLabels().includes(a.floor)?a.floor:floorLabel(a.number,groundCount,perFloor)):floorLabel(nextNum,groundCount,perFloor))}</div>
       <div class="field2"><label>اسم المالك</label><input id="mOwner" value="${a?esc(a.ownerName):''}"></div>
       <div class="field2"><label>اسم المستأجر (إن وجد)</label><input id="mTenant" value="${a?esc(a.tenantName||''):''}"></div>
-      <div class="field2"><label>مفتاح الدولة</label><select id="mCountry">${countryOptions(a?a.phoneCountry:'+20')}</select></div>
-      <div class="field2"><label>رقم الهاتف <span style="color:var(--red)">*</span></label><input id="mPhone" value="${a?esc(a.phone||''):''}"></div>
+      ${phoneField('mCountry','mPhone',a?a.phoneCountry:'+20',a?esc(a.phone||''):'','رقم الهاتف',true)}
       <div class="field2"><label>البريد الإلكتروني (اختياري)</label><input id="mEmail" type="email" value="${a?esc(a.email||''):''}"></div>
       <div class="field2"><label>الاشتراك الشهري <span style="color:var(--red)">*</span></label><input id="mFee" type="number" value="${a?a.monthlyFee:''}" placeholder="أدخل القيمة" min="0"></div>
       <div class="field2"><label>رصيد افتتاحي <span style="font-weight:400">(موجب = عليه من قبل، سالب = دائن/دفع مقدمًا)</span></label><input id="mOpeningBalance" type="number" value="${a?(a.openingBalance||0):0}"></div>
@@ -8598,8 +8608,7 @@ function openUserModal(id){
       ${editorUnrestricted||u.role==='admin'?`<option value="admin" ${currentRole==='admin'?'selected':''}>رئيس اتحاد إضافي (صلاحيات قابلة للتخصيص)</option>`:''}
     </select>${editorUnrestricted?`<p class="small mtop">لو رقّيته لرئيس اتحاد، هيفضل مرتبط بشقته لكن هيقدر يدخل على صفحات الإدارة اللي تحددها تحت.</p>`:`<p class="small mtop" style="color:var(--gold-dark)">بس رئيس الاتحاد الأساسي يقدر يرقّي مستخدم لرئيس اتحاد.</p>`}</div>`:''}
     <div class="grid g2">
-      <div class="field2"><label>مفتاح الدولة</label><select id="uCountry">${countryOptions(u?u.phoneCountry:'+20')}</select></div>
-      <div class="field2"><label>رقم الهاتف <span style="color:var(--red)">*</span></label><input id="uPhone" value="${u?esc(u.phone||''):''}"></div>
+      ${phoneField('uCountry','uPhone',u?u.phoneCountry:'+20',u?esc(u.phone||''):'','رقم الهاتف',true)}
     </div>
     <div class="field2"><label>البريد الإلكتروني (اختياري)</label><input id="uEmail" type="email" value="${u?esc(u.email||''):''}"></div>
     <div class="field2"><label>كلمة مرور جديدة (اتركها فارغة للإبقاء)</label>${pwField('uPass')}</div>
@@ -9056,8 +9065,7 @@ function openPaymentContactModal(){
     <div id="payMethodsList">${paymentMethodsListHTML(b.paymentMethods)}</div>
     <div class="flexrow"><select id="newPayType">${PAYMENT_METHOD_TYPES.map(t=>`<option>${t}</option>`).join('')}</select><input id="newPayDetails" placeholder="التفاصيل (رقم المحفظة، آيبان...)" style="flex:1"><button class="btn sm" onclick="addPaymentMethod()">+ إضافة</button></div>
     <div class="grid g2 mtop">
-      <div class="field2"><label>مفتاح الدولة</label><select id="payCountry">${countryOptions(b.contactPhoneCountry||'+20')}</select></div>
-      <div class="field2"><label>رقم هاتف/واتساب رئيس الاتحاد</label><input id="payPhone" value="${esc(b.contactPhone||'')}"></div>
+      ${phoneField('payCountry','payPhone',b.contactPhoneCountry||'+20',esc(b.contactPhone||''),'رقم هاتف/واتساب رئيس الاتحاد',false)}
     </div>
     <div class="modal-actions"><button class="btn primary" onclick="savePaymentContact()">💾 حفظ</button><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`);
 }
@@ -9184,8 +9192,7 @@ function pageProfile(u){
   <div class="card content-narrow"><h3>بياناتي</h3>
     <div class="grid g2 mtop">
       <div class="field2"><label>الاسم</label><input id="prName" value="${esc(u.name)}"></div>
-      <div class="field2"><label>مفتاح الدولة</label><select id="prCountry">${countryOptions(u.phoneCountry)}</select></div>
-      <div class="field2"><label>رقم الهاتف <span style="color:var(--red)">*</span></label><input id="prPhone" value="${esc(u.phone||'')}"></div>
+      ${phoneField('prCountry','prPhone',u.phoneCountry,esc(u.phone||''),'رقم الهاتف',true)}
       <div class="field2"><label>البريد الإلكتروني (اختياري)</label><input id="prEmail" type="email" value="${esc(u.email||'')}"></div>
     </div>
     <button class="btn primary" onclick="saveProfile()">💾 حفظ</button></div>
@@ -9292,6 +9299,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
 <script type="module" src="emartna-reports.js"></script>
 <script type="module" src="emartna-admin.js"></script>
 <script type="module" src="emartna-ui.js"></script>
+<script type="module" src="emartna-contacts.js"></script>
 
 </body>
 </html>

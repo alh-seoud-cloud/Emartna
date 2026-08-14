@@ -147,6 +147,7 @@ window.pageUsers = function(){
     ${none ? `<button class="btn primary" onclick="inviteAllUnits()">
         📨 ولّد دعوات لكل الوحدات (${none})</button>` : ''}
     <button class="btn ghost" onclick="openUserModal()">+ مستخدم إداري (محاسب/لجنة)</button>
+    <button class="btn gold" onclick="openContactsImport()">📊 تحديث الجوالات والإيميلات بالإكسل</button>
     <div class="spacer"></div>
     <button class="btn sm ghost" onclick="refreshUsers()">🔄 تحديث</button>
   </div>

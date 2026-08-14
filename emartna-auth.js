@@ -341,8 +341,12 @@ window.doSignup = async function(){
 
   if (!name)    return showLoginError('اكتب اسم العمارة');
   if (!loginId) return showLoginError('اكتب رقم موبايلك — هو ده اللي هتدخل بيه');
-  if (!password || password.length < 6)
-                return showLoginError('كلمة السر لازم ٦ حروف على الأقل');
+  if (window.passwordPolicyError){
+    const e = passwordPolicyError(password);
+    if (e) return showLoginError(e);
+  } else if (!password || password.length < 8){
+    return showLoginError('كلمة السر لازم ٨ خانات على الأقل');
+  }
   if (confirm && password !== confirm)
                 return showLoginError('كلمتا السر مش متطابقتين');
   if (agreeEl && agreeEl.type === 'checkbox' && !agreeEl.checked)

@@ -240,7 +240,9 @@
   window.changeMyCloudPassword = async function(){
     const p1 = (document.getElementById('cpNew')  || {}).value || '';
     const p2 = (document.getElementById('cpNew2') || {}).value || '';
-    if (p1.length < 8) return showMessage('كلمة السر لازم ٨ حروف على الأقل');
+    const perr = window.passwordPolicyError ? passwordPolicyError(p1)
+               : (p1.length < 8 ? 'كلمة السر لازم ٨ خانات على الأقل' : null);
+    if (perr) return showMessage(perr);
     if (p1 !== p2)     return showMessage('كلمتا السر مش متطابقتين');
     try{
       const { error } = await window.CLOUD._sb.auth.updateUser({ password: p1 });
@@ -286,10 +288,10 @@
       <button class="btn sm" onclick="changeMyDisplayName()">💾 حفظ الاسم</button>
 
       <h3 class="mtop2">تغيير كلمة السر</h3>
-      <div class="field2 mtop"><label>كلمة سر جديدة</label><input id="cpNew" type="password" autocomplete="new-password"></div>
-      <div class="field2"><label>تأكيد كلمة السر</label><input id="cpNew2" type="password" autocomplete="new-password"></div>
+      <div class="field2 mtop"><label>كلمة سر جديدة</label>${window.pwField ? pwField('cpNew','','','new-password') : '<input id="cpNew" type="password">'}</div>
+      <div class="field2"><label>تأكيد كلمة السر</label>${window.pwField ? pwField('cpNew2','','','new-password') : '<input id="cpNew2" type="password">'}</div>
       <button class="btn primary mtop" onclick="changeMyCloudPassword()">🔒 غيّر كلمة السر</button>
-      <p class="small mtop">٨ حروف على الأقل. التغيير بيسري فورًا على كل أجهزتك.</p>
+      <p class="small mtop">٨ خانات على الأقل. التغيير بيسري فورًا على كل أجهزتك.</p>
     </div>
     ${cleaned}`;
   };
