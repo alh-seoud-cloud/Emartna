@@ -109,12 +109,16 @@ window.pageUsers = function(){
           return `<div class="flexrow">
             <button class="btn sm primary" onclick="sendInviteWhatsApp('${r.ap ? r.ap.id : ''}')">📱 واتساب</button>
             <button class="btn sm ghost" onclick="resendInvite('${r.ap ? r.ap.id : ''}')" title="يلغي الكود القديم ويولّد كود جديد">🔄 كود جديد</button>
+            ${r.ap ? `<button class="btn sm ghost" onclick="openApartmentModal('${r.ap.id}')">🏠 تعديل الوحدة</button>` : ''}
             <button class="btn sm ghost" onclick="revokeInvite('${r.u.__inviteId}')">إلغاء</button></div>`;
         if (s === 'none' && r.ap)
-          return `<button class="btn sm" onclick="createInvite('${r.ap.id}')">📨 ولّد دعوة</button>`;
+          return `<div class="flexrow">
+            <button class="btn sm" onclick="createInvite('${r.ap.id}')">📨 ولّد دعوة</button>
+            <button class="btn sm ghost" onclick="openApartmentModal('${r.ap.id}')">🏠 تعديل الوحدة</button></div>`;
         if (r.u)
           return `<div class="flexrow">
-            <button class="btn sm" onclick="openUserModal('${r.u.id}')">تعديل</button>
+            <button class="btn sm" onclick="openUserModal('${r.u.id}')">تعديل المستخدم</button>
+            ${r.ap ? `<button class="btn sm ghost" onclick="openApartmentModal('${r.ap.id}')" title="رقم الوحدة · المالك · الهاتف · الاشتراك الشهري">🏠 تعديل الوحدة</button>` : ''}
             ${r.ap ? `<button class="btn sm gold" onclick="resendInvite('${r.ap.id}')" title="ابعت دعوة جديدة لصاحب الوحدة">📨 دعوة جديدة</button>` : ''}
             ${!r.u.apartmentId && r.u.role!=='admin'
               ? `<button class="btn sm red" onclick="deleteUser('${r.u.id}')">حذف</button>` : ''}

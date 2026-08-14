@@ -84,10 +84,12 @@ async function establishSession(preferBuildingId){
     return __sess;
   }
 
-  // صاحب البرنامج: لو مالوش عمارة → لوحة المنصة
+  // صاحب البرنامج بيدخل على لوحة المنصة دايمًا (كل العمارات).
+  // لو عايز يدخل عمارة بعينها، بيختارها من "كل العمارات" أو بييجي
+  // بـ preferBuildingId صريح (زي رابط دعوة أو تجربة).
   if (plat && plat.type === 'sysowner'){
     if (window.PLATFORM) { try{ await window.PLATFORM.load(); }catch(e){} }
-    if (!preferBuildingId && !CLOUD_AUTH.buildings.length){
+    if (!preferBuildingId){
       __sess = { type:'sysowner' };
       return __sess;
     }
