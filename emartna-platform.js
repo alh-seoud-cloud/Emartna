@@ -51,6 +51,20 @@ const SYSOWNER_PUBLIC_FIELDS = [
 ];
 const SYSOWNER_DOC = 'reg:sysOwnerPublic';
 
+/* بيانات الترخيص والاشتراك بتتغيّر من لوحة المنصة (تفعيل · تجديد ·
+   إيقاف · كوبون · إحالة) — لازم ترجع للخادم، مش تفضل محلية. */
+const BUILDING_LICENSE_FIELDS = b => ({
+  plan_key:        (b.license && b.license.plan)   || null,
+  license_start:   (b.license && b.license.start)  || null,
+  license_end:     (b.license && b.license.end)    || null,
+  license_status:  (b.license && b.license.status) || null,
+  applied_coupon:  b.appliedCoupon ?? null,
+  applied_offer_id:b.appliedOfferId ?? null,
+  referral_code:   b.referralCode || null,
+  referred_by:     b.referredBy || null,
+  name:            b.name || null,
+});
+
 function pickSysOwnerPublic(so){
   const out = {};
   if (!so) return out;
@@ -235,6 +249,17 @@ const PLATFORM = {
         }
       }
 
+      // تراخيص واشتراكات العمارات
+      for (const b of (REG.buildings || [])){
+        const row = BUILDING_LICENSE_FIELDS(b);
+        const now = JSON.stringify(row);
+        if (now === prev['bld:' + b.id]) continue;
+        const uuid = b.__uuid;
+        if (!uuid) continue;
+        const { error } = await sb3.from('buildings').update(row).eq('id', uuid);
+        if (error) throw error;
+      }
+
       // الجداول: إضافة/تعديل/حذف
       for (const [coll, m] of Object.entries(TABLE_COLLECTIONS)){
         const cur = REG[coll] || [];
@@ -290,6 +315,9 @@ function snapshot(REG){
   const s = {};
   DOC_COLLECTIONS.forEach(c => { s['doc:' + c] = JSON.stringify(REG[c] ?? null); });
   s['doc:sysOwnerPublic'] = JSON.stringify(pickSysOwnerPublic(REG.sysOwner));
+  (REG.buildings || []).forEach(b => {
+    s['bld:' + b.id] = JSON.stringify(BUILDING_LICENSE_FIELDS(b));
+  });
   Object.keys(TABLE_COLLECTIONS).forEach(c => {
     s['tbl:' + c] = JSON.parse(JSON.stringify(REG[c] || []));
   });
