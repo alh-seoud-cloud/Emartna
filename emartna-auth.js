@@ -277,6 +277,8 @@ window.loginHTML = function(){
       '<div class="login-logo"><div class="mark">',
       '<div class="login-logo" style="cursor:pointer" onclick="goToLanding()" title="الصفحة الرئيسية"><div class="mark">'
     )
+    // النصوص دي اتظبطت في الصفحة نفسها؛ السطور سايبة هنا كاحتياط
+    // لو حد فتح نسخة قديمة من emartna-cloud.html
     .replace('<label>اسم المستخدم</label>', '<label>رقم الموبايل أو الإيميل</label>')
     .replace('placeholder="مثال: admin أو shaqa1"', 'placeholder="01012345678"')
     .replace(
