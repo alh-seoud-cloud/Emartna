@@ -197,6 +197,20 @@
   }
   window.reloadPlatformBuildings = loadMissingBuildings;
 
+  /* لو السجل وصل متأخر (سباق البدء)، أعد التحميل أول ما يجهز */
+  document.addEventListener('cloud:ready', () => {
+    setTimeout(() => {
+      if (window.isSysOwner && isSysOwner()){
+        if (window.CLOUD && CLOUD._cache && CLOUD._cache.registry
+            && window.REG !== CLOUD._cache.registry){
+          window.REG = CLOUD._cache.registry;
+          if (window.renderRoot) renderRoot();
+        }
+        loadMissingBuildings();
+      }
+    }, 300);
+  });
+
   /* لوحة المنصة: حمّل الناقص في الخلفية أول ما تتفتح */
   const origSysContent = window.renderSysContent;
   if (origSysContent) window.renderSysContent = function(){

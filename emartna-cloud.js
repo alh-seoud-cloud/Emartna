@@ -828,6 +828,17 @@ const CLOUD = {
     }));
 
     window.__cloudReady = true;
+    window.__bootError = null;
+
+    // مهم: لو البرنامج بدأ قبل ما التحميل يخلص، بيكون REG وقتها
+    // "سجل فاضي" مؤقت. لازم نبدّله بالحقيقي ونعيد الرسم، وإلا
+    // العمارات بتفضل صفر لحد ما المستخدم يحدّث الصفحة بنفسه.
+    if (window.REG && window.REG !== cache.registry){
+      window.REG = cache.registry;
+      try{
+        if (window.getSession && getSession() && window.renderRoot) renderRoot();
+      }catch(e){ console.warn('[عمارتنا/سحابة] إعادة الرسم', e.message); }
+    }
     return true;
   },
 
@@ -1086,10 +1097,39 @@ function emptyRegistry(){
 
 window.loadRegistry = async function(){
   if (!cache.registry){
-    try{ await CLOUD.bootstrap(); }catch(e){ console.warn('[عمارتنا/سحابة]', e.message); }
+    try{ await CLOUD.bootstrap(); }
+    catch(e){
+      window.__bootError = e;
+      console.warn('[عمارتنا/سحابة]', e.message);
+      showBootError(e);
+    }
   }
   window.REG = cache.registry || emptyRegistry();
   return window.REG;
+};
+
+/* شريط أحمر أعلى الشاشة لو تحميل البيانات فشل — بدل ما تبان الشاشة فاضية */
+function showBootError(e){
+  if (document.getElementById('bootErrBar')) return;
+  const bar = document.createElement('div');
+  bar.id = 'bootErrBar';
+  bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#c23b3b;' +
+    'color:#fff;padding:10px 14px;font:13px/1.7 system-ui;text-align:center;direction:rtl';
+  bar.innerHTML = '⚠️ تعذّر تحميل بياناتك من الخادم — ' +
+    (window.cloudErrorText ? cloudErrorText(e) : (e && e.message || '')) +
+    ' <button onclick="retryBoot()" style="margin-inline-start:10px;background:#fff;color:#c23b3b;' +
+    'border:0;border-radius:6px;padding:4px 12px;cursor:pointer;font-weight:700">🔄 حاول تاني</button>';
+  document.body.appendChild(bar);
+}
+
+window.retryBoot = async function(){
+  const bar = document.getElementById('bootErrBar');
+  if (bar) bar.remove();
+  try{
+    await CLOUD.bootstrap();
+    window.REG = cache.registry || window.REG;
+    if (window.renderRoot) renderRoot();
+  }catch(e){ showBootError(e); }
 };
 
 /* ---- حفظ بيانات المنصة (خطط · عروض) ---- */
@@ -1207,7 +1247,9 @@ window.saveBuildingData = function(id, data){
     const { data:{ session } } = await sb.auth.getSession();
     if (session) await CLOUD.bootstrap();
   }catch(e){
+    window.__bootError = e;
     console.error('[عمارتنا/سحابة] فشل البدء:', e);
+    showBootError(e);
   }
   if (!cache.online) setStatus('offline');
   document.dispatchEvent(new CustomEvent('cloud:ready', { detail: CLOUD.status() }));
