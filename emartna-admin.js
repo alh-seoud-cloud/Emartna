@@ -292,8 +292,75 @@
       <div class="field2"><label>تأكيد كلمة السر</label>${window.pwField ? pwField('cpNew2','','','new-password') : '<input id="cpNew2" type="password">'}</div>
       <button class="btn primary mtop" onclick="changeMyCloudPassword()">🔒 غيّر كلمة السر</button>
       <p class="small mtop">٨ خانات على الأقل. التغيير بيسري فورًا على كل أجهزتك.</p>
+
+      <h3 class="mtop2">💾 نسخة احتياطية</h3>
+      <p class="small">بتنزّل ملف واحد فيه كل بيانات المنصة (العمارات · الوحدات · الحركات ·
+      المستخدمين · الإعدادات). احتفظ بيه في مكان آمن — ده خط دفاعك الأخير.</p>
+      <button class="btn gold mtop" onclick="downloadFullBackup()">⬇️ نزّل نسخة احتياطية كاملة</button>
     </div>
     ${cleaned}`;
+  };
+
+
+  /* ============================================================
+     ٥) نسخة احتياطية كاملة — تنزيل كل بيانات المنصة كملف JSON
+     ============================================================ */
+
+  window.downloadFullBackup = async function(){
+    const sb = window.CLOUD && window.CLOUD._sb;
+    if (!sb) return showMessage('طبقة السحابة لسه بتحمّل — جرّب بعد ثانية');
+    if (window.toast) toast('بيجهّز النسخة… ممكن تاخد شوية');
+
+    const TABLES = [
+      'buildings','apartments','accounts','ledger','expenses','expense_categories',
+      'transfers','projects','vendors','maintenance_reports','meetings','polls',
+      'announcements','suggestions','payment_requests','notifications',
+      'building_chat','activity_log','memberships','profiles','invitations',
+      'plans','landing_offers','platform_settings','platform_admins','platform_invites',
+      'renewal_requests','customer_proposals_v2','support_tickets','support_staff',
+      'sys_notifications','team_tasks','revenue_ledger','referral_rewards',
+    ];
+    const PAGE = 1000;
+    const out = { meta:{ takenAt:new Date().toISOString(), app:'عمارتنا', version:'backup-1' }, tables:{} };
+    const failed = [];
+
+    for (const t of TABLES){
+      try{
+        const rows = [];
+        for (let from = 0; ; from += PAGE){
+          const r = await sb.from(t).select('*').range(from, from + PAGE - 1);
+          if (r.error) throw r.error;
+          const batch = r.data || [];
+          rows.push(...batch);
+          if (batch.length < PAGE) break;
+        }
+        out.tables[t] = rows;
+      }catch(e){
+        failed.push(t + ' (' + (window.cloudErrorText ? cloudErrorText(e) : e.message) + ')');
+      }
+    }
+
+    // الصور بتكبّر الملف جدًا — بنشيلها ونعدّها
+    let images = 0;
+    (out.tables.payment_requests || []).forEach(r => {
+      if (r.proof_url && r.proof_url.length > 500){ r.proof_url = '[صورة محذوفة من النسخة]'; images++; }
+    });
+    out.meta.imagesStripped = images;
+    out.meta.rowCounts = Object.fromEntries(
+      Object.keys(out.tables).map(t => [t, out.tables[t].length]));
+
+    const blob = new Blob([JSON.stringify(out, null, 1)], { type:'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'emartna-backup-' + new Date().toISOString().slice(0,10) + '.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+
+    const total = Object.values(out.meta.rowCounts).reduce((a,b) => a+b, 0);
+    showMessage('✅ اتنزّلت نسخة فيها ' + total + ' سجل من ' +
+      Object.keys(out.tables).length + ' جدول' +
+      (images ? '\n(اتشال ' + images + ' صورة إثبات عشان الحجم)' : '') +
+      (failed.length ? '\n\n⚠️ جداول ما اتقرتش:\n' + failed.join('\n') : ''));
   };
 
   /* ============================================================

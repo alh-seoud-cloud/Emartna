@@ -548,6 +548,54 @@ async function pushBuilding(legacyId){
    6) طابور المزامنة
    ============================================================ */
 
+/* ============================================================
+   مترجم الأخطاء — رسالة عربية واضحة لكل نوع خطأ
+   ============================================================ */
+
+const ERR_BY_CODE = {
+  '23505': 'البيانات دي متسجّلة قبل كده (قيمة مكررة).',
+  '23503': 'العنصر ده مرتبط ببيانات تانية، أو بيشير لحاجة اتحذفت.',
+  '23514': 'قيمة مرفوضة — في خانة مش مستوفية شروط النظام.',
+  '23502': 'في خانة إلزامية فاضية.',
+  '22P02': 'صيغة قيمة غلط (رقم أو تاريخ مش مظبوط).',
+  '42501': 'مالكش صلاحية للعملية دي.',
+  '42703': 'في حقل مش موجود في قاعدة البيانات — محتاج تحديث النسخة.',
+  '42883': 'دالة مطلوبة مش موجودة على الخادم — محتاج تحديث النسخة.',
+  'PGRST301': 'الجلسة انتهت — سجّل دخول تاني.',
+  'PGRST116': 'السجل مش موجود — يمكن اتحذف من جهاز تاني.',
+};
+
+const ERR_BY_STATUS = {
+  400: 'الطلب غير صالح — راجع البيانات المدخلة.',
+  401: 'الجلسة انتهت — سجّل دخول تاني.',
+  403: 'مالكش صلاحية للعملية دي.',
+  404: 'السجل مش موجود — يمكن اتحذف من جهاز تاني.',
+  409: 'في تعارض — البيانات اتغيّرت من جهاز تاني. حدّث الصفحة.',
+  413: 'الملف كبير جدًا.',
+  422: 'البيانات مرفوضة من الخادم — راجع الخانات.',
+  429: 'طلبات كتير في وقت قصير — استنى شوية وجرّب تاني.',
+  500: 'عطل مؤقت في الخادم — جرّب تاني بعد شوية.',
+  502: 'عطل مؤقت في الخادم — جرّب تاني بعد شوية.',
+  503: 'الخدمة مش متاحة دلوقتي — جرّب تاني بعد شوية.',
+};
+
+window.cloudErrorText = function(e){
+  if (!e) return 'حصل خطأ غير معروف';
+  const raw = String(e.message || e || '');
+  if (/Failed to fetch|NetworkError|network/i.test(raw))
+    return 'مفيش اتصال بالإنترنت — شغلك محفوظ محليًا وهيتزامن أول ما النت يرجع.';
+  if (/JWT|token is expired|Invalid Refresh/i.test(raw))
+    return 'الجلسة انتهت — سجّل دخول تاني.';
+  if (e.code && ERR_BY_CODE[e.code]) return ERR_BY_CODE[e.code];
+  if (e.status && ERR_BY_STATUS[e.status]) return ERR_BY_STATUS[e.status];
+  if (/row-level security|violates row-level/i.test(raw))
+    return 'مالكش صلاحية للعملية دي.';
+  if (/duplicate key/i.test(raw)) return ERR_BY_CODE['23505'];
+  if (/check constraint/i.test(raw)) return ERR_BY_CODE['23514'];
+  if (/does not exist/i.test(raw)) return 'حاجة مطلوبة مش موجودة على الخادم — محتاج تحديث النسخة.';
+  return raw.slice(0, 140);
+};
+
 let flushTimer = null;
 
 function queue(legacyId){
@@ -571,7 +619,8 @@ async function flush(){
   }catch(e){
     cache.lastError = e;
     ids.forEach(id => cache.dirty.add(id));   // نرجّعها للطابور
-    setStatus('error', e.message);
+    window.__cloudLastErrorRaw = (e && (e.message || e.code)) ? ((e.code||'') + ' ' + (e.message||'')) : String(e);
+    setStatus('error', window.cloudErrorText(e));
     console.error('[عمارتنا/سحابة] فشل الحفظ:', e);
   }finally{
     cache.syncing = false;
@@ -592,7 +641,8 @@ function setStatus(state, msg){
     el.style.cssText =
       'position:fixed;bottom:14px;inset-inline-start:14px;z-index:99999;' +
       'font:600 12px/1.6 system-ui,sans-serif;padding:6px 12px;border-radius:20px;' +
-      'box-shadow:0 2px 10px rgba(0,0,0,.14);transition:opacity .3s;pointer-events:none';
+      'box-shadow:0 2px 10px rgba(0,0,0,.14);transition:opacity .3s;cursor:pointer';
+    el.onclick = () => window.showCloudSyncDetails && window.showCloudSyncDetails();
     document.body.appendChild(el);
   }
   const looks = {
@@ -609,6 +659,35 @@ function setStatus(state, msg){
   if (state === 'saved') setTimeout(() => { el.style.opacity = '0'; }, 2200);
 }
 
+
+window.retryCloudSync = function(){
+  cache.online = navigator.onLine !== false;
+  flush();
+};
+
+window.showCloudSyncDetails = function(){
+  const pending = cache.dirty.size;
+  const err = cache.lastError;
+  const body = `
+    <h3>${err ? '⚠️ في تغييرات لسه ما اتحفظتش' : '✓ كل حاجة محفوظة'}</h3>
+    ${err ? `<p class="small mtop">${window.esc ? esc(window.cloudErrorText(err)) : window.cloudErrorText(err)}</p>
+      <p class="small">عدد العناصر المنتظرة: <b>${pending}</b>. شغلك موجود على الجهاز، وهيتبعت أول ما المشكلة تتحل.</p>
+      <div style="background:var(--inputbg,#fffdf8);border:1px solid var(--line,#e3e8e6);border-radius:9px;
+                  padding:8px;font:12px/1.6 monospace;direction:ltr;text-align:left;white-space:pre-wrap;
+                  max-height:140px;overflow:auto;margin-top:10px">${window.esc ? esc(window.__cloudLastErrorRaw||'') : (window.__cloudLastErrorRaw||'')}</div>`
+    : '<p class="small mtop">مفيش تغييرات منتظرة. آخر حفظ تم بنجاح.</p>'}
+    <div class="modal-actions">
+      ${err ? '<button class="btn primary" onclick="retryCloudSync();closeModal()">🔄 حاول تاني</button>' : ''}
+      <button class="btn ghost" onclick="closeModal()">إغلاق</button>
+    </div>`;
+  if (window.openModal) openModal(body);
+  else alert(window.cloudErrorText(err));
+};
+
+/* تحذير قبل قفل الصفحة لو في تغييرات ما اتحفظتش */
+window.addEventListener('beforeunload', e => {
+  if (cache.dirty.size){ e.preventDefault(); e.returnValue = ''; }
+});
 
 /* ============================================================
    8) استبدال دوال البرنامج
