@@ -240,14 +240,15 @@ window.resendInvite = async function(apId){
 };
 
 /* تأكيد بسيط — بيستخدم نافذة البرنامج لو موجودة */
-function confirmAction(msg, onYes){
+function confirmAction(msg, onYes, opts){
+  opts = opts || {};
   if (typeof window.openModal === 'function'){
     window.__confirmAct = onYes;
     return window.openModal(`
-      <h3>تأكيد</h3>
+      <h3>${esc(opts.title || 'تأكيد')}</h3>
       <p class="small mtop" style="white-space:pre-line">${esc(msg)}</p>
       <div class="modal-actions">
-        <button class="btn primary" onclick="(function(){const f=window.__confirmAct;closeModal();f&&f()})()">متابعة</button>
+        <button class="btn primary" onclick="(function(){const f=window.__confirmAct;closeModal();f&&f()})()">${esc(opts.okLabel || 'متابعة')}</button>
         <button class="btn ghost" onclick="closeModal()">إلغاء</button>
       </div>`);
   }
@@ -260,10 +261,19 @@ window.inviteAllUnits = async function(){
   const targets = (D.apartments||[]).filter(a => !a.closed && !taken.has(a.id));
   const noPhone = targets.filter(a => !a.phone && !a.email);
 
-  confirmDelete(
-    `هيتولّد كود دعوة لـ ${targets.length - noPhone.length} وحدة.` +
-    (noPhone.length ? ` (${noPhone.length} وحدة مالهاش رقم موبايل هتتخطّى)` : '') +
-    ` بعدها تبعت الأكواد للسكان على واتساب.`,
+  const ready = targets.length - noPhone.length;
+  if (!ready)
+    return showMessage(
+      'مفيش وحدة جاهزة للدعوة.\n\n' +
+      (noPhone.length
+        ? `فيه ${noPhone.length} وحدة من غير رقم موبايل — ضيف الأرقام من شاشة "الشقق والملاك" الأول.\n` +
+          'أسرع طريقة: زرار "📊 تحديث بالإكسل" في نفس الشاشة.'
+        : 'كل الوحدات عندها حسابات أو دعوات بالفعل.'));
+
+  confirmAction(
+    `هيتولّد كود دعوة لـ ${ready} وحدة.` +
+    (noPhone.length ? `\n\n${noPhone.length} وحدة مالهاش رقم موبايل هتتخطّى — تقدر تضيف أرقامهم بعدين وتولّدلهم دعوات.` : '') +
+    `\n\nبعدها تبعت الأكواد للسكان على واتساب. مفيش أي بيانات هتتمسح.`,
     async () => {
       try{
         const { made, skipped } = await window.CLOUD.invites.createForAll(window.activeBuildingId);
@@ -271,18 +281,20 @@ window.inviteAllUnits = async function(){
         await window.refreshUsers();
         toast(`اتولّدت ${made.length} دعوة` + (skipped.length ? ` · اتخطّت ${skipped.length}` : ''));
       }catch(e){ showMessage(e.message); }
-    });
+    },
+    { title:'📨 توليد دعوات', okLabel:'ولّد الدعوات' });
 };
 
 window.revokeInvite = function(inviteId){
-  confirmDelete('إلغاء الدعوة دي؟ الكود مش هيشتغل تاني، وتقدر تولّد واحد جديد بعدين.',
+  confirmAction('إلغاء الدعوة دي؟ الكود مش هيشتغل تاني، وتقدر تولّد واحد جديد بعدين.\n\nالوحدة وبياناتها مش هيتأثروا.',
     async () => {
       try{
         await window.CLOUD.invites.revoke(inviteId);
         await window.refreshUsers();
         toast('اتلغت الدعوة');
       }catch(e){ showMessage(e.message); }
-    });
+    },
+    { title:'إلغاء دعوة', okLabel:'إلغاء الدعوة' });
 };
 
 window.sendInviteWhatsApp = function(apId){
