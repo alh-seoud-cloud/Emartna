@@ -460,9 +460,36 @@ function phoneField(ccId,phId,ccVal,phVal,label,required,placeholder){
     <label>${label||'رقم الهاتف'}${required?' <span style="color:var(--red)">*</span>':''}</label>
     <div style="display:flex;gap:0;align-items:stretch">
       <select id="${ccId}" style="flex:0 0 42%;border-top-left-radius:0;border-bottom-left-radius:0">${countryOptions(ccVal||'+20')}</select>
-      <input id="${phId}" type="tel" inputmode="tel" dir="ltr" style="flex:1;text-align:right;border-top-right-radius:0;border-bottom-right-radius:0;border-right:0"
-             placeholder="${esc(placeholder||'01xxxxxxxxx')}" value="${esc(phVal||'')}">
+      <input id="${phId}" type="tel" inputmode="tel" dir="ltr"
+             style="flex:1;text-align:right;border-top-right-radius:0;border-bottom-right-radius:0;border-right:0"
+             placeholder="${esc(placeholder||'01xxxxxxxxx')}" value="${esc(phVal||'')}"
+             oninput="sanitizePhoneInput('${ccId}','${phId}')">
     </div></div>`;
+}
+/* لو المستخدم كتب مفتاح الدولة جوه خانة الرقم، بنشيله ونظبط القائمة —
+   عشان مايتسجّلش مرتين (+20 +201012345678). */
+function sanitizePhoneInput(ccId,phId){
+  const cc=document.getElementById(ccId), ph=document.getElementById(phId);
+  if(!ph)return;
+  let v=ph.value.replace(/[^\d+]/g,'');
+  if(v.startsWith('00')) v='+'+v.slice(2);
+  if(v.startsWith('+')){
+    const hit=COUNTRY_CODES.slice().sort((a,b)=>b.code.length-a.code.length)
+      .find(c=>v.startsWith(c.code));
+    if(hit){ if(cc) cc.value=hit.code; v=v.slice(hit.code.length); }
+    else v=v.replace(/^\+/,'');
+  } else if(cc && cc.value && v.startsWith(cc.value.replace('+',''))
+            && v.length>cc.value.length){
+    v=v.slice(cc.value.length-1);
+  }
+  ph.value=v;
+}
+/* اختيار الدولة بالاسم بيظبط مفتاحها تلقائيًا */
+function linkCountryToCode(nationSelId,codeSelId){
+  const n=document.getElementById(nationSelId), c=document.getElementById(codeSelId);
+  if(!n||!c)return;
+  const hit=COUNTRY_CODES.find(x=>x.name===n.value);
+  if(hit) c.value=hit.code;
 }
 function countryOptions(selected){selected=selected||'+20';return COUNTRY_CODES.map(c=>`<option value="${c.code}" ${c.code===selected?'selected':''}>${c.name} ${c.code}</option>`).join('')}
 function phoneFull(country,phone){phone=String(phone||'').trim();country=country||'+20';return phone?`${country} ${phone}`:''}
@@ -2075,7 +2102,7 @@ function signupHTML(){
         <div class="field"><label>عدد المحلات من ضمنها (إن وجدت) <span style="font-weight:400">(اتركها صفر لو مفيش محلات)</span></label><input id="suGroundShops" type="number" value="0" min="0"></div>
         </div>
         <div id="suCompoundNote" class="field hidden"><p class="small">هتقدر تضيف كل مبنى وفيلا في الكمبوند بالتفصيل من شاشة "مباني وفلل الكمبوند" بعد إنشاء الحساب مباشرة.</p></div>
-        <div class="field"><label>الدولة</label><select id="suNationCountry" onchange="toggleGovernorateField('su')">${nationOptions('مصر')}</select></div>
+        <div class="field"><label>الدولة</label><select id="suNationCountry" onchange="toggleGovernorateField('su');linkCountryToCode('suNationCountry','suCountry')">${nationOptions('مصر')}</select></div>
         <div class="field hidden" id="suOtherCountryWrap"><label>اسم الدولة</label><input id="suOtherCountry" placeholder="اكتب اسم الدولة"></div>
         <div class="field" id="suGovernorateFieldWrap"><label>المحافظة</label><select id="suGovernorate">${EGYPT_GOVERNORATES.map(g=>`<option>${esc(g)}</option>`).join('')}</select></div>
         <div class="field"><label>المدينة <span style="color:var(--red)">*</span></label><input id="suCity" placeholder="مثال: مدينة نصر"></div>
