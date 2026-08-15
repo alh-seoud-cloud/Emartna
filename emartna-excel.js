@@ -25,12 +25,31 @@
   function download(rows, cols, sheet, fileName, widths){
     const ws = XLSX.utils.aoa_to_sheet([cols, ...rows]);
     ws['!cols'] = (widths || cols.map(() => 16)).map(w => ({ wch:w }));
+    // إكسيل بيفتح الشيت من الشمال افتراضيًا، فالأعمدة العربية بتبان مقلوبة
+    // للعين. السطر ده بيخلي الورقة تفتح من اليمين زي القراءة العربية.
+    ws['!views'] = [{ RTL: true }];
+    ws['!freeze'] = { xSplit:'0', ySplit:'1' };
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, sheet);
     XLSX.writeFile(wb, fileName + ' - ' + (window.todayISO ? todayISO() : '') + '.xlsx');
   }
 
-  function readSheet(file, onRows, host){
+  /* بصمة مبسطة للعنوان — عشان نقارن رغم فروق المسافات */
+  const norm = h => String(h == null ? '' : h).replace(/\s+/g,'').trim();
+
+  function headerProblem(got, expected){
+    const g = got.map(norm), e = expected.map(norm);
+    if (g.length < e.length - 1)
+      return `الملف ده فيه ${got.length} عمود، والقالب المطلوب فيه ${expected.length}.`;
+    for (let i = 0; i < e.length; i++){
+      if (g[i] !== e[i])
+        return `ترتيب الأعمدة مختلف: العمود رقم ${i+1} المفروض يكون "${expected[i]}" ` +
+               `ولقيت "${got[i] || '(فاضي)'}".`;
+    }
+    return null;
+  }
+
+  function readSheet(file, onRows, host, expectedCols){
     const reader = new FileReader();
     reader.onload = e => {
       try{
@@ -41,6 +60,21 @@
         if (!body.length){
           host.innerHTML = '<p class="small mtop" style="color:var(--red)">الملف فاضي — مفيش صفوف بيانات.</p>';
           return;
+        }
+        if (expectedCols){
+          const problem = headerProblem(rows[0] || [], expectedCols);
+          if (problem){
+            host.innerHTML = `
+              <div class="card mtop2" style="border:1px solid var(--red)">
+                <h3 style="color:var(--red)">❌ الملف ده مش القالب الصح</h3>
+                <p class="small mtop">${esc2(problem)}</p>
+                <p class="small">نزّل القالب من الزرار اللي فوق، عدّل عليه، وارفعه —
+                من غير ما تغيّر أسماء الأعمدة ولا ترتيبها ولا تمسح أي عمود.</p>
+                <p class="small" style="color:var(--muted)">الأعمدة المطلوبة بالترتيب:<br>
+                ${expectedCols.map((c,i) => (i+1) + '. ' + esc2(c)).join(' · ')}</p>
+              </div>`;
+            return;
+          }
         }
         onRows(body);
       }catch(err){
@@ -126,7 +160,7 @@
     'البريد الإلكتروني','الاشتراك الشهري','رصيد افتتاحي','مغلقة (نعم/لا)','ملاحظات',
     'الرصيد الحالي (للعرض فقط)'];
 
-  window.downloadApartmentsTemplate = function(){
+  window.downloadApUpdateTemplate = function(){
     if (noXLSX()) return;
     const rows = (D.apartments || []).slice()
       .sort((a,b) => (Number(a.number)||0) - (Number(b.number)||0))
@@ -210,7 +244,7 @@
       : { line, ap, label, status:'same' };
   }
 
-  window.openApartmentsImport = function(){
+  window.openApUpdateImport = function(){
     const n = (D.apartments || []).length;
     openModal(`
       <h3>📊 تحديث بيانات الشقق والملاك بالإكسل</h3>
@@ -223,14 +257,14 @@
       <p class="small" style="color:var(--red)">
         ⚠️ متغيّرش عمود "رمز الوحدة" ولا تمسح صفوف. عمود "الرصيد الحالي" للعرض بس — بيتحسب من الحركات.
       </p>
-      <button class="btn gold mtop" onclick="downloadApartmentsTemplate()">⬇️ تحميل القالب معبّى</button>
+      <button class="btn gold mtop" onclick="downloadApUpdateTemplate()">⬇️ تحميل القالب معبّى</button>
       <div class="field2 mtop2"><label>ارفع الملف بعد التعديل (.xlsx)</label>
-        <input type="file" id="apImportFile" accept=".xlsx,.xls,.csv" onchange="handleApartmentsUpload(this)"></div>
+        <input type="file" id="apImportFile" accept=".xlsx,.xls,.csv" onchange="handleApUpdateUpload(this)"></div>
       <div id="apImpPreview"></div>
       <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`, true);
   };
 
-  window.handleApartmentsUpload = function(input){
+  window.handleApUpdateUpload = function(input){
     const file = input.files[0];
     if (!file || noXLSX()) return;
     const host = document.getElementById('apImpPreview');
@@ -238,11 +272,11 @@
       const seen = new Map();
       const results = body.map((r,i) => checkApRow(r, i, seen));
       window.__apImp = results;
-      renderPreview('apImpPreview', results, 'applyApartmentsImport');
-    }, host);
+      renderPreview('apImpPreview', results, 'applyApUpdateImport');
+    }, host, AP_COLS);
   };
 
-  window.applyApartmentsImport = function(){
+  window.applyApUpdateImport = function(){
     const upd = (window.__apImp || []).filter(x => x.status === 'update');
     if (!upd.length) return;
     let n = 0;
@@ -264,7 +298,7 @@
     'الصلاحية (رئيس اتحاد/محاسب/إداري/صاحب شقة/مستأجر)',
     'مفتاح الدولة','رقم الجوال','البريد الإلكتروني','نشط (نعم/لا)'];
 
-  window.downloadUsersTemplate = function(){
+  window.downloadUsersUpdateTemplate = function(){
     if (noXLSX()) return;
     const aps = D.apartments || [];
     const rows = (D.users || []).map(u => {
@@ -334,7 +368,7 @@
       : { line, u, label, status:'same' };
   }
 
-  window.openUsersImport = function(){
+  window.openUsersUpdateImport = function(){
     const n = (D.users || []).length;
     openModal(`
       <h3>📊 تحديث بيانات المستخدمين بالإكسل</h3>
@@ -346,14 +380,14 @@
       <p class="small" style="color:var(--red)">
         ⚠️ "معرّف المستخدم" و"اسم الدخول" و"الوحدة" للربط بس — متغيّرهمش.
       </p>
-      <button class="btn gold mtop" onclick="downloadUsersTemplate()">⬇️ تحميل القالب معبّى</button>
+      <button class="btn gold mtop" onclick="downloadUsersUpdateTemplate()">⬇️ تحميل القالب معبّى</button>
       <div class="field2 mtop2"><label>ارفع الملف بعد التعديل (.xlsx)</label>
-        <input type="file" id="usImportFile" accept=".xlsx,.xls,.csv" onchange="handleUsersUpload(this)"></div>
+        <input type="file" id="usImportFile" accept=".xlsx,.xls,.csv" onchange="handleUsersUpdateUpload(this)"></div>
       <div id="usImpPreview"></div>
       <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`, true);
   };
 
-  window.handleUsersUpload = function(input){
+  window.handleUsersUpdateUpload = function(input){
     const file = input.files[0];
     if (!file || noXLSX()) return;
     const host = document.getElementById('usImpPreview');
@@ -361,11 +395,11 @@
       const seen = new Map();
       const results = body.map((r,i) => checkUserRow(r, i, seen));
       window.__usImp = results;
-      renderPreview('usImpPreview', results, 'applyUsersImport');
-    }, host);
+      renderPreview('usImpPreview', results, 'applyUsersUpdateImport');
+    }, host, US_COLS);
   };
 
-  window.applyUsersImport = function(){
+  window.applyUsersUpdateImport = function(){
     const upd = (window.__usImp || []).filter(x => x.status === 'update');
     if (!upd.length) return;
     let n = 0;
@@ -392,16 +426,81 @@
   const origApartments = window.pageApartments;
   if (origApartments) window.pageApartments = function(){
     return `<div class="flexrow" style="margin-bottom:10px">
-      <button class="btn gold sm" onclick="openApartmentsImport()">📊 تحديث بالإكسل</button>
+      <button class="btn gold sm" onclick="openApUpdateImport()">📊 تحديث بالإكسل</button>
     </div>` + origApartments.apply(this, arguments);
   };
 
   const origUsers = window.pageUsers;
   if (origUsers) window.pageUsers = function(){
     return `<div class="flexrow" style="margin-bottom:10px">
-      <button class="btn gold sm" onclick="openUsersImport()">📊 تحديث بالإكسل</button>
+      <button class="btn gold sm" onclick="openUsersUpdateImport()">📊 تحديث بالإكسل</button>
     </div>` + origUsers.apply(this, arguments);
   };
+
+
+  /* ============================================================
+     تحسين شاشات الاستيراد القديمة (عمارات · فريق دعم · أرقام تسويق · وحدات)
+     نفس الحماية: ورقة من اليمين + رفض أي ملف أعمدته مش مطابقة
+     ============================================================ */
+
+  const LEGACY = [
+    { tpl:'downloadBuildingsTemplate',  cols:'BUILDINGS_IMPORT_COLUMNS',  sheet:'العمارات' },
+    { tpl:'downloadStaffTemplate',      cols:'STAFF_IMPORT_COLUMNS',      sheet:'فريق الدعم' },
+    { tpl:'downloadLeadsTemplate',      cols:'LEADS_IMPORT_COLUMNS',      sheet:'أرقام التسويق' },
+    { tpl:'downloadApartmentsTemplate', cols:'APARTMENTS_IMPORT_COLUMNS', sheet:'الوحدات' },
+  ];
+
+  // الورقة تفتح من اليمين في كل قوالب البرنامج
+  if (typeof XLSX !== 'undefined' && XLSX.utils && !XLSX.utils.__rtlPatched){
+    const orig = XLSX.utils.aoa_to_sheet;
+    XLSX.utils.aoa_to_sheet = function(){
+      const ws = orig.apply(this, arguments);
+      ws['!views'] = [{ RTL: true }];
+      ws['!freeze'] = { xSplit:'0', ySplit:'1' };
+      return ws;
+    };
+    XLSX.utils.__rtlPatched = true;
+  }
+
+  /* لفّ دوال التحقق القديمة: لو الرأس غلط، نوقف قبل أي قراءة */
+  function guardLegacyImport(handlerName, getCols, label){
+    const orig = window[handlerName];
+    if (typeof orig !== 'function') return;
+    window[handlerName] = function(input){
+      const file = input && input.files && input.files[0];
+      // الأعمدة معرّفة بـconst في الصفحة (مش على window) — بنجيبها بدالة
+      let expected = null;
+      try{ expected = getCols(); }catch(e){}
+      if (!file || !expected || typeof XLSX === 'undefined') return orig.apply(this, arguments);
+      const self = this, args = arguments;
+      const r = new FileReader();
+      r.onload = e => {
+        try{
+          const wb = XLSX.read(e.target.result, { type:'array' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:false });
+          const problem = headerProblem(rows[0] || [], expected);
+          if (problem){
+            input.value = '';
+            return showMessage(
+              `❌ الملف ده مش نموذج "${label}".\n\n${problem}\n\n` +
+              'نزّل النموذج من الزرار اللي فوق واملأه من غير ما تغيّر أسماء الأعمدة ولا ترتيبها.');
+          }
+          orig.apply(self, args);
+        }catch(err){
+          showMessage('تعذّرت قراءة الملف: ' + err.message);
+        }
+      };
+      r.readAsArrayBuffer(file);
+    };
+  }
+
+  // بنلفّ الدوال اللي بتستقبل الملف في الشاشات القديمة
+  [['handleBuildingsFileUpload',  () => BUILDINGS_IMPORT_COLUMNS,  'استيراد العمارات'],
+   ['handleStaffFileUpload',      () => STAFF_IMPORT_COLUMNS,      'استيراد فريق الدعم'],
+   ['handleLeadsFileUpload',      () => LEADS_IMPORT_COLUMNS,      'استيراد أرقام التسويق'],
+   ['handleApartmentsFileUpload', () => APARTMENTS_IMPORT_COLUMNS, 'استيراد الوحدات'],
+  ].forEach(([fn,gc,lb]) => guardLegacyImport(fn, gc, lb));
 
   console.log('[عمارتنا] تحديث الشقق والمستخدمين بالإكسل جاهز');
 })();
