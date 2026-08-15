@@ -423,19 +423,91 @@
      الأزرار في الشاشتين
      ============================================================ */
 
-  const origApartments = window.pageApartments;
-  if (origApartments) window.pageApartments = function(){
-    return `<div class="flexrow" style="margin-bottom:10px">
-      <button class="btn gold sm" onclick="openApUpdateImport()">📊 تحديث بالإكسل</button>
-    </div>` + origApartments.apply(this, arguments);
+  /* قائمة إكسل واحدة تجمع كل العمليات بدل أزرار متفرقة */
+  window.toggleExcelMenu = function(id){
+    const m = document.getElementById(id);
+    if (!m) return;
+    const open = m.style.display === 'block';
+    document.querySelectorAll('.excel-menu').forEach(x => x.style.display = 'none');
+    m.style.display = open ? 'none' : 'block';
   };
+  document.addEventListener('click', e => {
+    if (e.target.closest && e.target.closest('.excel-wrap')) return;
+    document.querySelectorAll('.excel-menu').forEach(x => x.style.display = 'none');
+  });
 
-  const origUsers = window.pageUsers;
-  if (origUsers) window.pageUsers = function(){
-    return `<div class="flexrow" style="margin-bottom:10px">
-      <button class="btn gold sm" onclick="openUsersUpdateImport()">📊 تحديث بالإكسل</button>
-    </div>` + origUsers.apply(this, arguments);
-  };
+  function excelMenu(id, items){
+    return `<span class="excel-wrap" style="position:relative;display:inline-block">
+      <button class="btn gold" onclick="toggleExcelMenu('${id}')">📊 إكسل ▾</button>
+      <div id="${id}" class="excel-menu" style="display:none;position:absolute;z-index:60;
+           top:calc(100% + 6px);inset-inline-end:0;min-width:280px;background:var(--panel);
+           border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.14);
+           padding:6px;text-align:start">
+        ${items.map(it => `
+          <button class="btn ghost" style="display:block;width:100%;text-align:start;border:0;
+                  padding:9px 10px;margin:0" onclick="toggleExcelMenu('${id}');${it.fn}">
+            <b>${it.icon} ${it.label}</b>
+            <div class="small" style="color:var(--muted);font-weight:400">${it.hint}</div>
+          </button>`).join('')}
+      </div></span>`;
+  }
+
+  /* لفّ آمن: لو الشاشة اتعرّفت بعدينا (ترتيب تحميل الملفات)، اللفّة
+     بتفضل شغالة — بنمسك أي إعادة تعريف بـsetter. */
+  function wrapPage(name, transform){
+    let raw = window[name];
+    const wrapper = function(){
+      const html = typeof raw === 'function' ? raw.apply(this, arguments) : '';
+      return transform(html);
+    };
+    try{
+      Object.defineProperty(window, name, {
+        configurable: true,
+        get(){ return wrapper; },
+        set(v){ raw = v; },      // أي ملف يعيد تعريفها → بنخزنها كأصل
+      });
+    }catch(e){
+      // بعض الدوال معرّفة في الصفحة نفسها ومينفعش نعيد تعريف خاصيتها،
+      // فبنستبدلها مباشرة — ولو ملف تاني استبدلها بعدنا بنرجّع اللفّة.
+      window[name] = wrapper;
+      let tries = 0;
+      const t = setInterval(() => {
+        if (++tries > 20) return clearInterval(t);
+        if (window[name] !== wrapper){ raw = window[name]; window[name] = wrapper; }
+      }, 500);
+    }
+  }
+
+  /* الشقق: القائمة بتتحط جنب أزرار الإضافة والاستيراد الموجودة */
+  wrapPage('pageApartments', function(html){
+    const importBtn = '<button class="btn ghost" onclick="openImportApartmentsModal()">📥 استيراد من إكسيل</button>';
+    const menu = excelMenu('apExcelMenu', [
+      { icon:'✏️', label:'تحديث بيانات موجودة', fn:'openApUpdateImport()',
+        hint:'نزّل بياناتك معبّاة · عدّلها · ارفعها بمراجعة' },
+      { icon:'➕', label:'إضافة وحدات جديدة',   fn:'openImportApartmentsModal()',
+        hint:'نموذج فاضي لإضافة وحدات دفعة واحدة' },
+      { icon:'⬇️', label:'تصدير الجدول الحالي', fn:"exportSortableTableToExcel('apTable')",
+        hint:'بنفس الفلاتر والأعمدة الظاهرة قدامك' },
+    ]);
+    return html.includes(importBtn)
+      ? html.replace(importBtn, menu)
+      : `<div class="flexrow" style="margin-bottom:10px">${menu}</div>` + html;
+  });
+
+  /* المستخدمون */
+  wrapPage('pageUsers', function(html){
+    const menu = excelMenu('usExcelMenu', [
+      { icon:'✏️', label:'تحديث بيانات المستخدمين', fn:'openUsersUpdateImport()',
+        hint:'الأسماء · الصلاحيات · الجوالات · البريد' },
+      { icon:'⬇️', label:'تصدير الجدول الحالي', fn:"exportSortableTableToExcel('usersTable')",
+        hint:'بنفس الفلاتر والأعمدة الظاهرة قدامك' },
+    ]);
+    // بندوّر على زرار "مستخدم إداري" مهما كانت المسافات حواليه
+    const m = html.match(/<button class="btn ghost" onclick="openUserModal\(\)">[^<]*<\/button>/);
+    return m
+      ? html.replace(m[0], m[0] + menu)
+      : `<div class="flexrow" style="margin-bottom:10px">${menu}</div>` + html;
+  });
 
 
   /* ============================================================
