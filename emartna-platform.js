@@ -55,9 +55,9 @@ const SYSOWNER_DOC = 'reg:sysOwnerPublic';
    إيقاف · كوبون · إحالة) — لازم ترجع للخادم، مش تفضل محلية. */
 const nz = v => (v === '' || v === undefined) ? null : v;   // تاريخ فاضي = null
 const BUILDING_LICENSE_FIELDS = b => ({
-  plan_key:        nz(b.license && b.license.plan)   || null,
-  license_start:   nz(b.license && b.license.start)  || null,
-  license_end:     nz(b.license && b.license.end)    || null,
+  plan_key:        nz(b.license && b.license.plan)      || null,
+  license_start:   nz(b.license && b.license.startDate) || null,
+  license_end:     nz(b.license && b.license.endDate)   || null,
   license_status:  (b.license && b.license.status) || null,
   applied_coupon:  b.appliedCoupon ?? null,
   applied_offer_id:b.appliedOfferId ?? null,

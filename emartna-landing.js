@@ -146,8 +146,12 @@
   function watchScroll(){
     const bar = document.getElementById('landStickyCta');
     if (!bar) return;
-    const on = window.scrollY > 420;
-    bar.style.display = on ? 'block' : 'none';
+    // الشريط ده للصفحة الرئيسية بس. لو المستخدم داخل البرنامج،
+    // بيفضل مخفي — وإلا بيغطي أزرار الشريط الجانبي (زي "تسجيل الخروج").
+    const onLanding = (typeof __viewMode !== 'undefined' && __viewMode === 'landing')
+                   && !(window.getSession && getSession());
+    if (!onLanding){ bar.style.display = 'none'; return; }
+    bar.style.display = (window.scrollY > 420) ? 'block' : 'none';
   }
   window.addEventListener('scroll', watchScroll, { passive:true });
   setInterval(watchScroll, 1200);

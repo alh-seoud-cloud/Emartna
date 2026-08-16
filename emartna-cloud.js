@@ -822,11 +822,18 @@ const CLOUD = {
         referredBy: b.referred_by || null,
         appliedCoupon: b.applied_coupon || null,
         signupSource: b.signup_source || '',
+        // مهم: البرنامج بيقرا الترخيص بأسماء startDate/endDate/plan/status.
+        // كان بيتبني بأسماء تانية (start/end) فالشاشة كانت تقول
+        // "بلا تاريخ انتهاء" و"الخطة null" وتحسبه منتهي — رغم إن
+        // الخادم مسجّل التواريخ صح.
         license: {
-          plan:   b.plan_key,
-          start:  b.license_start,
-          end:    b.license_end,
-          status: b.license_status,
+          plan:      b.plan_key || 'custom',
+          status:    b.license_status || 'trial',
+          startDate: b.license_start || null,
+          endDate:   b.license_end   || null,
+          maxApartments:   null,
+          maxTransactions: null,
+          notes: '',
         },
       })),
       // طبقة المنصة — الجولة ٣
