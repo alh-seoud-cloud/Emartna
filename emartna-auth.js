@@ -190,8 +190,12 @@ const __origLogout = window.logout;
 window.logout = async function(){
   try{ clearTimeout(window.__idleTimer); clearTimeout(window.__idleWarnTimer); }catch(e){}
 
+  // لازم نعرف نوع الجلسة الأول — كان بيتقرا بعد ما يتصفّر،
+  // فالزائر التجريبي كان بيروح لشاشة الدخول بدل الصفحة الرئيسية.
+  const wasDemo = !!(window.isDemoSession && window.isDemoSession());
+
   // عمارة تجريبية؟ تتمسح بكل بياناتها
-  if (window.isDemoSession && window.isDemoSession()){
+  if (wasDemo){
     try{ await window.CLOUD._sb.rpc('drop_my_demo_building'); }catch(e){}
     window.__isDemoSession = false;
     try{ sessionStorage.removeItem('emartna_demo'); }catch(e){}
@@ -201,7 +205,39 @@ window.logout = async function(){
   __sess = null;
   window.D = null; window.activeBuildingId = null;
   window.curPage = 'dashboard'; window.__navExpandedGroup = null;
+
+  // بعد الخروج المستخدم بيتوقع شاشة الدخول — من غير السطر ده البرنامج
+  // كان بيرجّعه للصفحة الرئيسية (آخر قيمة لـ__viewMode) فيبان كأنه
+  // راح لشاشة تانية خالص.
+  window.__viewMode = wasDemo ? 'landing' : 'login';
+  window.__previewMode = false;
+
   renderRoot(); resetHistoryBase();
+  try{ window.scrollTo(0, 0); }catch(e){}
+  if (window.toast) toast(wasDemo ? 'خرجت من التجربة' : 'اتسجّل خروجك — تقدر تدخل تاني من هنا');
+};
+
+/* تأكيد قبل الخروج — عشان مايحصلش بالغلط وإنت في نص شغل */
+const __logoutNow = window.logout;
+window.logout = function(){
+  const pending = (window.CLOUD && window.CLOUD.pendingCount) ? CLOUD.pendingCount() : 0;
+  const demo = !!(window.isDemoSession && window.isDemoSession());
+  const msg = demo
+    ? 'هتخرج من التجربة، وكل بيانات العمارة التجريبية هتتمسح. متابعة؟'
+    : (pending
+        ? `في ${pending} تغيير لسه بيتحفظ. لو خرجت دلوقتي ممكن يضيع. تفضل تستنى شوية؟`
+        : 'هتسجّل خروجك وترجع لشاشة الدخول. متابعة؟');
+
+  if (typeof window.openModal !== 'function') return __logoutNow();
+  window.__doLogout = __logoutNow;
+  openModal(`
+    <h3>🚪 تسجيل الخروج</h3>
+    <p class="small mtop" style="white-space:pre-line">${window.esc ? esc(msg) : msg}</p>
+    <div class="modal-actions">
+      <button class="btn primary" onclick="(function(){const f=window.__doLogout;closeModal();f&&f()})()">
+        ${demo ? 'اخرج من التجربة' : 'تسجيل الخروج'}</button>
+      <button class="btn ghost" onclick="closeModal()">إلغاء — كمّل شغلي</button>
+    </div>`);
 };
 
 /* ============================================================

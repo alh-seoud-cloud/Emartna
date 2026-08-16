@@ -217,10 +217,32 @@ const BUILDING_FIELDS = {
    2) الترجمة في الاتجاهين
    ============================================================ */
 
+/* أعمدة التواريخ في قاعدة البيانات — الخانة الفاضية '' مش تاريخ صالح،
+   لازم تروح null. من غير كده Postgres بيرفض الحفظ كله برسالة
+   invalid input syntax for type date، والتغييرات بتفضل معلّقة. */
+const DATE_COLS = new Set([
+  'date','created_at','updated_at','resolved_at','reviewed_at','reminded_at',
+  'deleted_at','demo_expires_at','last_backup_date','license_start','license_end',
+  'contract_start','contract_end','requested_at','registered_at','converted_at',
+  'opened_at','expires_at','sent_at','accepted_at','starts_at','ends_at',
+]);
+
+function cleanValue(col, v){
+  if (v === undefined) return undefined;
+  if (DATE_COLS.has(col)){
+    if (v === '' || v === null) return null;
+    if (typeof v === 'string' && !v.trim()) return null;
+  }
+  return v;
+}
+
 function toDB(item, map, ctx){
   const row = {};
   for (const [appKey, col] of Object.entries(map.fields)){
-    if (item[appKey] !== undefined) row[col] = item[appKey];
+    if (item[appKey] !== undefined){
+      const v = cleanValue(col, item[appKey]);
+      if (v !== undefined) row[col] = v;
+    }
   }
   if (map.refs){
     for (const [appKey, [col, coll]] of Object.entries(map.refs)){
@@ -659,6 +681,9 @@ function setStatus(state, msg){
   if (state === 'saved') setTimeout(() => { el.style.opacity = '0'; }, 2200);
 }
 
+
+/* عدد التغييرات اللي لسه ما اتحفظتش — بيستخدمه تأكيد الخروج */
+CLOUD.pendingCount = () => cache.dirty.size;
 
 window.retryCloudSync = function(){
   cache.online = navigator.onLine !== false;
