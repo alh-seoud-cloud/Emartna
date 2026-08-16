@@ -207,5 +207,178 @@
         </div>`).join('') : '<p class="small">لا توجد مقترحات مطابقة</p>'}</div>`;
   };
 
+
+  /* ---------- ٥) مقترحاتي مع صاحب البرنامج ---------- */
+
+  const origMyProp = window.pageMyProposals;
+  if (origMyProp) window.pageMyProposals = function(){
+    const items = (window.myProposals ? myProposals() : []);
+    const filters = [
+      { k:'all',      label:'الكل' },
+      { k:'pending',  label:'بانتظار المراجعة', test:p => (p.status||'pending') === 'pending' },
+      { k:'reviewed', label:'تحت الدراسة',      test:p => p.status === 'reviewed' },
+      { k:'done',     label:'تم الرد',          test:p => ['answered','done','accepted','rejected'].includes(p.status) },
+    ];
+    const counts = countAll(filters, items);
+
+    if ((V.myprop || 'cards') === 'cards'){
+      const html = origMyProp.apply(this, arguments);
+      return html.replace(/(<div class="flexrow">[\s\S]*?<\/div>)/, '$1' + toolbar('myprop', filters, counts));
+    }
+
+    const shown = apply('myprop', filters, items);
+    const badge = s => s === 'pending' ? '<span class="badge y">بانتظار المراجعة</span>'
+                   : s === 'reviewed' ? '<span class="badge b">تحت الدراسة</span>'
+                   : '<span class="badge g">تم الرد</span>';
+    const cols = [
+      { key:'date',  label:'التاريخ', value:p => p.createdAt||'', cell:p => esc2((p.createdAt||'').slice(0,10) || '-') },
+      { key:'title', label:'المقترح', value:p => p.title||'', cell:p => `<b>${esc2(p.title||'')}</b>` },
+      { key:'desc',  label:'التفاصيل', value:p => p.description||'',
+        cell:p => `<span class="small">${esc2((p.description||'').slice(0,80))}</span>` },
+      { key:'status',label:'الحالة', value:p => p.status||'', cell:p => badge(p.status) },
+      { key:'reply', label:'رد الإدارة', value:p => p.adminResponse||'',
+        cell:p => p.adminResponse ? `<span class="small">${esc2(p.adminResponse.slice(0,70))}</span>` : '-' },
+    ];
+    return `<div class="flexrow"><button class="btn primary" onclick="openSubmitProposalModal()">+ تقديم مقترح جديد</button></div>
+      ${toolbar('myprop', filters, counts)}
+      <div class="mtop">${sortableTable('myPropTable', shown, cols, null,
+        { defaultKey:'date', emptyText:'مفيش مقترحات مطابقة', exportName:'مقترحاتي' })}</div>`;
+  };
+
+  /* ---------- ٦) الدعم الفني ---------- */
+
+  const origTickets = window.pageMySupportTickets;
+  if (origTickets) window.pageMySupportTickets = function(){
+    const items = (window.ensureSupportTickets ? ensureSupportTickets() : [])
+      .filter(t => t.buildingId === window.activeBuildingId)
+      .sort((a,b) => (b.updatedAt||'').localeCompare(a.updatedAt||''));
+    const filters = [
+      { k:'open',   label:'مفتوحة',  test:t => ['open','new','pending'].includes(t.status||'open') },
+      { k:'working',label:'جاري العمل', test:t => ['in_progress','working'].includes(t.status) },
+      { k:'closed', label:'تم الحل',  test:t => ['closed','resolved','done'].includes(t.status) },
+      { k:'all',    label:'الكل' },
+    ];
+    const counts = countAll(filters, items);
+
+    if ((V.tick || 'cards') === 'cards'){
+      const html = origTickets.apply(this, arguments);
+      return html.replace(/(<div class="flexrow">[\s\S]*?<\/div>)/, '$1' + toolbar('tick', filters, counts));
+    }
+
+    const shown = apply('tick', filters, items);
+    const badge = t => ['closed','resolved','done'].includes(t.status) ? '<span class="badge g">✅ تم الحل</span>'
+                   : ['in_progress','working'].includes(t.status) ? '<span class="badge b">🔧 جاري العمل</span>'
+                   : '<span class="badge y">⏳ مفتوحة</span>';
+    const cols = [
+      { key:'date',   label:'التاريخ', value:t => t.createdAt||'', cell:t => esc2((t.createdAt||'').slice(0,10) || '-') },
+      { key:'subject',label:'الموضوع', value:t => t.subject||'', cell:t => `<b>${esc2(t.subject||'')}</b>` },
+      { key:'prio',   label:'الأولوية', value:t => t.priority||'', cell:t => esc2(t.priority||'-') },
+      { key:'status', label:'الحالة', value:t => t.status||'', cell:badge },
+      { key:'replies',label:'الردود', value:t => (t.replies||[]).length,
+        cell:t => (t.replies||[]).length ? `<span class="badge b">${(t.replies||[]).length}</span>` : '-' },
+      { key:'upd',    label:'آخر تحديث', value:t => t.updatedAt||'', cell:t => esc2((t.updatedAt||'').slice(0,10) || '-') },
+    ];
+    return `<div class="flexrow"><button class="btn primary" onclick="openTicketModal()">🎫 طلب دعم فني جديد</button></div>
+      ${toolbar('tick', filters, counts)}
+      <div class="mtop">${sortableTable('ticketTable', shown, cols, null,
+        { defaultKey:'date', emptyText:'مفيش طلبات مطابقة', exportName:'طلبات الدعم' })}</div>`;
+  };
+
+  /* ---------- ٧) سجل النشاط: كروت كبديل للجدول ---------- */
+
+  const origAct = window.pageActivity;
+  if (origAct) window.pageActivity = function(){
+    const items = [...(D.activityLog || [])].reverse();
+    const filters = [{ k:'all', label:'الكل' }];
+    const counts = { all: items.length };
+
+    if ((V.act || 'table') === 'table'){
+      const html = origAct.apply(this, arguments);
+      return toolbar('act', filters, counts) + html;
+    }
+    return toolbar('act', filters, counts) + `
+      <div class="grid g2 mtop">${items.slice(0,200).map(a => `
+        <div class="card">
+          <div class="flexrow" style="justify-content:space-between">
+            <b>${esc2(a.action||'')}</b>
+            <span class="small" style="color:var(--muted)">${esc2((a.date||'').slice(0,16))}</span>
+          </div>
+          <p class="small mtop">${esc2(a.detail||'')}</p>
+          <p class="small" style="color:var(--muted)">${esc2(a.name||a.username||'')}</p>
+        </div>`).join('') || '<p class="small">مفيش نشاط</p>'}</div>`;
+  };
+
+  /* ---------- ٨) الرخصة: الخطط جدول أو كروت ---------- */
+
+  const origLic = window.pageLicense;
+  if (origLic) window.pageLicense = function(){
+    const plans = (window.ensurePlans ? ensurePlans() : (REG.plans || []))
+      .filter(p => p.active !== false);
+    const filters = [{ k:'all', label:'كل الخطط' }];
+    const counts = { all: plans.length };
+    const html = origLic.apply(this, arguments);
+
+    if ((V.lic || 'cards') === 'cards')
+      return html.replace(/(<div class="card[\s\S]*?<\/div>)/, '$1' + toolbar('lic', filters, counts));
+
+    const cols = [
+      { key:'name',  label:'الخطة', value:p => p.name||'', cell:p => `<b>${esc2((p.icon||'')+' '+(p.name||''))}</b>` },
+      { key:'price', label:'السعر', value:p => Number(p.price)||0,
+        cell:p => Number(p.price) ? money(p.price) : '<span class="badge g">مجاني</span>' },
+      { key:'dur',   label:'المدة', value:p => p.durationMonths||0,
+        cell:p => p.durationMonths ? p.durationMonths + ' شهر' : 'بلا نهاية' },
+      { key:'units', label:'حد الوحدات', value:p => p.maxApartments||0,
+        cell:p => p.maxApartments ? String(p.maxApartments) : 'غير محدود' },
+      { key:'trx',   label:'حد المعاملات', value:p => p.maxTransactions||0,
+        cell:p => p.maxTransactions ? String(p.maxTransactions) : 'غير محدود' },
+      { key:'x', label:'', value:null,
+        cell:p => `<button class="btn sm primary" onclick="openRenewalRequestModal('${p.key}')">اطلب التجديد</button>` },
+    ];
+    // نسيب كارت الحالة زي ما هو ونحط جدول الخطط مكان الكروت
+    const head = html.split('تفعيل خطة جديدة')[0];
+    return head + toolbar('lic', filters, counts) +
+      `<div class="mtop">${sortableTable('plansTable', plans, cols, null,
+        { defaultKey:'price', emptyText:'مفيش خطط', exportName:'خطط الاشتراك' })}</div>`;
+  };
+
+
+  /* ---------- ٩) الإحالة: مين استخدم كودك ---------- */
+
+  const origRef = window.pageReferralProgram;
+  if (origRef) window.pageReferralProgram = function(){
+    const rec = window.findBuildingRec ? findBuildingRec(window.activeBuildingId) : null;
+    const items = rec ? (REG.buildings || []).filter(b => b.referredBy === rec.id) : [];
+    const filters = [
+      { k:'all',      label:'الكل' },
+      { k:'rewarded', label:'اترقّى',      test:b => !!b.referralRewardGiven },
+      { k:'trial',    label:'لسه تجريبي',  test:b => !b.referralRewardGiven },
+    ];
+    const counts = countAll(filters, items);
+    const html = origRef.apply(this, arguments);
+
+    if ((V.ref || 'cards') === 'cards')
+      return html.replace(/(<div class="section-title"><h3>مين استخدم كودك<\/h3><\/div>)/,
+                          '$1' + toolbar('ref', filters, counts));
+
+    const shown = apply('ref', filters, items);
+    const rewards = window.ensureReferralRewards ? ensureReferralRewards() : [];
+    const daysOf = b => rewards.filter(r => r.referredBuildingId === b.id)
+                               .reduce((s,r) => s + (r.rewardDays||0), 0);
+    const cols = [
+      { key:'name', label:'العمارة', value:b => b.name||'', cell:b => `<b>${esc2(b.name||'')}</b>` },
+      { key:'code', label:'الكود',   value:b => b.code||'', cell:b => `<span dir="ltr">${esc2(b.code||'-')}</span>` },
+      { key:'state',label:'الحالة',  value:b => b.referralRewardGiven ? 1 : 0,
+        cell:b => b.referralRewardGiven ? '<span class="badge g">✅ اترقّى</span>'
+                                        : '<span class="badge y">لسه تجريبي</span>' },
+      { key:'days', label:'أيام المكافأة', value:daysOf,
+        cell:b => daysOf(b) ? `<b>${daysOf(b)} يوم</b>` : '-' },
+    ];
+    const head = html.split('<div class="section-title"><h3>مين استخدم كودك</h3></div>')[0];
+    return head + '<div class="section-title"><h3>مين استخدم كودك</h3></div>' +
+      toolbar('ref', filters, counts) +
+      `<div class="mtop">${sortableTable('refTable', shown, cols, null,
+        { defaultKey:'name', emptyText:'محدش استخدم كودك لسه', exportName:'الإحالات' })}</div>`;
+  };
+
   console.log('[عمارتنا] عرض شاشات التواصل جاهز');
 })();
