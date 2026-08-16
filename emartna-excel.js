@@ -574,5 +574,44 @@
    ['handleApartmentsFileUpload', () => APARTMENTS_IMPORT_COLUMNS, 'استيراد الوحدات'],
   ].forEach(([fn,gc,lb]) => guardLegacyImport(fn, gc, lb));
 
+
+  /* ============================================================
+     المكتبات الخارجية بتتحمّل عند الطلب — بنلفّ كل دالة بتستخدمها
+     عشان تستنى التحميل الأول بدل ما تفشل.
+     ============================================================ */
+  (function lazyLibs(){
+    const XLSX_FNS = ['downloadApartmentsTemplate','downloadBuildingsTemplate',
+      'downloadLeadsTemplate','downloadStaffTemplate','exportSortableTableToExcel',
+      'handleApartmentsFileUpload','handleBuildingsFileUpload','handleLeadsFileUpload',
+      'handleStaffFileUpload','downloadApUpdateTemplate','downloadUsersUpdateTemplate',
+      'handleApUpdateUpload','handleUsersUpdateUpload','printSortableTable'];
+
+    XLSX_FNS.forEach(name => {
+      const orig = window[name];
+      if (typeof orig !== 'function') return;
+      window[name] = function(){
+        if (typeof XLSX !== 'undefined') return orig.apply(this, arguments);
+        const self = this, args = arguments;
+        if (window.toast) toast('بيحمّل مكتبة إكسيل…');
+        return window.ensureXLSX()
+          .then(() => orig.apply(self, args))
+          .catch(err => showMessage(err.message || 'تعذّر تحميل مكتبة إكسيل'));
+      };
+    });
+
+    // QR في بطاقة الدعاية
+    ['renderPromoQR','openPromoCard','downloadPromoCard'].forEach(name => {
+      const orig = window[name];
+      if (typeof orig !== 'function') return;
+      window[name] = function(){
+        if (typeof QRCode !== 'undefined') return orig.apply(this, arguments);
+        const self = this, args = arguments;
+        return window.ensureQRCode()
+          .then(() => orig.apply(self, args))
+          .catch(() => orig.apply(self, args));
+      };
+    });
+  })();
+
   console.log('[عمارتنا] تحديث الشقق والمستخدمين بالإكسل جاهز');
 })();
