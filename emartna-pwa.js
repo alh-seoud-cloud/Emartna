@@ -79,8 +79,11 @@
           name: 'عمارتنا - إدارة اتحاد الملاك',
           short_name: 'عمارتنا',
           description: 'نظام إدارة اتحاد الملاك بسهولة واحترافية',
-          start_url: location.pathname + location.search,
-          scope: location.pathname.replace(/[^/]*$/, ''),
+          // لازم روابط كاملة — الـmanifest متولّد كـblob فالمسارات
+          // النسبية بتبقى نسبة للـblob مش للموقع، فمتصفح كروم بيتجاهلها.
+          start_url: location.origin + location.pathname + location.search,
+          scope: location.origin + location.pathname.replace(/[^/]*$/, ''),
+          id: location.origin + location.pathname,
           display: 'standalone',
           orientation: 'portrait',
           background_color: '#F8FAF9',

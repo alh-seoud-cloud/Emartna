@@ -682,9 +682,6 @@ function setStatus(state, msg){
 }
 
 
-/* عدد التغييرات اللي لسه ما اتحفظتش — بيستخدمه تأكيد الخروج */
-CLOUD.pendingCount = () => cache.dirty.size;
-
 window.retryCloudSync = function(){
   cache.online = navigator.onLine !== false;
   flush();
@@ -1083,6 +1080,10 @@ window.imgTag = function(ref, style){
     ? `<img data-ref="${ref}" style="${st}" alt="جاري التحميل…">`
     : `<img src="${ref}" style="${st}">`;
 };
+
+/* عدد التغييرات اللي لسه ما اتحفظتش — بيستخدمه تأكيد الخروج.
+   لازم تتعرّف بعد CLOUD نفسها، مش قبلها. */
+CLOUD.pendingCount = () => cache.dirty.size;
 
 window.CLOUD = CLOUD;
 
