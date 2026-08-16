@@ -1207,7 +1207,10 @@ async function loginAsDemo(role){
 }
 function logout(){
   const wasDemoBuilding=activeBuildingId&&REG.demoBuildingId&&activeBuildingId===REG.demoBuildingId;
-  clearTimeout(__idleTimer);clearTimeout(__idleWarnTimer);clearSession();D=null;activeBuildingId=null;curPage='dashboard';window.__navExpandedGroup=null;renderRoot();resetHistoryBase();
+  clearTimeout(__idleTimer);clearTimeout(__idleWarnTimer);clearSession();D=null;activeBuildingId=null;curPage='dashboard';window.__navExpandedGroup=null;
+  // شاشة الدخول هي المتوقعة بعد الخروج، مش الصفحة الرئيسية
+  window.__viewMode=wasDemoBuilding?'landing':'login';window.__previewMode=false;
+  renderRoot();resetHistoryBase();try{window.scrollTo(0,0);}catch(e){}
   if(wasDemoBuilding)resetDemoBuildingData();
 }
 const IDLE_TIMEOUT_MIN=20;
@@ -7198,6 +7201,23 @@ function pageApartments(){
     {key:'monthlyFee',label:'الاشتراك الشهري',value:a=>a.monthlyFee,cell:feeCell},
     {key:'username',label:'اسم الدخول',value:a=>a.username,cell:a=>`<code>${esc(a.username)}</code>`},
     {key:'balance',label:'الرصيد',value:a=>apBalance(a.id),cell:a=>{const bal=apBalance(a.id);return bal>0?`<span class="badge r">${money(bal)}</span>`:bal<0?`<span class="badge g">رصيد ${money(-bal)}</span>`:'<span class="badge n">صفر</span>';}},
+    {key:'status',label:'الحالة',value:a=>a.closed?'مقفولة':'مفتوحة',
+     cell:a=>a.closed?'<span class="badge n">🔒 مقفولة</span>':'<span class="badge g">✅ مفتوحة</span>'},
+    {key:'email',label:'البريد الإلكتروني',value:a=>a.email||'',cell:a=>esc(a.email||'-')},
+    {key:'openingBalance',label:'رصيد افتتاحي',value:a=>Number(a.openingBalance)||0,
+     cell:a=>Number(a.openingBalance)?money(a.openingBalance):'-'},
+    {key:'charges',label:'إجمالي المستحق',value:a=>apCharges(a.id),cell:a=>money(apCharges(a.id))},
+    {key:'payments',label:'إجمالي المحصّل',value:a=>apPayments(a.id),cell:a=>money(apPayments(a.id))},
+    {key:'lastPay',label:'آخر دفعة',
+     value:a=>{const l=(D.ledger||[]).filter(x=>x.apartmentId===a.id&&x.type==='دفعة').map(x=>x.date||'').sort();return l.length?l[l.length-1]:'';},
+     cell:a=>{const l=(D.ledger||[]).filter(x=>x.apartmentId===a.id&&x.type==='دفعة').map(x=>x.date||'').sort();return l.length?esc(l[l.length-1]):'<span class="small" style="color:var(--muted)">مفيش</span>';}},
+    {key:'account',label:'حالة الحساب',
+     value:a=>{const u=(D.users||[]).find(x=>x.apartmentId===a.id);return u?(u.inviteStatus==='pending'?'دعوة مستنية':'عنده حساب'):'مفيش حساب';},
+     cell:a=>{const u=(D.users||[]).find(x=>x.apartmentId===a.id);
+       return !u?'<span class="badge n">— مفيش حساب</span>'
+         :u.inviteStatus==='pending'?'<span class="badge y">⏳ دعوة مستنية</span>'
+         :'<span class="badge g">✅ عنده حساب</span>';}},
+    {key:'notes',label:'ملاحظات',value:a=>a.notes||'',cell:a=>esc(a.notes||'-')},
   ];
   window.__apartmentColsDef=APARTMENT_COLS;
   const cols=[...APARTMENT_COLS,{key:'x',label:'',value:null,cell:a=>`<div class="flexrow"><button class="btn sm" onclick="openApartmentModal('${a.id}')">تعديل</button><button class="btn sm ghost" onclick="openApartmentDetail('${a.id}')">تفاصيل</button></div>`}];
