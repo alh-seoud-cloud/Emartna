@@ -1193,11 +1193,21 @@ function isSupportStaff(){const s=getSession();return s&&s.type==='support'}
 function currentSupportStaff(){const s=getSession();if(!s||s.type!=='support')return null;return ensureSupportStaff().find(x=>x.username===s.staffUsername)||null}
 function impersonateBuilding(buildingId){
   const data=loadBuildingData(buildingId); if(!data)return showMessage('تعذر تحميل العمارة');
-  const admin=(data.users||[]).find(u=>u.role==='admin')||data.users[0];
+  // لازم ندخل بحساب رئيس الاتحاد. لو مالقيناهوش (بيانات ناقصة مثلًا)
+  // مننفعش نقع على أول اسم في القايمة — ده بيدخّلك بحساب صاحب محل
+  // وبصلاحياته المحدودة. بنفضّل: إداري نشط ← أي إداري ← وقف بوضوح.
+  const users=(data.users||[]);
+  const admin = users.find(u=>u.role==='admin' && u.active!==false && u.inviteStatus!=='pending')
+             || users.find(u=>u.role==='admin')
+             || users.find(u=>['manager','accountant'].includes(u.role) && u.active!==false);
+  if(!admin) return showMessage(
+    'العمارة دي مالهاش رئيس اتحاد مسجّل، فمينفعش تفتحها بصلاحياته.\n\n'+
+    'اطلب من صاحبها يسجّل دخول مرة واحدة، أو ولّد له دعوة من شاشة المستخدمين.');
   activeBuildingId=buildingId; D=data; migrateBuildingData();
   window.__cameFromSysOwner=true;
   setSession({type:'building',buildingId,username:admin.username});
   curPage='dashboard'; renderRoot(); resetHistoryBase(); resetIdleTimer();
+  if(window.toast) toast('دخلت بحساب: '+(admin.name||admin.username)+' — '+(admin.role==='admin'?'رئيس اتحاد':admin.role));
 }
 /* ---------- عمارة تجريبية عامة (تجربة العرض من شاشة الدخول) ---------- */
 const DEMO_ADMIN_USERNAME='demo_admin';

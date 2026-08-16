@@ -660,10 +660,13 @@ function setStatus(state, msg){
   if (!el){
     el = document.createElement('div');
     el.id = 'cloudStatus';
+    // مهم: المؤشر كان فوق زرار "تسجيل الخروج" في الشريط الجانبي فبيبلع
+    // الضغطة. بقى في الناحية التانية، وبيقبل الضغط وقت المشكلة بس.
     el.style.cssText =
-      'position:fixed;bottom:14px;inset-inline-start:14px;z-index:99999;' +
+      'position:fixed;bottom:14px;inset-inline-end:14px;z-index:9000;' +
       'font:600 12px/1.6 system-ui,sans-serif;padding:6px 12px;border-radius:20px;' +
-      'box-shadow:0 2px 10px rgba(0,0,0,.14);transition:opacity .3s;cursor:pointer';
+      'box-shadow:0 2px 10px rgba(0,0,0,.14);transition:opacity .3s;' +
+      'pointer-events:none;max-width:60vw';
     el.onclick = () => window.showCloudSyncDetails && window.showCloudSyncDetails();
     document.body.appendChild(el);
   }
@@ -678,7 +681,13 @@ function setStatus(state, msg){
   el.style.background = s.bg;
   el.style.color = s.c;
   el.style.opacity = '1';
-  if (state === 'saved') setTimeout(() => { el.style.opacity = '0'; }, 2200);
+  // الضغط متاح وقت المشكلة بس — عشان مايتعارضش مع أزرار الواجهة
+  el.style.pointerEvents = (state === 'error') ? 'auto' : 'none';
+  el.style.cursor        = (state === 'error') ? 'pointer' : 'default';
+  if (state === 'saved') setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.pointerEvents = 'none';
+  }, 2200);
 }
 
 
