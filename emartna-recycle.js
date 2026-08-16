@@ -60,12 +60,15 @@
         },
       }));
       window.__trashLoaded = true;
-      if (window.renderSysContent) renderSysContent();
     }catch(e){
       window.__trashLoaded = true;
+      window.__trashError = (window.cloudErrorText ? cloudErrorText(e) : e.message);
       console.warn('[عمارتنا/سلة المحذوفات]', e.message);
     }finally{
       loading = false;
+      // لازم نعيد الرسم في كل الحالات — من غير كده الشاشة بتفضل
+      // على "بيحمّل…" للأبد لو التحميل فشل.
+      if (window.renderSysContent) { try{ renderSysContent(); }catch(e2){} }
     }
   }
 
@@ -76,9 +79,13 @@
   window.pageSysTrash = function(){
     if (!window.__trashLoaded){
       loadTrash();
-      return '<p class="small">⏳ بيحمّل سلة المحذوفات…</p>';
+      return '<div class="card"><p class="small">⏳ بيحمّل سلة المحذوفات…</p></div>';
     }
-    return originalPage ? originalPage() : '<p class="small">سلة المحذوفات فاضية</p>';
+    const err = window.__trashError
+      ? `<div class="card" style="border:1px solid var(--red)">
+           <p class="small" style="color:var(--red)">⚠️ تعذّر تحميل سلة المحذوفات: ${window.esc ? esc(window.__trashError) : window.__trashError}</p>
+           <button class="btn sm" onclick="reloadTrash()">🔄 حاول تاني</button></div>` : '';
+    return err + (originalPage ? originalPage() : '<p class="small">سلة المحذوفات فاضية</p>');
   };
 
   /* ---------- حذف مؤقت ---------- */
@@ -164,7 +171,7 @@
   };
 
   /* أول ما صاحب البرنامج يدخل، حمّل السلة في الخلفية */
-  window.reloadTrash = function(){ window.__trashLoaded = false; loadTrash(); };
+  window.reloadTrash = function(){ window.__trashLoaded = false; window.__trashError = null; loadTrash(); };
 
   console.log('[عمارتنا] سلة المحذوفات السحابية جاهزة');
 })();
