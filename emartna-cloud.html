@@ -349,7 +349,7 @@ function upgradeAlertBannerHTML(){
   if(localStorage.getItem(dismissedKey)===today)return'';
   let banner='';
   // تذكير قرب انتهاء التجربة/الاشتراك
-  if(lic.status==='active'&&lic.endDate){
+  if(licenseIsLive(lic)&&lic.endDate){
     const daysLeft=Math.ceil((new Date(lic.endDate)-new Date(today))/86400000);
     if(daysLeft>=0&&daysLeft<=3){
       const planDef=findPlan(lic.plan);
@@ -2787,10 +2787,10 @@ function pageSysDashboard(){
     return{...b,apCount:(d.apartments||[]).length,apOnlyCount:(d.apartments||[]).filter(a=>a.type!=='shop').length,shopCount:(d.apartments||[]).filter(a=>a.type==='shop').length,adminUser:admin?admin.username:'-',adminPhone:admin?phoneFull(admin.phoneCountry,admin.phone):'-',adminEmail:admin&&admin.email?admin.email:'-',adminPhoneRaw:admin?admin.phone:'',adminPhoneCountryRaw:admin?admin.phoneCountry:'+20',plan:lic.plan,status:lic.status,endDate:lic.endDate||'بلا انتهاء',endDateRaw:lic.endDate,daysLeft,used,maxTx:lic.maxTransactions,city:d.building.city||'',address:d.building.address||'',locationUrl:d.building.locationUrl||'',buildYear:d.building.buildYear||'',apartmentsPerFloor:d.building.apartmentsPerFloor||'',country:d.building.country||'',governorate:d.building.governorate||''};
   });
   const totalApartments=rows.reduce((s,b)=>s+b.apCount,0);
-  const activeCount=rows.filter(b=>b.status==='active').length;
+  const activeCount=rows.filter(b=>b.status==='active'||b.status==='trial').length;
   const trialCount=rows.filter(b=>{const p=findPlan(b.plan);return p&&p.isTrial}).length;
   const expiredCount=rows.filter(b=>b.status==='expired'||b.status==='suspended').length;
-  const expiringSoon=rows.filter(b=>b.status==='active'&&b.daysLeft!==null&&b.daysLeft>=0&&b.daysLeft<=7);
+  const expiringSoon=rows.filter(b=>(b.status==='active'||b.status==='trial')&&b.daysLeft!==null&&b.daysLeft>=0&&b.daysLeft<=7);
 
   if(window.__sysDashFilter===undefined)window.__sysDashFilter='all';
   const colDefs={
@@ -2825,10 +2825,10 @@ function pageSysDashboard(){
   </div>`}];
   const filterMap={
     all:{test:()=>true,label:'كل العمارات'},
-    active:{test:b=>b.status==='active',label:'اشتراكات نشطة'},
+    active:{test:b=>b.status==='active'||b.status==='trial',label:'اشتراكات نشطة'},
     trial:{test:b=>{const p=findPlan(b.plan);return p&&p.isTrial;},label:'عمارات تجريبية'},
     expired:{test:b=>b.status==='expired'||b.status==='suspended',label:'عمارات منتهية أو موقوفة'},
-    expiringSoon:{test:b=>b.status==='active'&&b.daysLeft!==null&&b.daysLeft>=0&&b.daysLeft<=7,label:'هتنتهي خلال 7 أيام'},
+    expiringSoon:{test:b=>(b.status==='active'||b.status==='trial')&&b.daysLeft!==null&&b.daysLeft>=0&&b.daysLeft<=7,label:'هتنتهي خلال 7 أيام'},
   };
   const shownRows=rows.filter(filterMap[window.__sysDashFilter].test);
   const kpiCard=(key,icon,label,val,cls)=>`<div class="kpi ${cls||''}" style="cursor:pointer;${window.__sysDashFilter===key?'outline:2px solid var(--accent);outline-offset:-1px':''}" onclick="setSysDashFilter('${key}')"><div class="ic">${icon}</div><div class="lbl">${label}</div><div class="val">${val}</div></div>`;
@@ -4100,6 +4100,24 @@ function ensureLicense(rec){if(!rec)return null;if(!rec.license)rec.license=buil
 function findBuildingRec(key){key=key||activeBuildingId;if(!key||!REG||!REG.buildings)return null;return REG.buildings.find(b=>b.id===key)||REG.buildings.find(b=>b.__uuid===key)||REG.buildings.find(b=>b.code===key)||null}
 function licenseRec(){return findBuildingRec(activeBuildingId)}
 function licenseInfo(){const rec=licenseRec();return rec?ensureLicense(rec):null}
+/* الحالة الفعلية للترخيص — الحساب من التاريخ مش من الاسم المخزّن.
+   كانت أي حالة غير 'active' بتتعرض "منتهية"، فالاشتراك التجريبي
+   (trial) كان بيبان منتهي رغم إن قدامه شهرين. */
+function licenseState(lic){
+  if(!lic) return {key:'none',label:'—',badge:'n',daysLeft:null};
+  const today=todayISO();
+  const daysLeft = lic.endDate
+    ? Math.ceil((new Date(lic.endDate)-new Date(today))/86400000) : null;
+  if(lic.status==='suspended') return {key:'suspended',label:'موقوفة',badge:'r',daysLeft};
+  if(lic.endDate && today>lic.endDate) return {key:'expired',label:'منتهية',badge:'y',daysLeft};
+  if(lic.status==='trial')
+    return {key:'trial',label:daysLeft!==null?`تجريبية · باقي ${daysLeft} يوم`:'تجريبية',badge:'b',daysLeft};
+  if(lic.status==='expired') return {key:'expired',label:'منتهية',badge:'y',daysLeft};
+  return {key:'active',label:daysLeft!==null?`سارية · باقي ${daysLeft} يوم`:'سارية',badge:'g',daysLeft};
+}
+function licenseBadge(lic){const st=licenseState(lic);return `<span class="badge ${st.badge}">${st.label}</span>`;}
+/* هل الاشتراك شغّال؟ (تجريبي أو نشط وما انتهاش) */
+function licenseIsLive(lic){const k=licenseState(lic).key;return k==='active'||k==='trial';}
 function usedTransactionsCount(){return(D.ledger||[]).length+(D.expenses||[]).length}
 function licenseStatusCheck(){
   const lic=licenseInfo(); if(!lic)return{ok:true};
@@ -5440,7 +5458,7 @@ function openLicenseManage(buildingId){
   const rec=REG.buildings.find(b=>b.id===buildingId); const lic=ensureLicense(rec);
   const d=loadBuildingData(buildingId);
   const used=d?(d.ledger||[]).length+(d.expenses||[]).length:0;
-  const statusBadge=lic.status==='active'?'<span class="badge g">نشطة</span>':lic.status==='suspended'?'<span class="badge r">موقوفة</span>':'<span class="badge y">منتهية</span>';
+  const statusBadge=licenseBadge(lic);
   const history=[...(rec.licenseHistory||[])].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const curDef=findPlan(lic.plan);
   const pendingReq=(REG.renewalRequests||[]).find(r=>r.buildingId===buildingId&&r.status==='pending');
@@ -5654,7 +5672,7 @@ function copyReferralMessage(){
 function pageLicense(){
   const rec=licenseRec(); const lic=ensureLicense(rec);
   const used=usedTransactionsCount();
-  const statusBadge=lic.status==='active'?'<span class="badge g">نشطة</span>':lic.status==='suspended'?'<span class="badge r">موقوفة</span>':'<span class="badge y">منتهية</span>';
+  const statusBadge=licenseBadge(lic);
   const vendor=REG.sysOwner;
   const myRequests=[...(REG.renewalRequests||[])].filter(r=>r.buildingId===activeBuildingId).sort((a,b)=>(b.requestedAt||'').localeCompare(a.requestedAt||''));
   const pendingRequest=myRequests.find(r=>r.status==='pending');
