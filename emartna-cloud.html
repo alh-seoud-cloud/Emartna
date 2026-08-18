@@ -1205,7 +1205,8 @@ function impersonateBuilding(buildingId){
     'اطلب من صاحبها يسجّل دخول مرة واحدة، أو ولّد له دعوة من شاشة المستخدمين.');
   activeBuildingId=buildingId; D=data; migrateBuildingData();
   window.__cameFromSysOwner=true;
-  setSession({type:'building',buildingId,username:admin.username});
+  // بنمرّر authId كمان عشان currentUser تلاقي الحساب الصح مباشرة
+  setSession({type:'building',buildingId,username:admin.username,authId:admin.__authId||null});
   curPage='dashboard'; renderRoot(); resetHistoryBase(); resetIdleTimer();
   if(window.toast) toast('دخلت بحساب: '+(admin.name||admin.username)+' — '+(admin.role==='admin'?'رئيس اتحاد':admin.role));
 }
@@ -9424,6 +9425,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
 <script type="module" src="emartna-pwa.js"></script>
 <script type="module" src="emartna-landing.js"></script>
 <script type="module" src="emartna-comm.js"></script>
+<script type="module" src="emartna-period.js"></script>
 
 </body>
 </html>
