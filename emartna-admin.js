@@ -110,7 +110,7 @@
 
   /* أي تطوير جديد بيتضاف هنا. البرنامج بيسجّله تلقائيًا كـ"داخلي فقط". */
   const CHANGELOG = [
-    { version:'3.2', date:'2026-08-14', notes:[
+    { version:'1.02', date:'2026-08-14', notes:[
       'تحديث بيانات الشقق والملاك بالإكسل — تنزيل قالب معبّى بكل الأعمدة، وتعديله خارجيًا، ورفعه بمراجعة تفصيلية قبل الاعتماد',
       'تحديث بيانات المستخدمين بالإكسل بنفس الطريقة، مع حماية آخر رئيس اتحاد من الإيقاف بالغلط',
       'تقرير بكل سطر ناجح وكل سطر فيه خطأ مع سببه ورقمه في الملف',
@@ -125,7 +125,7 @@
       'إصلاح: أكواد الدعوات كانت بتفشل بعد تشديد إعدادات الأمان على الخادم',
       'إصلاح: بيانات التواصل وطرق السداد وتراخيص الاشتراكات مكانتش بتتحفظ على الخادم',
     ]},
-    { version:'3.1', date:'2026-08-13', notes:[
+    { version:'1.01', date:'2026-08-13', notes:[
       'تقارير محاسبية جديدة: ميزان المراجعة وأعمار الديون، مع فلترة بالتواريخ ومقارنة بفترات سابقة',
       'قائمة الدخل والميزانية المصغرة بأرصدة أول وآخر المدة',
       'كشف حساب موحّد لأي عنصر (شقة · حساب · مشروع · مورد · بند صرف) مع اختيار الفترة',
@@ -140,10 +140,37 @@
     ]},
   ];
 
+  /* ترقيم موحّد: النسخة الأساسية v1.00 واللي بعدها v1.01 · v1.02 …
+     الأرقام القديمة (3.0 · 3.1 · 3.2) بتترحّل مرة واحدة. */
+  const VERSION_MAP = { '3.0':'1.00', '3.1':'1.01', '3.2':'1.02',
+                        '2.0':'1.00', '1.0':'1.00' };
+
+  function migrateVersionNumbers(list){
+    let changed = false;
+    list.forEach(v => {
+      const key = String(v.version || '').replace(/^v/i, '');
+      if (VERSION_MAP[key] && key !== VERSION_MAP[key]){
+        v.version = VERSION_MAP[key];
+        changed = true;
+      }
+    });
+    // دمج أي إصدارين بقوا بنفس الرقم بعد الترحيل
+    const byVer = {};
+    for (let i = list.length - 1; i >= 0; i--){
+      const k = String(list[i].version);
+      if (byVer[k]){
+        byVer[k].notes = (byVer[k].notes || []).concat(list[i].notes || []);
+        list.splice(i, 1);
+        changed = true;
+      } else byVer[k] = list[i];
+    }
+    return changed;
+  }
+
   function seedChangelog(){
     if (!window.REG || !window.ensureVersionHistory) return;
     const list = ensureVersionHistory();
-    let changed = false;
+    let changed = migrateVersionNumbers(list);
 
     for (const entry of CHANGELOG){
       let v = list.find(x => String(x.version) === String(entry.version));

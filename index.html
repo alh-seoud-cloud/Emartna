@@ -387,7 +387,7 @@ function upgradeAlertBannerHTML(){
       banner=`<div class="card content-narrow mtop2" style="background:var(--tint-warning);border:1px solid var(--gold)">
         <div class="flexrow"><div style="font-size:24px">💾</div><div style="flex:1">
           <b>محتاج تاخد نسخة احتياطية</b>
-          <p class="small mtop">${lastBackup?'آخر نسخة كانت من '+daysSinceBackup+' يوم':'لسه ما اخدتش نسخة احتياطية خالص'} - بياناتك متخزنة في المتصفح بس، خد نسخة عشان متفقدش حاجة.</p>
+          <p class="small mtop">${lastBackup?'آخر نسخة كانت من '+daysSinceBackup+' يوم':'لسه ما اخدتش نسخة احتياطية خالص'} - بياناتك محفوظة على الخادم، والنسخة الاحتياطية بتحميك من الحذف بالخطأ.</p>
         </div>
         <button class="btn sm primary" onclick="exportBackup()">⬇️ تنزيل الآن</button>
         <button class="btn sm ghost" onclick="dismissUpgradeAlert()">تذكير بكرة</button>
@@ -3312,13 +3312,14 @@ function defaultVersionHistorySeed(){
 }
 function ensureVersionHistory(){if(!REG.versionHistory)REG.versionHistory=defaultVersionHistorySeed();return REG.versionHistory;}
 function pageSysVersions(){
-  const versions=[...ensureVersionHistory()].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const versions=[...ensureVersionHistory()]
+    .sort((a,b)=>compareVersions(a.version,b.version) || (b.date||'').localeCompare(a.date||''));
   return `
   <p class="small">سجّل كل تحديث تعمله على البرنامج هنا. لكل تعديل تقدر تحدد هل يظهر لرؤساء اتحادات الملاك في شاشة "ما الجديد" ولا يفضل داخلي بس.</p>
   <div class="flexrow mtop"><button class="btn primary" onclick="openVersionModal()">+ إصدار جديد</button></div>
   <div class="mtop2">${versions.length?versions.map(v=>`
     <div class="card mtop">
-      <div class="flexrow"><b style="flex:1">الإصدار ${esc(v.version)}</b><span class="small">${esc(v.date)}</span></div>
+      <div class="flexrow"><b style="flex:1">الإصدار v${esc(String(v.version).replace(/^v/i,''))}</b><span class="small">📅 ${esc(v.date)}</span></div>
       <ul class="mtop" style="padding-inline-start:20px">${(v.notes||[]).map(n=>`<li class="small">${esc(n.text)} ${n.visibleToAdmins?'<span class="badge g">ظاهر لرؤساء الاتحادات</span>':'<span class="badge n">داخلي فقط</span>'}</li>`).join('')}</ul>
       <div class="flexrow mtop"><button class="btn sm ghost" onclick="openVersionModal('${v.id}')">تعديل</button><button class="btn sm red" onclick="deleteVersion('${v.id}')">حذف</button></div>
     </div>`).join(''):'<p class="small">لسه معملتش أي سجل إصدار.</p>'}</div>`;
@@ -3387,8 +3388,20 @@ function deleteVersion(id){
   });
 }
 /* ---------- ما الجديد (لرؤساء اتحاد الملاك) ---------- */
+/* ترتيب الإصدارات رقميًا: 1.10 أحدث من 1.9 */
+function versionKey(v){
+  return String(v||'0').replace(/^v/i,'').split('.')
+    .map(x=>parseInt(x,10)||0)
+    .concat([0,0,0]).slice(0,3)
+    .reduce((a,n)=>a*10000+n, 0);
+}
+function compareVersions(a,b){ return versionKey(b)-versionKey(a); }
+window.versionKey=versionKey; window.compareVersions=compareVersions;
+
 function publicVersionHistory(){
-  return ensureVersionHistory().map(v=>({...v,notes:(v.notes||[]).filter(n=>n.visibleToAdmins)})).filter(v=>v.notes.length).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  return ensureVersionHistory().map(v=>({...v,notes:(v.notes||[]).filter(n=>n.visibleToAdmins)}))
+    .filter(v=>v.notes.length)
+    .sort((a,b)=>compareVersions(a.version,b.version) || (b.date||'').localeCompare(a.date||''));
 }
 function pageWhatsNew(){
   const versions=publicVersionHistory();
@@ -3396,7 +3409,7 @@ function pageWhatsNew(){
   <p class="small">آخر التطويرات والإضافات على البرنامج.</p>
   <div class="mtop2">${versions.length?versions.map(v=>`
     <div class="card mtop">
-      <div class="flexrow"><b style="flex:1">الإصدار ${esc(v.version)}</b><span class="small">${esc(v.date)}</span></div>
+      <div class="flexrow"><b style="flex:1">الإصدار v${esc(String(v.version).replace(/^v/i,''))}</b><span class="small">📅 ${esc(v.date)}</span></div>
       <ul class="mtop" style="padding-inline-start:20px">${v.notes.map(n=>`<li class="small">${esc(n.text)}</li>`).join('')}</ul>
     </div>`).join(''):'<p class="small">لا توجد تحديثات معلنة حاليًا.</p>'}</div>`;
 }
