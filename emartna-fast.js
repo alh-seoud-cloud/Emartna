@@ -105,9 +105,12 @@
     if (document.getElementById('updateBar')) return;
     const bar = document.createElement('div');
     bar.id = 'updateBar';
-    bar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9500;' +
-      'background:var(--accent,#159A8C);color:#fff;padding:10px 14px;' +
-      'font:600 13px/1.7 system-ui;text-align:center;direction:rtl';
+    // بيتحط على اليمين مش على عرض الشاشة كله — عشان مايغطيش
+    // زرار "تسجيل الخروج" في الشريط الجانبي.
+    bar.style.cssText = 'position:fixed;bottom:14px;inset-inline-end:14px;z-index:9500;' +
+      'background:var(--accent,#159A8C);color:#fff;padding:9px 14px;border-radius:12px;' +
+      'font:600 13px/1.7 system-ui;text-align:center;direction:rtl;max-width:min(92vw,420px);' +
+      'box-shadow:0 6px 20px rgba(0,0,0,.18)';
     bar.innerHTML = '🎉 نزل تحديث جديد للبرنامج ' +
       '<button onclick="applyAppUpdate()" style="margin-inline-start:10px;background:#fff;' +
       'color:var(--accent,#159A8C);border:0;border-radius:6px;padding:5px 14px;' +
