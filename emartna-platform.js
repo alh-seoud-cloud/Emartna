@@ -115,6 +115,8 @@ const TABLE_COLLECTIONS = {
     toDB: (x, ctx) => ({
       legacy_id: x.id, building_id: ctx.uuidOfBuilding(x.buildingId),
       building_name: x.buildingName || '',
+      // الخادم بيشترط إن مقدّم الطلب هو المستخدم الحالي
+      submitted_by: (window.CLOUD_AUTH && CLOUD_AUTH.user && CLOUD_AUTH.user.id) || null,
       submitted_by_username: x.submittedByUsername || '',
       submitted_by_name: x.submittedByName || '',
       submitted_by_role: x.submittedByRole || '',
@@ -139,6 +141,8 @@ const TABLE_COLLECTIONS = {
     toDB: (x, ctx) => ({
       legacy_id: x.id, building_id: ctx.uuidOfBuilding(x.buildingId),
       building_name: x.buildingName || '',
+      // الخادم بيشترط إن مقدّم الطلب هو المستخدم الحالي
+      submitted_by: (window.CLOUD_AUTH && CLOUD_AUTH.user && CLOUD_AUTH.user.id) || null,
       submitted_by_username: x.submittedByUsername || '',
       submitted_by_name: x.submittedByName || '',
       subject: x.subject || '', priority: x.priority || 'normal',
@@ -230,9 +234,14 @@ const PLATFORM = {
     const prev = PLATFORM.__snapshot || {};
     const c = ctx();
 
+    // إعدادات المنصة والخطط والتراخيص لصاحب البرنامج بس.
+    // أي مستخدم تاني (رئيس اتحاد · ساكن · زائر تجريبي) بيحفظ
+    // الجداول المسموح له بيها فقط — مقترحاته وتذاكره وطلبات تجديده.
+    const isPlatform = !!(window.CLOUD_AUTH && CLOUD_AUTH.isPlatformAdmin);
+
     try{
       // المستندات: نحفظ اللي اتغيّر بس
-      for (const coll of DOC_COLLECTIONS){
+      for (const coll of (isPlatform ? DOC_COLLECTIONS : [])){
         const now = JSON.stringify(REG[coll] ?? null);
         if (now === prev['doc:' + coll]) continue;
         const { error } = await sb3.rpc('save_platform_doc',
@@ -241,7 +250,7 @@ const PLATFORM = {
       }
 
       // بيانات التواصل والدفع
-      {
+      if (isPlatform) {
         const nowSO = JSON.stringify(pickSysOwnerPublic(REG.sysOwner));
         if (nowSO !== prev['doc:sysOwnerPublic']){
           const { error } = await sb3.rpc('save_platform_doc',
@@ -251,7 +260,7 @@ const PLATFORM = {
       }
 
       // تراخيص واشتراكات العمارات
-      for (const b of (REG.buildings || [])){
+      for (const b of (isPlatform ? (REG.buildings || []) : [])){
         const row = BUILDING_LICENSE_FIELDS(b);
         const now = JSON.stringify(row);
         if (now === prev['bld:' + b.id]) continue;

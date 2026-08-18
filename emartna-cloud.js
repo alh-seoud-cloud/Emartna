@@ -1180,6 +1180,10 @@ let __regTimer = null;
 async function pushRegistry(){
   const REG = window.REG;
   if (!REG) return;
+  // الخطط والعروض بيكتبها صاحب البرنامج بس. من غير الشرط ده،
+  // أي ساكن بيقدّم مقترح كان بيحاول يكتب في جدول الخطط
+  // فالخادم يرفض ويقول "الحفظ متأخر" لعملية مالهاش علاقة أصلًا.
+  if (!(window.CLOUD_AUTH && CLOUD_AUTH.isPlatformAdmin)) return;
   try{
     // الخطط
     if (Array.isArray(REG.plans) && REG.plans.length){
