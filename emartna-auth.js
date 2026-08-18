@@ -119,10 +119,25 @@ window.currentUser = function(){
   const D = window.D;
   if (!s || s.type !== 'building' || !D) return null;
   const uid = s.authId;
-  const u = (D.users || []).find(x => x.__authId === uid);
-  if (u) return u;
-  // أول تحميل بعد إنشاء عمارة: العضوية موجودة بس D لسه بيتحدث
-  return (D.users || []).find(x => x.role === 'admin') || null;
+
+  // مهم: لو الجلسة من غير authId (زي دخول صاحب البرنامج لعمارة)،
+  // كان `x.__authId === undefined` بيطابق أول دعوة مستنية —
+  // فبيدخل بحساب صاحب شقة أو محل بالغلط.
+  if (uid){
+    const u = (D.users || []).find(x => x.__authId === uid);
+    if (u) return u;
+  }
+
+  // الرجوع لاسم الجلسة لو موجود (وبنستبعد الدعوات المستنية)
+  if (s.username){
+    const byName = (D.users || []).find(x =>
+      x.username === s.username && x.inviteStatus !== 'pending' && x.active !== false);
+    if (byName) return byName;
+  }
+
+  // آخر حل: رئيس الاتحاد النشط
+  return (D.users || []).find(x =>
+    x.role === 'admin' && x.inviteStatus !== 'pending' && x.active !== false) || null;
 };
 
 window.isSysOwner = () => !!(__sess && __sess.type === 'sysowner');
