@@ -1828,7 +1828,7 @@ function pageSupportBuildingsView(){
     {key:'apCount',label:'عدد الوحدات',value:b=>b.apCount},
     {key:'adminUser',label:'حساب الأدمن',value:b=>b.adminUser,cell:b=>`<code>${esc(b.adminUser)}</code>`},
     {key:'plan',label:'الخطة',value:b=>b.plan,cell:b=>planLabel(b.plan)},
-    {key:'status',label:'الحالة',value:b=>b.status,cell:b=>b.status==='active'?'<span class="badge g">نشط</span>':b.status==='suspended'?'<span class="badge r">موقوف</span>':'<span class="badge y">منتهي</span>'},
+    {key:'status',label:'الحالة',value:b=>licenseState({status:b.status,endDate:b.endDate}).label,cell:b=>licenseBadge({status:b.status,endDate:b.endDate})},
     {key:'endDate',label:'تاريخ الانتهاء',value:b=>b.endDate},
   ],null,
   {defaultKey:'name',emptyText:'لا توجد عمارات مسجّلة بعد',exportName:'العمارات'})}</div>`;
@@ -2572,7 +2572,7 @@ function checkExpiringSubscriptionReminders(){
   const today=todayISO();
   let changed=false;
   REG.buildings.forEach(b=>{
-    const lic=ensureLicense(b); if(!lic.endDate||lic.status!=='active')return;
+    const lic=ensureLicense(b); if(!lic.endDate||!licenseIsLive(lic))return;
     const daysLeft=Math.ceil((new Date(lic.endDate)-new Date(today))/86400000);
     if(daysLeft<0||daysLeft>7)return;
     if(b.lastExpiryReminderDate===today)return;
@@ -2788,6 +2788,8 @@ function pageSysDashboard(){
     return{...b,apCount:(d.apartments||[]).length,apOnlyCount:(d.apartments||[]).filter(a=>a.type!=='shop').length,shopCount:(d.apartments||[]).filter(a=>a.type==='shop').length,adminUser:admin?admin.username:'-',adminPhone:admin?phoneFull(admin.phoneCountry,admin.phone):'-',adminEmail:admin&&admin.email?admin.email:'-',adminPhoneRaw:admin?admin.phone:'',adminPhoneCountryRaw:admin?admin.phoneCountry:'+20',plan:lic.plan,status:lic.status,endDate:lic.endDate||'بلا انتهاء',endDateRaw:lic.endDate,daysLeft,used,maxTx:lic.maxTransactions,city:d.building.city||'',address:d.building.address||'',locationUrl:d.building.locationUrl||'',buildYear:d.building.buildYear||'',apartmentsPerFloor:d.building.apartmentsPerFloor||'',country:d.building.country||'',governorate:d.building.governorate||''};
   });
   const totalApartments=rows.reduce((s,b)=>s+b.apCount,0);
+  // نحسب الحالة الفعلية من التاريخ لكل صف قبل أي عدّ
+  rows.forEach(b=>{ b.status = licenseState({status:b.status,endDate:b.endDate}).key; });
   const activeCount=rows.filter(b=>b.status==='active'||b.status==='trial').length;
   const trialCount=rows.filter(b=>{const p=findPlan(b.plan);return p&&p.isTrial}).length;
   const expiredCount=rows.filter(b=>b.status==='expired'||b.status==='suspended').length;
@@ -2803,7 +2805,7 @@ function pageSysDashboard(){
     adminPhone:{label:'هاتف الأدمن',value:b=>b.adminPhone,cell:b=>esc(b.adminPhone)},
     adminEmail:{label:'بريد الأدمن',value:b=>b.adminEmail,cell:b=>esc(b.adminEmail)},
     plan:{label:'الخطة',value:b=>b.plan,cell:b=>planLabel(b.plan)},
-    status:{label:'الحالة',value:b=>b.status,cell:b=>b.status==='active'?'<span class="badge g">نشط</span>':b.status==='suspended'?'<span class="badge r">موقوف</span>':'<span class="badge y">منتهي</span>'},
+    status:{label:'الحالة',value:b=>licenseState({status:b.status,endDate:b.endDate}).label,cell:b=>licenseBadge({status:b.status,endDate:b.endDate})},
     endDate:{label:'تاريخ الانتهاء',value:b=>b.endDate,cell:b=>b.daysLeft!==null&&b.daysLeft<=7&&b.daysLeft>=0?`<span style="color:var(--red);font-weight:700">${esc(b.endDate)} (باقي ${b.daysLeft} يوم)</span>`:esc(b.endDate)},
     usage:{label:'المعاملات',value:b=>b.used,cell:b=>b.used+(b.maxTx?' / '+b.maxTx:'')},
     createdAt:{label:'تاريخ الإنشاء',value:b=>b.createdAt,cell:b=>esc(b.createdAt)},
@@ -5346,7 +5348,7 @@ function pageSysLicenses(){
     {key:'name',label:'العمارة',value:b=>b.name,cell:b=>esc(b.name)},
     {key:'code',label:'الكود',value:b=>b.code,cell:b=>`<code>${esc(b.code)}</code>`},
     {key:'plan',label:'الخطة',value:b=>ensureLicense(b).plan,cell:b=>planLabel(ensureLicense(b).plan)},
-    {key:'status',label:'الحالة',value:b=>ensureLicense(b).status,cell:b=>{const s=ensureLicense(b).status;return s==='active'?'<span class="badge g">نشط</span>':s==='suspended'?'<span class="badge r">موقوف</span>':'<span class="badge y">منتهي</span>';}},
+    {key:'status',label:'الحالة',value:b=>licenseState(ensureLicense(b)).label,cell:b=>licenseBadge(ensureLicense(b))},
     {key:'expiry',label:'تاريخ الانتهاء',value:b=>ensureLicense(b).endDate||'',cell:b=>esc(ensureLicense(b).endDate||'بلا انتهاء')},
     {key:'usage',label:'المعاملات',value:b=>{const d=loadBuildingData(b.id);return d?(d.ledger||[]).length+(d.expenses||[]).length:0},cell:b=>{const lic=ensureLicense(b);const d=loadBuildingData(b.id);const used=d?(d.ledger||[]).length+(d.expenses||[]).length:0;return used+(lic.maxTransactions?' / '+lic.maxTransactions:'');}},
     {key:'x',label:'',value:null,cell:b=>`<button class="btn sm primary" onclick="openLicenseManage('${b.id}')">إدارة الاشتراك</button>`}
@@ -5503,7 +5505,7 @@ function computeRenewedLicense(rec,planKey){
   const def=findPlan(planKey);
   const cur=rec.license;
   const samePlan=cur&&cur.plan===planKey;
-  const stillValid=cur&&cur.endDate&&cur.endDate>todayISO()&&cur.status==='active';
+  const stillValid=cur&&cur.endDate&&cur.endDate>todayISO()&&licenseIsLive(cur);
   if(samePlan&&stillValid&&def&&def.durationMonths){
     const newLic={...cur};
     newLic.endDate=addMonths(cur.endDate,def.durationMonths);
@@ -9150,8 +9152,8 @@ function buildSysAIReportData(){
   });
   return{
     إجمالي_العملاء:REG.buildings.length,
-    عملاء_نشطين:REG.buildings.filter(b=>ensureLicense(b).status==='active').length,
-    عملاء_موقوفين_أو_منتهيين:REG.buildings.filter(b=>ensureLicense(b).status!=='active').length,
+    عملاء_نشطين:REG.buildings.filter(b=>licenseIsLive(ensureLicense(b))).length,
+    عملاء_موقوفين_أو_منتهيين:REG.buildings.filter(b=>!licenseIsLive(ensureLicense(b))).length,
     عملاء_تجريبي:REG.buildings.filter(b=>{const p=findPlan(ensureLicense(b).plan);return p&&p.isTrial}).length,
     طلبات_تجديد_معلّقة:pendingRenewalsCount(),
     عمارات_في_سلة_المحذوفات:(REG.deletedBuildings||[]).length,
