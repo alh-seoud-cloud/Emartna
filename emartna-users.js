@@ -942,8 +942,9 @@ window.PLATFORM_INVITES = {
   },
 
   link(code){
+    // الرابط بيروح للجذر — نفس الصفحة اللي المستخدم فاتح منها
     const base = location.origin + location.pathname.replace(/[^/]*$/, '');
-    return base + 'emartna-cloud.html?invite=' + encodeURIComponent(code);
+    return base + '?invite=' + encodeURIComponent(code);
   },
 
   message(inv){

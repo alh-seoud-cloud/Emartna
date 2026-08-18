@@ -281,36 +281,8 @@ tr:hover td{background:#faf8f2}
   .top .actions .btn{padding:6px 8px;font-size:12px}
 }
 </style>
-<!-- المكتبات الخارجية بتتحمّل عند أول استخدام فعلي، مش عند فتح الصفحة.
-     مكتبة إكسيل لوحدها ٩٠٠ كيلوبايت وكانت بتوقف ظهور الصفحة لحد ما تنزل. -->
-<script>
-(function(){
-  const loaded = {};
-  function loadScript(url){
-    if (loaded[url]) return loaded[url];
-    loaded[url] = new Promise((res, rej) => {
-      const s = document.createElement('script');
-      s.src = url; s.async = true;
-      s.onload = () => res(true);
-      s.onerror = () => { loaded[url] = null; rej(new Error('تعذّر تحميل مكتبة خارجية — اتأكد من الإنترنت')); };
-      document.head.appendChild(s);
-    });
-    return loaded[url];
-  }
-  window.ensureXLSX = function(){
-    if (typeof XLSX !== 'undefined') return Promise.resolve(true);
-    return loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
-  };
-  window.ensureQRCode = function(){
-    if (typeof QRCode !== 'undefined') return Promise.resolve(true);
-    return loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js');
-  };
-  // تحميل مسبق هادي بعد ما الصفحة تستقر — عشان أول استخدام يبقى فوري
-  window.addEventListener('load', () => {
-    setTimeout(() => { try{ ensureXLSX(); }catch(e){} }, 4000);
-  });
-})();
-</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 <div id="root"></div>
@@ -324,7 +296,7 @@ tr:hover td{background:#faf8f2}
    ========================================================= */
 const REG_KEY='omaretna_registry_v2';
 const SESSION_KEY='omaretna_session_v2';
-var REG=null, D=null, activeBuildingId=null, curPage='dashboard';
+let REG=null, D=null, activeBuildingId=null, curPage='dashboard';
 
 function uid(){return Date.now()+'_'+Math.floor(Math.random()*99999)}
 function todayISO(){return new Date().toISOString().slice(0,10)}
@@ -343,13 +315,13 @@ function timeBasedGreeting(){
   return'🌙 مساء الخير';
 }
 function upgradeAlertBannerHTML(){
-  const lic=ensureLicense(findBuildingRec(activeBuildingId)); if(!lic)return'';
+  const lic=ensureLicense(REG.buildings.find(b=>b.id===activeBuildingId)); if(!lic)return'';
   const today=todayISO();
   const dismissedKey='__upgradeAlertDismissed_'+activeBuildingId;
   if(localStorage.getItem(dismissedKey)===today)return'';
   let banner='';
   // تذكير قرب انتهاء التجربة/الاشتراك
-  if(licenseIsLive(lic)&&lic.endDate){
+  if(lic.status==='active'&&lic.endDate){
     const daysLeft=Math.ceil((new Date(lic.endDate)-new Date(today))/86400000);
     if(daysLeft>=0&&daysLeft<=3){
       const planDef=findPlan(lic.plan);
@@ -443,58 +415,6 @@ function heroSkylineSVG(dark){
     ${b(800,55,60,true)}${t(870,0.75)}
   </svg>`;
 }
-/* ============================================================
-   ضغط الصور — دالة واحدة للبرنامج كله
-   الصورة من الموبايل بتيجي ٥٠٠ك — ٢ ميجا. بنصغّرها لعرض معقول
-   ونضغطها لحد ما تنزل تحت الحد، مع إبقاء الإيصال مقروء.
-   ============================================================ */
-function compressImage(file, opts){
-  opts = opts || {};
-  const maxW      = opts.maxW      || 1400;
-  const maxBytes  = opts.maxBytes  || 180 * 1024;   // ~١٨٠ كيلو
-  const minQuality= opts.minQuality|| 0.45;
-  let   quality   = opts.quality   || 0.72;
-
-  return new Promise((resolve, reject) => {
-    if (!file) return resolve(null);
-    if (!/^image\//.test(file.type)){
-      // مش صورة (PDF مثلًا) — بنسيبه زي ما هو
-      const r = new FileReader();
-      r.onload = e => resolve(e.target.result);
-      r.onerror = () => reject(new Error('تعذّرت قراءة الملف'));
-      return r.readAsDataURL(file);
-    }
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('تعذّرت قراءة الصورة'));
-    reader.onload = ev => {
-      const img = new Image();
-      img.onerror = () => reject(new Error('الملف ده مش صورة صالحة'));
-      img.onload = () => {
-        const scale = Math.min(1, maxW / (img.width || maxW));
-        const canvas = document.createElement('canvas');
-        canvas.width  = Math.max(1, Math.round(img.width  * scale));
-        canvas.height = Math.max(1, Math.round(img.height * scale));
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#fff';                       // خلفية بيضا بدل الشفاف
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-        let out = canvas.toDataURL('image/jpeg', quality);
-        // لو لسه كبيرة، نقلّل الجودة تدريجيًا
-        while (out.length * 0.75 > maxBytes && quality > minQuality){
-          quality = Math.max(minQuality, quality - 0.1);
-          out = canvas.toDataURL('image/jpeg', quality);
-        }
-        resolve(out);
-      };
-      img.src = ev.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-/* حجم تقريبي بالكيلو لصورة dataURL */
-function dataUrlKB(d){ return d ? Math.round(String(d).length * 0.75 / 1024) : 0; }
-
 function pwField(id,placeholder,value,autocomplete){
   return `<div class="pw-wrap"><input id="${id}" name="${id}" type="password" autocomplete="${autocomplete||'new-password'}" placeholder="${esc(placeholder||'')}" value="${esc(value||'')}"><button type="button" class="pw-toggle" onclick="togglePwVisibility('${id}')" tabindex="-1">👁️</button></div>`;
 }
@@ -513,14 +433,12 @@ function nationOptions(selected,allowOther){
   return opts;
 }
 const EGYPT_GOVERNORATES=['القاهرة','الجيزة','القليوبية','الإسكندرية','البحيرة','مطروح','الغربية','المنوفية','كفر الشيخ','الدقهلية','دمياط','بورسعيد','الإسماعيلية','السويس','شمال سيناء','جنوب سيناء','الشرقية','الفيوم','بني سويف','المنيا','أسيوط','سوهاج','قنا','الأقصر','أسوان','البحر الأحمر','الوادي الجديد'];
-/* سياسة كلمة المرور — واحدة في البرنامج كله: ٨ خانات فأكتر.
-   الطول أهم من تعقيد الرموز، والحماية الإضافية من الخادم (منع كلمات
-   السر المسرّبة) بتتفعّل من إعدادات Supabase. */
-const PASSWORD_MIN=8;
-const PASSWORD_RULE_TEXT='٨ خانات على الأقل';
 function passwordPolicyError(pw){
   pw=String(pw||'');
-  if(pw.length<PASSWORD_MIN)return'كلمة المرور لازم تكون '+PASSWORD_MIN+' خانات على الأقل';
+  if(pw.length<8)return'كلمة المرور لازم تكون 8 حروف على الأقل';
+  if(!/[A-Za-z]/.test(pw))return'كلمة المرور لازم تحتوي على حرف واحد على الأقل';
+  if(!/[0-9]/.test(pw))return'كلمة المرور لازم تحتوي على رقم واحد على الأقل';
+  if(!/[^A-Za-z0-9]/.test(pw))return'كلمة المرور لازم تحتوي على رمز واحد على الأقل (مثل !@#$%)';
   return null;
 }
 function toggleGovernorateField(prefix){
@@ -533,43 +451,6 @@ function toggleGovernorateField(prefix){
   }else{
     wrap.innerHTML=`<label>المحافظة / المنطقة</label><input id="${prefix}Governorate" placeholder="اكتب المحافظة أو المنطقة">`;
   }
-}
-/* حقل هاتف موحّد — مفتاح الدولة والرقم في تابة واحدة */
-function phoneField(ccId,phId,ccVal,phVal,label,required,placeholder){
-  return `<div class="field2">
-    <label>${label||'رقم الهاتف'}${required?' <span style="color:var(--red)">*</span>':''}</label>
-    <div style="display:flex;gap:0;align-items:stretch">
-      <select id="${ccId}" style="flex:0 0 42%;border-top-left-radius:0;border-bottom-left-radius:0">${countryOptions(ccVal||'+20')}</select>
-      <input id="${phId}" type="tel" inputmode="tel" dir="ltr"
-             style="flex:1;text-align:right;border-top-right-radius:0;border-bottom-right-radius:0;border-right:0"
-             placeholder="${esc(placeholder||'01xxxxxxxxx')}" value="${esc(phVal||'')}"
-             oninput="sanitizePhoneInput('${ccId}','${phId}')">
-    </div></div>`;
-}
-/* لو المستخدم كتب مفتاح الدولة جوه خانة الرقم، بنشيله ونظبط القائمة —
-   عشان مايتسجّلش مرتين (+20 +201012345678). */
-function sanitizePhoneInput(ccId,phId){
-  const cc=document.getElementById(ccId), ph=document.getElementById(phId);
-  if(!ph)return;
-  let v=ph.value.replace(/[^\d+]/g,'');
-  if(v.startsWith('00')) v='+'+v.slice(2);
-  if(v.startsWith('+')){
-    const hit=COUNTRY_CODES.slice().sort((a,b)=>b.code.length-a.code.length)
-      .find(c=>v.startsWith(c.code));
-    if(hit){ if(cc) cc.value=hit.code; v=v.slice(hit.code.length); }
-    else v=v.replace(/^\+/,'');
-  } else if(cc && cc.value && v.startsWith(cc.value.replace('+',''))
-            && v.length>cc.value.length){
-    v=v.slice(cc.value.length-1);
-  }
-  ph.value=v;
-}
-/* اختيار الدولة بالاسم بيظبط مفتاحها تلقائيًا */
-function linkCountryToCode(nationSelId,codeSelId){
-  const n=document.getElementById(nationSelId), c=document.getElementById(codeSelId);
-  if(!n||!c)return;
-  const hit=COUNTRY_CODES.find(x=>x.name===n.value);
-  if(hit) c.value=hit.code;
 }
 function countryOptions(selected){selected=selected||'+20';return COUNTRY_CODES.map(c=>`<option value="${c.code}" ${c.code===selected?'selected':''}>${c.name} ${c.code}</option>`).join('')}
 function phoneFull(country,phone){phone=String(phone||'').trim();country=country||'+20';return phone?`${country} ${phone}`:''}
@@ -895,7 +776,7 @@ async function seedBuildingData(name,apartmentsCount,perFloor,adminUsername,admi
   const groundCount=groundFloorCountIn||perFloor;
   groundShopsCount=Math.min(groundShopsCount||0,groundCount);
   const apartments=[],users=[];
-  const adminUser={id:uid(),username:adminUsername,password:await hashPassword(adminPassword),role:'admin',name:(window.__signupAdminName||'رئيس اتحاد الملاك'),phoneCountry:adminPhoneCountry||'+20',phone:adminPhone||'',email:adminEmail||'',apartmentId:null,active:true};
+  const adminUser={id:uid(),username:adminUsername,password:await hashPassword(adminPassword),role:'admin',name:'رئيس اتحاد الملاك',phoneCountry:adminPhoneCountry||'+20',phone:adminPhone||'',email:adminEmail||'',apartmentId:null,active:true};
   if(recoveryQ&&recoveryA){adminUser.recoveryQ=recoveryQ;adminUser.recoveryA=await hashPassword(recoveryA.trim().toLowerCase());}
   users.push(adminUser);
   for(let i=1;i<=apartmentsCount;i++){
@@ -1004,7 +885,7 @@ function migrateBuildingData(){
   checkMonthlyChargeReminder();
 }
 function fixDuplicateUsernamesInActiveBuilding(){
-  const rec=findBuildingRec(activeBuildingId); if(!rec)return;
+  const rec=REG.buildings.find(b=>b.id===activeBuildingId); if(!rec)return;
   const prefix=usernamePrefixFromCode(rec.code);
   let changed=false;
   D.users.forEach(u=>{
@@ -1160,9 +1041,9 @@ async function loginBuilding(buildingId,username,password){
   const rec=REG.buildings.find(b=>b.id===buildingId);
   if(rec&&rec.license&&rec.license.status==='suspended')return showLoginError('تم إيقاف الاشتراك الخاص بهذه العمارة، تواصل مع مسؤول النظام');
   const u=(data.users||[]).find(x=>x.username===username.trim());
-  if(!u||u.active===false)return showLoginError('رقم الموبايل أو الإيميل أو كلمة المرور غير صحيحة');
+  if(!u||u.active===false)return showLoginError('اسم المستخدم أو كلمة المرور غير صحيحة');
   const ok=await verifyAndUpgrade(password,u.password,rec=>{u.password=rec;saveBuildingData(buildingId,data);});
-  if(!ok)return showLoginError('رقم الموبايل أو الإيميل أو كلمة المرور غير صحيحة');
+  if(!ok)return showLoginError('اسم المستخدم أو كلمة المرور غير صحيحة');
   window.__cameFromSysOwner=false;
   activeBuildingId=buildingId; D=data; migrateBuildingData();
   setSession({type:'building',buildingId,username:u.username});
@@ -1193,22 +1074,11 @@ function isSupportStaff(){const s=getSession();return s&&s.type==='support'}
 function currentSupportStaff(){const s=getSession();if(!s||s.type!=='support')return null;return ensureSupportStaff().find(x=>x.username===s.staffUsername)||null}
 function impersonateBuilding(buildingId){
   const data=loadBuildingData(buildingId); if(!data)return showMessage('تعذر تحميل العمارة');
-  // لازم ندخل بحساب رئيس الاتحاد. لو مالقيناهوش (بيانات ناقصة مثلًا)
-  // مننفعش نقع على أول اسم في القايمة — ده بيدخّلك بحساب صاحب محل
-  // وبصلاحياته المحدودة. بنفضّل: إداري نشط ← أي إداري ← وقف بوضوح.
-  const users=(data.users||[]);
-  const admin = users.find(u=>u.role==='admin' && u.active!==false && u.inviteStatus!=='pending')
-             || users.find(u=>u.role==='admin')
-             || users.find(u=>['manager','accountant'].includes(u.role) && u.active!==false);
-  if(!admin) return showMessage(
-    'العمارة دي مالهاش رئيس اتحاد مسجّل، فمينفعش تفتحها بصلاحياته.\n\n'+
-    'اطلب من صاحبها يسجّل دخول مرة واحدة، أو ولّد له دعوة من شاشة المستخدمين.');
+  const admin=(data.users||[]).find(u=>u.role==='admin')||data.users[0];
   activeBuildingId=buildingId; D=data; migrateBuildingData();
   window.__cameFromSysOwner=true;
-  // بنمرّر authId كمان عشان currentUser تلاقي الحساب الصح مباشرة
-  setSession({type:'building',buildingId,username:admin.username,authId:admin.__authId||null});
+  setSession({type:'building',buildingId,username:admin.username});
   curPage='dashboard'; renderRoot(); resetHistoryBase(); resetIdleTimer();
-  if(window.toast) toast('دخلت بحساب: '+(admin.name||admin.username)+' — '+(admin.role==='admin'?'رئيس اتحاد':admin.role));
 }
 /* ---------- عمارة تجريبية عامة (تجربة العرض من شاشة الدخول) ---------- */
 const DEMO_ADMIN_USERNAME='demo_admin';
@@ -1246,10 +1116,7 @@ async function loginAsDemo(role){
 }
 function logout(){
   const wasDemoBuilding=activeBuildingId&&REG.demoBuildingId&&activeBuildingId===REG.demoBuildingId;
-  clearTimeout(__idleTimer);clearTimeout(__idleWarnTimer);clearSession();D=null;activeBuildingId=null;curPage='dashboard';window.__navExpandedGroup=null;
-  // شاشة الدخول هي المتوقعة بعد الخروج، مش الصفحة الرئيسية
-  window.__viewMode=wasDemoBuilding?'landing':'login';window.__previewMode=false;
-  renderRoot();resetHistoryBase();try{window.scrollTo(0,0);}catch(e){}
+  clearTimeout(__idleTimer);clearTimeout(__idleWarnTimer);clearSession();D=null;activeBuildingId=null;curPage='dashboard';window.__navExpandedGroup=null;renderRoot();resetHistoryBase();
   if(wasDemoBuilding)resetDemoBuildingData();
 }
 const IDLE_TIMEOUT_MIN=20;
@@ -1369,8 +1236,7 @@ function totalExpenses(){return D.expenses.reduce((s,e)=>s+Number(e.amount),0)}
 
 /* ---------- مودال ---------- */
 function openModal(html,wide){
-  document.getElementById('modalBox').innerHTML=html;
-  if(window.hydrateStorageImages) hydrateStorageImages(document.getElementById('modalBox'));document.getElementById('modalBox').classList.toggle('wide',!!wide);
+  document.getElementById('modalBox').innerHTML=html;document.getElementById('modalBox').classList.toggle('wide',!!wide);
   document.getElementById('modalOverlay').classList.add('show');
   history.pushState({modal:true},'',location.href);
 }
@@ -1379,13 +1245,9 @@ function closeModal(){
   if(history.state&&history.state.modal){history.back();}else{hideModalUI();}
 }
 /* ---------- تأكيد الحذف بكتابة كلمة "حذف" ---------- */
-function promptModal(title,placeholder,defaultValue,onSubmit,submitLabel,isPassword){
-  // لو النافذة بتطلب كلمة سر، بتيجي بزرار إظهار زي باقي البرنامج
-  const pw = isPassword || /كلمة\s*(ال)?(مرور|سر)/.test(String(title||''));
+function promptModal(title,placeholder,defaultValue,onSubmit,submitLabel){
   openModal(`<h3>${esc(title)}</h3>
-    <div class="field2 mtop">${pw
-      ? pwField('promptModalInput',placeholder||'','','new-password')
-      : `<input id="promptModalInput" placeholder="${esc(placeholder||'')}" value="${esc(defaultValue||'')}">`}</div>
+    <div class="field2 mtop"><input id="promptModalInput" placeholder="${esc(placeholder||'')}" value="${esc(defaultValue||'')}"></div>
     <div class="modal-actions"><button class="btn primary" id="promptModalBtn">${esc(submitLabel||'تأكيد')}</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
   const input=document.getElementById('promptModalInput');
   input.focus();
@@ -1770,7 +1632,7 @@ function renderRoot(){
     else html=supportStaffShellHTML(staff);
   }
   else if(s&&s.type==='building'){
-    if(!D||activeBuildingId!==s.buildingId){D=loadBuildingData(s.buildingId);activeBuildingId=s.buildingId;if(D&&!window.CLOUD)migrateBuildingData();}
+    if(!D||activeBuildingId!==s.buildingId){D=loadBuildingData(s.buildingId);activeBuildingId=s.buildingId;if(D)migrateBuildingData();}
     if(!D||!currentUser()){clearSession();html=loginHTML();}
     else html=shellHTML(currentUser());
   } else html=loginHTML();
@@ -1828,7 +1690,7 @@ function pageSupportBuildingsView(){
     {key:'apCount',label:'عدد الوحدات',value:b=>b.apCount},
     {key:'adminUser',label:'حساب الأدمن',value:b=>b.adminUser,cell:b=>`<code>${esc(b.adminUser)}</code>`},
     {key:'plan',label:'الخطة',value:b=>b.plan,cell:b=>planLabel(b.plan)},
-    {key:'status',label:'الحالة',value:b=>licenseState({status:b.status,endDate:b.endDate}).label,cell:b=>licenseBadge({status:b.status,endDate:b.endDate})},
+    {key:'status',label:'الحالة',value:b=>b.status,cell:b=>b.status==='active'?'<span class="badge g">نشط</span>':b.status==='suspended'?'<span class="badge r">موقوف</span>':'<span class="badge y">منتهي</span>'},
     {key:'endDate',label:'تاريخ الانتهاء',value:b=>b.endDate},
   ],null,
   {defaultKey:'name',emptyText:'لا توجد عمارات مسجّلة بعد',exportName:'العمارات'})}</div>`;
@@ -2150,7 +2012,7 @@ function loginHTML(){
       <div style="text-align:center;margin-top:-8px"><a href="javascript:void(0)" onclick="goToLanding()" class="small">← الصفحة الرئيسية</a></div>
       <div class="login-error" id="loginErr"></div>
       <form id="loginForm" autocomplete="on">
-      <div class="field"><label>رقم الموبايل أو الإيميل</label><input id="lgUser" name="username" autocomplete="username" inputmode="email" placeholder="مثال: 01012345678"></div>
+      <div class="field"><label>اسم المستخدم</label><input id="lgUser" name="username" autocomplete="username" placeholder="مثال: admin أو shaqa1"></div>
       <div class="field"><label>كلمة المرور</label>${pwField('lgPass','','','current-password')}</div>
       <button class="login-btn" id="lgBtn" type="submit">تسجيل الدخول</button>
       </form>
@@ -2197,7 +2059,7 @@ function signupHTML(){
         <div class="field"><label>عدد المحلات من ضمنها (إن وجدت) <span style="font-weight:400">(اتركها صفر لو مفيش محلات)</span></label><input id="suGroundShops" type="number" value="0" min="0"></div>
         </div>
         <div id="suCompoundNote" class="field hidden"><p class="small">هتقدر تضيف كل مبنى وفيلا في الكمبوند بالتفصيل من شاشة "مباني وفلل الكمبوند" بعد إنشاء الحساب مباشرة.</p></div>
-        <div class="field"><label>الدولة</label><select id="suNationCountry" onchange="toggleGovernorateField('su');linkCountryToCode('suNationCountry','suCountry')">${nationOptions('مصر')}</select></div>
+        <div class="field"><label>الدولة</label><select id="suNationCountry" onchange="toggleGovernorateField('su')">${nationOptions('مصر')}</select></div>
         <div class="field hidden" id="suOtherCountryWrap"><label>اسم الدولة</label><input id="suOtherCountry" placeholder="اكتب اسم الدولة"></div>
         <div class="field" id="suGovernorateFieldWrap"><label>المحافظة</label><select id="suGovernorate">${EGYPT_GOVERNORATES.map(g=>`<option>${esc(g)}</option>`).join('')}</select></div>
         <div class="field"><label>المدينة <span style="color:var(--red)">*</span></label><input id="suCity" placeholder="مثال: مدينة نصر"></div>
@@ -2205,13 +2067,14 @@ function signupHTML(){
         <div class="field"><label>رابط الموقع على خرائط جوجل <span style="font-weight:400">(اختياري)</span></label><input id="suLocation" placeholder="https://maps.google.com/..." type="url"></div>
       </div>
       <div class="wizard-step hidden" id="wizStep2">
-        <div class="field"><label>اسمك <span style="color:var(--red)">*</span></label><input id="suUser" name="name" autocomplete="name" placeholder="مثال: حسن محمد"><p class="small" style="margin-top:4px">الاسم ده بيظهر للسكان — مش اسم دخول.</p></div>
-        <div class="field" style="display:flex;gap:8px">
-          ${phoneField('suCountry','suPhone','+20','','رقم الهاتف',true,'ده اللي هتدخل بيه')}
-        </div>
-        <div class="field"><label>البريد الإلكتروني <span style="font-weight:400">(اختياري — تقدر تدخل بيه كمان)</span></label><input id="suEmail" type="email" placeholder="غير إلزامي"></div>
-        <div class="field"><label>كلمة المرور</label>${pwField('suPass','','','new-password')}<p class="small" style="margin-top:4px">٨ خانات على الأقل</p></div>
+        <div class="field"><label>اسم المستخدم (لك أنت كرئيس اتحاد)</label><input id="suUser" name="username" autocomplete="username" placeholder="مثال: admin"></div>
+        <div class="field"><label>كلمة المرور</label>${pwField('suPass','','','new-password')}<p class="small" style="margin-top:4px">8 حروف على الأقل، تحتوي على حرف ورقم ورمز واحد على الأقل (مثل !@#$%)</p></div>
         <div class="field"><label>تأكيد كلمة المرور</label>${pwField('suPassConfirm','','','new-password')}<p class="small" id="suPassMatchMsg" style="margin-top:4px"></p></div>
+        <div class="field" style="display:flex;gap:8px">
+          <div style="flex:1"><label>مفتاح الدولة</label><select id="suCountry">${countryOptions('+20')}</select></div>
+          <div style="flex:2"><label>رقم الهاتف <span style="color:var(--red)">*</span></label><input id="suPhone" placeholder="مطلوب"></div>
+        </div>
+        <div class="field"><label>البريد الإلكتروني <span style="font-weight:400">(اختياري)</span></label><input id="suEmail" type="email" placeholder="غير إلزامي"></div>
       </div>
       <div class="wizard-step hidden" id="wizStep3">
         <p class="small">لو نسيت كلمة المرور بعدين، هتحتاج تجاوب على السؤال ده عشان تسترجع حسابك.</p>
@@ -2324,7 +2187,7 @@ async function doSignup(){
   const countrySel=document.getElementById('suNationCountry').value;
   const country=countrySel==='أخرى'?document.getElementById('suOtherCountry').value.trim():countrySel;
   const governorate=document.getElementById('suGovernorate').value.trim();
-  let username=document.getElementById('suUser').value.trim();
+  const username=document.getElementById('suUser').value.trim();
   const password=document.getElementById('suPass').value;
   const passwordConfirm=document.getElementById('suPassConfirm')?document.getElementById('suPassConfirm').value:password;
   if(password!==passwordConfirm)return showLoginError('كلمة المرور وتأكيدها مش متطابقين');
@@ -2334,7 +2197,7 @@ async function doSignup(){
   const rq=document.getElementById('suRQ').value.trim();
   const ra=document.getElementById('suRA').value.trim();
   if(!name)return showLoginError('اسم العمارة / الاتحاد مطلوب');
-  if(!username)return showLoginError('اكتب اسمك');
+  if(!username)return showLoginError('اسم المستخدم مطلوب');
   if(!password)return showLoginError('كلمة المرور مطلوبة');
   if(!document.getElementById('suAgree').checked)return showLoginError('لازم توافق على سياسة الخصوصية وشروط الاستخدام للمتابعة');
   if(!phone)return showLoginError('رقم الهاتف مطلوب');
@@ -2346,22 +2209,12 @@ async function doSignup(){
   }
   window.__signupPhoneConfirmed=false;
   const pwErr=passwordPolicyError(password); if(pwErr)return showLoginError(pwErr);
-  // الدخول برقم الموبايل — فالمعرّف بياخد الرقم، والاسم بيفضل اسم العرض
-  window.__signupAdminName=username;   // الاسم اللي هيظهر للسكان
-  (function(){
-    let d=String(phone||'').replace(/[^\d+]/g,'');
-    if(d.startsWith('00')) d='+'+d.slice(2);
-    const cc=(document.getElementById('suCountry')||{}).value||'+20';
-    const e164=d.startsWith('+')?d:(cc+d.replace(/^0+/,''));
-    let base=e164.replace(/\D/g,'')||username, n=1, u=base;
-    while(isUsernameTaken(u)){u=base+'_'+(++n);}
-    username=u;
-  })();
+  if(isUsernameTaken(username))return showLoginError('اسم المستخدم ده محجوز، اختر اسمًا آخر');
   const referralCodeUsed=document.getElementById('suReferral').value.trim();
   const couponCodeUsed=document.getElementById('suCoupon').value.trim();
   const signupSource=getCampaignSource();
   const{code,id:newBuildingId}=await createBuildingRecord(name,count,4,username,password,rq,ra,phoneCountry,phone,email,trialPlan().key,{groundShopsCount:groundShops,groundFloorCount:groundCount,address,locationUrl,city,country,governorate,communityType,referralCodeUsed,couponCodeUsed,signupSource});
-  pushSysNotification('عمارة جديدة سجّلت بنفسها',`"${name}" - خطة تجريبية - دخول رئيس الاتحاد: ${phoneFull(phoneCountry,phone)}`,'sysdash');
+  pushSysNotification('عمارة جديدة سجّلت بنفسها',`"${name}" - خطة تجريبية - يوزر الأدمن: ${username}`,'sysdash');
   window.__viewMode='login';
   try{history.pushState({viewMode:'login'},'',location.href);}catch(e){}
   showCodeConfirmModal(name,code,username,true);
@@ -2387,10 +2240,10 @@ function recoverHTML(){
   <div class="login-wrap">
     <div class="skyline-bg">${heroSkylineSVG(true)}</div>
     <div class="login-card">
-    <div class="login-logo"><div class="mark">${appLogoSVG(92)}</div><h1>استرداد الدخول</h1><p>ابحث برقم الموبايل أو الإيميل</p></div>
+    <div class="login-logo"><div class="mark">${appLogoSVG(92)}</div><h1>استرداد الدخول</h1><p>ابحث بحساب اسم المستخدم بتاعك</p></div>
     <div class="login-error" id="loginErr"></div>
     ${step===1?`
-      <div class="field"><label>رقم الموبايل أو الإيميل</label><input id="rcUser" inputmode="email" placeholder="اللي بتدخل بيه"></div>
+      <div class="field"><label>اسم المستخدم</label><input id="rcUser" placeholder="اسم المستخدم اللي بتدخل بيه"></div>
       <button class="login-btn" id="rcSearchBtn">بحث</button>
       <div class="login-hint"><a href="javascript:void(0)" onclick="closeRecover()">العودة لتسجيل الدخول</a></div>
     `:step===2?recoverResultsHTML():step===4?recoverVerifyHTML():step===5?recoverContactResetHTML():recoverContactFailHTML()}
@@ -2489,7 +2342,7 @@ function bindLogin(){
     if(window.__recoveryStep===1){
       const go=()=>{
         const username=document.getElementById('rcUser').value.trim();
-        if(!username)return showLoginError('أدخل رقم الموبايل أو الإيميل');
+        if(!username)return showLoginError('أدخل اسم المستخدم');
         window.__recoveryMatches=findUserMatches(username);
         window.__recoveryStep=2; renderRoot();
       };
@@ -2505,9 +2358,9 @@ function bindLogin(){
   const go=()=>{
     const username=document.getElementById('lgUser').value.trim();
     const password=document.getElementById('lgPass').value;
-    if(!username||!password)return showLoginError('أدخل رقم الموبايل أو الإيميل وكلمة المرور');
+    if(!username||!password)return showLoginError('أدخل اسم المستخدم وكلمة المرور');
     const matches=findUserMatches(username);
-    if(!matches.length)return showLoginError('مفيش حساب بالرقم أو الإيميل ده');
+    if(!matches.length)return showLoginError('اسم المستخدم أو كلمة المرور غير صحيحة');
     const sysMatch=matches.find(m=>m.type==='sysowner');
     if(sysMatch){loginSysOwner(username,password);return;}
     loginBuilding(matches[0].buildingId,username,password);
@@ -2572,7 +2425,7 @@ function checkExpiringSubscriptionReminders(){
   const today=todayISO();
   let changed=false;
   REG.buildings.forEach(b=>{
-    const lic=ensureLicense(b); if(!lic.endDate||!licenseIsLive(lic))return;
+    const lic=ensureLicense(b); if(!lic.endDate||lic.status!=='active')return;
     const daysLeft=Math.ceil((new Date(lic.endDate)-new Date(today))/86400000);
     if(daysLeft<0||daysLeft>7)return;
     if(b.lastExpiryReminderDate===today)return;
@@ -2747,7 +2600,7 @@ function validateBldImportRow(r){
   if(!name)return{ok:false,reason:'اسم العمارة مفقود'};
   if(!username)return{ok:false,reason:'اسم دخول الأدمن مفقود'};
   if(isUsernameTaken(username))return{ok:false,reason:'اسم الدخول ده محجوز بالفعل'};
-  if(!pass||pass.length<8)return{ok:false,reason:'كلمة المرور لازم تكون ٨ خانات على الأقل'};
+  if(!pass||pass.length<8)return{ok:false,reason:'كلمة المرور لازم تكون 8 حروف على الأقل'};
   return{ok:true};
 }
 function renderBldImportPreview(rows){
@@ -2788,12 +2641,10 @@ function pageSysDashboard(){
     return{...b,apCount:(d.apartments||[]).length,apOnlyCount:(d.apartments||[]).filter(a=>a.type!=='shop').length,shopCount:(d.apartments||[]).filter(a=>a.type==='shop').length,adminUser:admin?admin.username:'-',adminPhone:admin?phoneFull(admin.phoneCountry,admin.phone):'-',adminEmail:admin&&admin.email?admin.email:'-',adminPhoneRaw:admin?admin.phone:'',adminPhoneCountryRaw:admin?admin.phoneCountry:'+20',plan:lic.plan,status:lic.status,endDate:lic.endDate||'بلا انتهاء',endDateRaw:lic.endDate,daysLeft,used,maxTx:lic.maxTransactions,city:d.building.city||'',address:d.building.address||'',locationUrl:d.building.locationUrl||'',buildYear:d.building.buildYear||'',apartmentsPerFloor:d.building.apartmentsPerFloor||'',country:d.building.country||'',governorate:d.building.governorate||''};
   });
   const totalApartments=rows.reduce((s,b)=>s+b.apCount,0);
-  // نحسب الحالة الفعلية من التاريخ لكل صف قبل أي عدّ
-  rows.forEach(b=>{ b.status = licenseState({status:b.status,endDate:b.endDate}).key; });
-  const activeCount=rows.filter(b=>b.status==='active'||b.status==='trial').length;
+  const activeCount=rows.filter(b=>b.status==='active').length;
   const trialCount=rows.filter(b=>{const p=findPlan(b.plan);return p&&p.isTrial}).length;
   const expiredCount=rows.filter(b=>b.status==='expired'||b.status==='suspended').length;
-  const expiringSoon=rows.filter(b=>(b.status==='active'||b.status==='trial')&&b.daysLeft!==null&&b.daysLeft>=0&&b.daysLeft<=7);
+  const expiringSoon=rows.filter(b=>b.status==='active'&&b.daysLeft!==null&&b.daysLeft>=0&&b.daysLeft<=7);
 
   if(window.__sysDashFilter===undefined)window.__sysDashFilter='all';
   const colDefs={
@@ -2805,7 +2656,7 @@ function pageSysDashboard(){
     adminPhone:{label:'هاتف الأدمن',value:b=>b.adminPhone,cell:b=>esc(b.adminPhone)},
     adminEmail:{label:'بريد الأدمن',value:b=>b.adminEmail,cell:b=>esc(b.adminEmail)},
     plan:{label:'الخطة',value:b=>b.plan,cell:b=>planLabel(b.plan)},
-    status:{label:'الحالة',value:b=>licenseState({status:b.status,endDate:b.endDate}).label,cell:b=>licenseBadge({status:b.status,endDate:b.endDate})},
+    status:{label:'الحالة',value:b=>b.status,cell:b=>b.status==='active'?'<span class="badge g">نشط</span>':b.status==='suspended'?'<span class="badge r">موقوف</span>':'<span class="badge y">منتهي</span>'},
     endDate:{label:'تاريخ الانتهاء',value:b=>b.endDate,cell:b=>b.daysLeft!==null&&b.daysLeft<=7&&b.daysLeft>=0?`<span style="color:var(--red);font-weight:700">${esc(b.endDate)} (باقي ${b.daysLeft} يوم)</span>`:esc(b.endDate)},
     usage:{label:'المعاملات',value:b=>b.used,cell:b=>b.used+(b.maxTx?' / '+b.maxTx:'')},
     createdAt:{label:'تاريخ الإنشاء',value:b=>b.createdAt,cell:b=>esc(b.createdAt)},
@@ -2828,10 +2679,10 @@ function pageSysDashboard(){
   </div>`}];
   const filterMap={
     all:{test:()=>true,label:'كل العمارات'},
-    active:{test:b=>b.status==='active'||b.status==='trial',label:'اشتراكات نشطة'},
+    active:{test:b=>b.status==='active',label:'اشتراكات نشطة'},
     trial:{test:b=>{const p=findPlan(b.plan);return p&&p.isTrial;},label:'عمارات تجريبية'},
     expired:{test:b=>b.status==='expired'||b.status==='suspended',label:'عمارات منتهية أو موقوفة'},
-    expiringSoon:{test:b=>(b.status==='active'||b.status==='trial')&&b.daysLeft!==null&&b.daysLeft>=0&&b.daysLeft<=7,label:'هتنتهي خلال 7 أيام'},
+    expiringSoon:{test:b=>b.status==='active'&&b.daysLeft!==null&&b.daysLeft>=0&&b.daysLeft<=7,label:'هتنتهي خلال 7 أيام'},
   };
   const shownRows=rows.filter(filterMap[window.__sysDashFilter].test);
   const kpiCard=(key,icon,label,val,cls)=>`<div class="kpi ${cls||''}" style="cursor:pointer;${window.__sysDashFilter===key?'outline:2px solid var(--accent);outline-offset:-1px':''}" onclick="setSysDashFilter('${key}')"><div class="ic">${icon}</div><div class="lbl">${label}</div><div class="val">${val}</div></div>`;
@@ -2911,7 +2762,7 @@ function applyColCustomizer(){
 async function resetBuildingAdminPasswordPrompt(buildingId){
   const d=loadBuildingData(buildingId); if(!d)return;
   const admin=d.users.find(u=>u.role==='admin'); if(!admin)return showMessage('لا يوجد حساب رئيس اتحاد لهذه العمارة');
-  promptModal('كلمة مرور جديدة','٨ خانات على الأقل','',async(newPass)=>{
+  promptModal('كلمة مرور جديدة','8 حروف على الأقل، حرف ورقم ورمز','',async(newPass)=>{
     if(!newPass)return;
     const pwErr=passwordPolicyError(newPass); if(pwErr)return showMessage(pwErr);
     admin.password=await hashPassword(newPass); saveBuildingData(buildingId,d);
@@ -2942,7 +2793,8 @@ function openNewBuildingModal(){
       <div class="field2"><label>رابط الموقع على خرائط جوجل (اختياري)</label><input id="nbLocation" type="url" placeholder="https://maps.google.com/..."></div>
       <div class="field2"><label>اسم مستخدم رئيس الاتحاد</label><input id="nbAdminUser" value="admin"></div>
       <div class="field2"><label>كلمة مرور رئيس الاتحاد</label>${pwField('nbAdminPass','',"Admin@1234")}</div>
-      ${phoneField('nbCountry','nbPhone','+20','','رقم الهاتف',true)}
+      <div class="field2"><label>مفتاح الدولة</label><select id="nbCountry">${countryOptions('+20')}</select></div>
+      <div class="field2"><label>رقم الهاتف <span style="color:var(--red)">*</span></label><input id="nbPhone"></div>
       <div class="field2"><label>البريد الإلكتروني (اختياري)</label><input id="nbEmail" type="email"></div>
       <div class="field2"><label>خطة الاشتراك</label><select id="nbPlan">${activePlans().map(p=>`<option value="${p.key}" ${p.isTrial?'selected':''}>${p.icon} ${p.name}${p.priceBefore?' - '+money(planPriceAfter(p)):''}</option>`).join('')}</select></div>
       <div class="field2"><label>سؤال استرداد (اختياري)</label><input id="nbRQ" placeholder="مثال: اسم شارع العمارة؟"></div>
@@ -3101,7 +2953,8 @@ function pageSysSettings(){
   </div>
   <div class="card content-narrow mtop2"><h3>بيانات التواصل (تظهر لعملائك عند الترقية أو انتهاء التجربة)</h3>
     <div class="grid g2 mtop">
-      ${phoneField('soCountry','soPhone',so.contactPhoneCountry||'+20',esc(so.contactPhone||''),'رقم الهاتف/واتساب',false)}
+      <div class="field2"><label>مفتاح الدولة</label><select id="soCountry">${countryOptions(so.contactPhoneCountry||'+20')}</select></div>
+      <div class="field2"><label>رقم الهاتف/واتساب</label><input id="soPhone" value="${esc(so.contactPhone||'')}"></div>
       <div class="field2"><label>البريد الإلكتروني</label><input id="soEmail" type="email" value="${esc(so.contactEmail||'')}"></div>
     </div>
     <div class="field2"><label>رابط دفع مباشر (اختياري)</label><input id="soPayLink" placeholder="مثال: رابط فوري أو إنستاباي أو أي بوابة دفع" value="${esc(so.paymentLink||'')}"><p class="small mtop">لو موجود، هيظهر زرار "💳 ادفع الآن" واضح لعملائك في شاشة الترقية، بدل ما يدوروا على بيانات التحويل يدويًا.</p></div>
@@ -3182,7 +3035,7 @@ function pageSysUsers(){
 }
 async function sysResetUserPassword(buildingId,username){
   const d=loadBuildingData(buildingId); const u=d.users.find(x=>x.username===username); if(!u)return;
-  promptModal('كلمة مرور جديدة','٨ خانات على الأقل','',async(newPass)=>{
+  promptModal('كلمة مرور جديدة','8 حروف على الأقل، حرف ورقم ورمز','',async(newPass)=>{
     if(!newPass)return;
     const pwErr=passwordPolicyError(newPass); if(pwErr)return showMessage(pwErr);
     u.password=await hashPassword(newPass); saveBuildingData(buildingId,d);
@@ -3773,7 +3626,7 @@ function submitSupportTicket(){
   const file=document.getElementById('tkImage').files[0];
   if(file){
     if(file.size>4*1024*1024)return showMessage('حجم الصورة كبير جدًا - الحد الأقصى 4 ميجا');
-    compressImage(file).then(finish).catch(err=>showMessage(err.message));
+    const reader=new FileReader();reader.onload=e=>finish(e.target.result);reader.readAsDataURL(file);
   }else finish(null);
 }
 function pageMySupportTickets(){
@@ -3882,7 +3735,7 @@ function validateStaffImportRow(r){
   if(!name)return{ok:false,reason:'الاسم مفقود'};
   if(!username)return{ok:false,reason:'اسم الدخول مفقود'};
   if(username===REG.sysOwner.username||ensureSupportStaff().some(s=>s.username===username))return{ok:false,reason:'اسم الدخول محجوز بالفعل'};
-  if(!pass||pass.length<8)return{ok:false,reason:'كلمة المرور لازم تكون ٨ خانات على الأقل'};
+  if(!pass||pass.length<8)return{ok:false,reason:'كلمة المرور لازم تكون 8 حروف على الأقل'};
   return{ok:true};
 }
 function renderStaffImportPreview(rows){
@@ -3946,13 +3799,13 @@ async function saveStaffAccount(id){
     const s=ensureSupportStaff().find(x=>x.id===id); if(!s)return;
     s.name=name; s.username=username;
     if(password){
-      if(password.length<8)return showMessage('كلمة المرور لازم تكون ٨ خانات على الأقل');
+      if(password.length<8)return showMessage('كلمة المرور لازم تكون 8 حروف على الأقل');
       s.password=await hashPassword(password);
     }
     logSysActivity('تعديل عضو فريق',name+' ('+username+')');
     saveRegistry();closeModal();toast('تم حفظ التعديل');renderSysContent();
   }else{
-    if(!password||password.length<8)return showMessage('كلمة المرور لازم تكون ٨ خانات على الأقل');
+    if(!password||password.length<8)return showMessage('كلمة المرور لازم تكون 8 حروف على الأقل');
     const permissions={};
     SUPPORT_PERMISSION_GROUPS.forEach(g=>{const el=document.getElementById('stPerm_'+g.key);permissions[g.key]=el?el.checked:false;});
     ensureSupportStaff().push({id:uid(),name,username,password:await hashPassword(password),active:true,permissions});
@@ -3987,7 +3840,7 @@ function openResetStaffPassModal(id){
 async function resetStaffPassword(id){
   const s=ensureSupportStaff().find(x=>x.id===id); if(!s)return;
   const pass=document.getElementById('stNewPass').value;
-  if(!pass||pass.length<8)return showMessage('كلمة المرور لازم تكون ٨ خانات على الأقل');
+  if(!pass||pass.length<8)return showMessage('كلمة المرور لازم تكون 8 حروف على الأقل');
   s.password=await hashPassword(pass);
   saveRegistry();closeModal();toast('تم تغيير كلمة المرور');
 }
@@ -4025,7 +3878,9 @@ function submitCustomerProposal(){
   const file=fileInput.files[0];
   if(file){
     if(file.size>4*1024*1024)return showMessage('حجم الصورة كبير جدًا - الحد الأقصى 4 ميجا');
-    compressImage(file).then(finish).catch(err=>showMessage(err.message));
+    const reader=new FileReader();
+    reader.onload=e=>finish(e.target.result);
+    reader.readAsDataURL(file);
   }else finish(null);
 }
 function pageMyProposals(){
@@ -4099,28 +3954,9 @@ function buildLicense(planKey){
   const start=todayISO();
   return{plan:def.key,status:'active',startDate:start,endDate:def.durationMonths?addMonths(start,def.durationMonths):null,maxApartments:def.maxApartments,maxTransactions:def.maxTransactions,notes:''};
 }
-function ensureLicense(rec){if(!rec)return null;if(!rec.license)rec.license=buildLicense('custom');return rec.license}
-function findBuildingRec(key){key=key||activeBuildingId;if(!key||!REG||!REG.buildings)return null;return REG.buildings.find(b=>b.id===key)||REG.buildings.find(b=>b.__uuid===key)||REG.buildings.find(b=>b.code===key)||null}
-function licenseRec(){return findBuildingRec(activeBuildingId)}
+function ensureLicense(rec){if(!rec.license)rec.license=buildLicense('custom');return rec.license}
+function licenseRec(){return REG.buildings.find(b=>b.id===activeBuildingId)}
 function licenseInfo(){const rec=licenseRec();return rec?ensureLicense(rec):null}
-/* الحالة الفعلية للترخيص — الحساب من التاريخ مش من الاسم المخزّن.
-   كانت أي حالة غير 'active' بتتعرض "منتهية"، فالاشتراك التجريبي
-   (trial) كان بيبان منتهي رغم إن قدامه شهرين. */
-function licenseState(lic){
-  if(!lic) return {key:'none',label:'—',badge:'n',daysLeft:null};
-  const today=todayISO();
-  const daysLeft = lic.endDate
-    ? Math.ceil((new Date(lic.endDate)-new Date(today))/86400000) : null;
-  if(lic.status==='suspended') return {key:'suspended',label:'موقوفة',badge:'r',daysLeft};
-  if(lic.endDate && today>lic.endDate) return {key:'expired',label:'منتهية',badge:'y',daysLeft};
-  if(lic.status==='trial')
-    return {key:'trial',label:daysLeft!==null?`تجريبية · باقي ${daysLeft} يوم`:'تجريبية',badge:'b',daysLeft};
-  if(lic.status==='expired') return {key:'expired',label:'منتهية',badge:'y',daysLeft};
-  return {key:'active',label:daysLeft!==null?`سارية · باقي ${daysLeft} يوم`:'سارية',badge:'g',daysLeft};
-}
-function licenseBadge(lic){const st=licenseState(lic);return `<span class="badge ${st.badge}">${st.label}</span>`;}
-/* هل الاشتراك شغّال؟ (تجريبي أو نشط وما انتهاش) */
-function licenseIsLive(lic){const k=licenseState(lic).key;return k==='active'||k==='trial';}
 function usedTransactionsCount(){return(D.ledger||[]).length+(D.expenses||[]).length}
 function licenseStatusCheck(){
   const lic=licenseInfo(); if(!lic)return{ok:true};
@@ -4406,7 +4242,8 @@ function openAddLeadModal(id){
   openModal(`<h3>${lead?'تعديل رقم':'+ إضافة رقم يدويًا'}</h3>
     <div class="field2 mtop"><label>الاسم (اختياري)</label><input id="leadName" value="${lead?esc(lead.name||''):''}"></div>
     <div class="grid g2">
-      ${phoneField('leadPhoneCountry','leadPhone',lead?lead.phoneCountry:null,lead?esc(lead.phone):'','رقم الهاتف/واتساب',false)}
+      <div class="field2"><label>مفتاح الدولة</label><select id="leadPhoneCountry">${countryOptions(lead?lead.phoneCountry:null)}</select></div>
+      <div class="field2"><label>رقم الهاتف/واتساب</label><input id="leadPhone" placeholder="01xxxxxxxxx" value="${lead?esc(lead.phone):''}"></div>
     </div>
     <div class="field2"><label>المصدر (اختياري)</label><input id="leadSource" placeholder="مثال: فيسبوك، معرض، توصية" value="${lead?esc(lead.source||''):''}"></div>
     <div class="modal-actions"><button class="btn primary" onclick="saveNewLead(${id?`'${id}'`:'null'})">✅ ${lead?'حفظ التعديل':'إضافة'}</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
@@ -4820,7 +4657,7 @@ function maybeShowOfferPopup(){
 }
 /* ---------- بانر عرض للعملاء الحاليين ---------- */
 function existingOfferBannerHTML(){
-  const rec=findBuildingRec(activeBuildingId); if(!rec)return'';
+  const rec=REG.buildings.find(b=>b.id===activeBuildingId); if(!rec)return'';
   if(rec.claimedOfferId)return'';
   const o=activeExistingCustomerOffer(); if(!o)return'';
   if(localStorage.getItem('__offerBannerDismissed_'+activeBuildingId)===todayISO())return'';
@@ -4839,7 +4676,7 @@ function dismissExistingOfferBanner(){
 }
 function claimExistingOffer(offerId){
   const o=ensureLandingOffers().find(x=>x.id===offerId); if(!o)return;
-  const rec=findBuildingRec(activeBuildingId); if(!rec)return;
+  const rec=REG.buildings.find(b=>b.id===activeBuildingId); if(!rec)return;
   if(rec.claimedOfferId)return toast('العرض ده اتفعّل بالفعل على حسابك من قبل');
   confirmAction('هل تريد تفعيل هذا العرض؟ سيتم تحديث اشتراكك مجانًا للمدة المحددة.',()=>{
     const lic=ensureLicense(rec);
@@ -5348,7 +5185,7 @@ function pageSysLicenses(){
     {key:'name',label:'العمارة',value:b=>b.name,cell:b=>esc(b.name)},
     {key:'code',label:'الكود',value:b=>b.code,cell:b=>`<code>${esc(b.code)}</code>`},
     {key:'plan',label:'الخطة',value:b=>ensureLicense(b).plan,cell:b=>planLabel(ensureLicense(b).plan)},
-    {key:'status',label:'الحالة',value:b=>licenseState(ensureLicense(b)).label,cell:b=>licenseBadge(ensureLicense(b))},
+    {key:'status',label:'الحالة',value:b=>ensureLicense(b).status,cell:b=>{const s=ensureLicense(b).status;return s==='active'?'<span class="badge g">نشط</span>':s==='suspended'?'<span class="badge r">موقوف</span>':'<span class="badge y">منتهي</span>';}},
     {key:'expiry',label:'تاريخ الانتهاء',value:b=>ensureLicense(b).endDate||'',cell:b=>esc(ensureLicense(b).endDate||'بلا انتهاء')},
     {key:'usage',label:'المعاملات',value:b=>{const d=loadBuildingData(b.id);return d?(d.ledger||[]).length+(d.expenses||[]).length:0},cell:b=>{const lic=ensureLicense(b);const d=loadBuildingData(b.id);const used=d?(d.ledger||[]).length+(d.expenses||[]).length:0;return used+(lic.maxTransactions?' / '+lic.maxTransactions:'');}},
     {key:'x',label:'',value:null,cell:b=>`<button class="btn sm primary" onclick="openLicenseManage('${b.id}')">إدارة الاشتراك</button>`}
@@ -5461,7 +5298,7 @@ function openLicenseManage(buildingId){
   const rec=REG.buildings.find(b=>b.id===buildingId); const lic=ensureLicense(rec);
   const d=loadBuildingData(buildingId);
   const used=d?(d.ledger||[]).length+(d.expenses||[]).length:0;
-  const statusBadge=licenseBadge(lic);
+  const statusBadge=lic.status==='active'?'<span class="badge g">نشطة</span>':lic.status==='suspended'?'<span class="badge r">موقوفة</span>':'<span class="badge y">منتهية</span>';
   const history=[...(rec.licenseHistory||[])].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const curDef=findPlan(lic.plan);
   const pendingReq=(REG.renewalRequests||[]).find(r=>r.buildingId===buildingId&&r.status==='pending');
@@ -5505,7 +5342,7 @@ function computeRenewedLicense(rec,planKey){
   const def=findPlan(planKey);
   const cur=rec.license;
   const samePlan=cur&&cur.plan===planKey;
-  const stillValid=cur&&cur.endDate&&cur.endDate>todayISO()&&licenseIsLive(cur);
+  const stillValid=cur&&cur.endDate&&cur.endDate>todayISO()&&cur.status==='active';
   if(samePlan&&stillValid&&def&&def.durationMonths){
     const newLic={...cur};
     newLic.endDate=addMonths(cur.endDate,def.durationMonths);
@@ -5641,7 +5478,7 @@ function licenseBannerHTML(){
   </div>`;
 }
 function pageReferralProgram(){
-  const rec=findBuildingRec(activeBuildingId); if(!rec)return'';
+  const rec=REG.buildings.find(b=>b.id===activeBuildingId); if(!rec)return'';
   if(!rec.referralCode){rec.referralCode=generateReferralCode(rec.name);saveRegistry();}
   const referred=REG.buildings.filter(b=>b.referredBy===rec.id);
   const rewards=ensureReferralRewards().filter(r=>r.referrerBuildingId===rec.id);
@@ -5675,7 +5512,7 @@ function copyReferralMessage(){
 function pageLicense(){
   const rec=licenseRec(); const lic=ensureLicense(rec);
   const used=usedTransactionsCount();
-  const statusBadge=licenseBadge(lic);
+  const statusBadge=lic.status==='active'?'<span class="badge g">نشطة</span>':lic.status==='suspended'?'<span class="badge r">موقوفة</span>':'<span class="badge y">منتهية</span>';
   const vendor=REG.sysOwner;
   const myRequests=[...(REG.renewalRequests||[])].filter(r=>r.buildingId===activeBuildingId).sort((a,b)=>(b.requestedAt||'').localeCompare(a.requestedAt||''));
   const pendingRequest=myRequests.find(r=>r.status==='pending');
@@ -5722,10 +5559,22 @@ function wireImageUpload(inputId,previewId,storageKey){
   document.getElementById(inputId).addEventListener('change',e=>{
     const file=e.target.files[0]; if(!file)return;
     if(file.size>8*1024*1024){showMessage('حجم الصورة كبير جدًا (أكبر من 8 ميجا)، اختر صورة أصغر أو قلل جودة الكاميرا.');e.target.value='';return;}
-    compressImage(file).then(__img=>{
-        window[storageKey]=__img;
-        document.getElementById(previewId).innerHTML=`<img src="${__img}" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--line)">`;
-    }).catch(err=>showMessage(err.message));
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const img=new Image();
+      img.onload=()=>{
+        const maxW=1920;
+        const scale=Math.min(1,maxW/img.width);
+        const canvas=document.createElement('canvas');
+        canvas.width=img.width*scale; canvas.height=img.height*scale;
+        canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+        const compressed=canvas.toDataURL('image/jpeg',0.85);
+        window[storageKey]=compressed;
+        document.getElementById(previewId).innerHTML=`<img src="${compressed}" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--line)">`;
+      };
+      img.src=ev.target.result;
+    };
+    reader.readAsDataURL(file);
   });
 }
 function openRenewalRequestModal(){
@@ -5740,17 +5589,29 @@ function openRenewalRequestModal(){
   document.getElementById('rrImage').addEventListener('change',e=>{
     const file=e.target.files[0]; if(!file)return;
     if(file.size>8*1024*1024){showMessage('حجم الصورة كبير جدًا (أكبر من 8 ميجا)، اختر صورة أصغر أو قلل جودة الكاميرا.');e.target.value='';return;}
-    compressImage(file).then(__img=>{
-        window.__rrImageData=__img;
-        document.getElementById('rrImagePreview').innerHTML=`<img src="${__img}" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--line)">`;
-    }).catch(err=>showMessage(err.message));
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const img=new Image();
+      img.onload=()=>{
+        const maxW=1920;
+        const scale=Math.min(1,maxW/img.width);
+        const canvas=document.createElement('canvas');
+        canvas.width=img.width*scale; canvas.height=img.height*scale;
+        canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+        const compressed=canvas.toDataURL('image/jpeg',0.85);
+        window.__rrImageData=compressed;
+        document.getElementById('rrImagePreview').innerHTML=`<img src="${compressed}" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--line)">`;
+      };
+      img.src=ev.target.result;
+    };
+    reader.readAsDataURL(file);
   });
 }
 function submitRenewalRequest(){
   const planKey=document.getElementById('rrPlan').value;
   const note=document.getElementById('rrNote').value.trim();
   if(!window.__rrImageData)return showMessage('أرفق صورة إثبات التحويل أولًا');
-  const rec=findBuildingRec(activeBuildingId)||{name:''};
+  const rec=REG.buildings.find(b=>b.id===activeBuildingId);
   REG.renewalRequests=REG.renewalRequests||[];
   REG.renewalRequests.push({id:uid(),buildingId:activeBuildingId,buildingName:rec.name,planKey,imageDataUrl:window.__rrImageData,note,status:'pending',requestedAt:new Date().toISOString()});
   pushSysNotification('طلب تجديد اشتراك جديد',`"${rec.name}" - الخطة المطلوبة: ${planName(planKey)}`,'sysrenewals');
@@ -5759,19 +5620,19 @@ function submitRenewalRequest(){
   closeModal(); toast('تم إرسال طلب التجديد، هيراجعه مسؤول البرنامج قريبًا'); renderContent();
 }
 /* ---------- هيكل تطبيق العمارة ---------- */
-var ADMIN_NAV_GROUPS=[
+const ADMIN_NAV_GROUPS=[
   {key:'home',icon:'🏠',label:'الرئيسية',items:[['dashboard','📊','لوحة التحكم'],['analytics','📈','التحليلات والاتجاهات']]},
-  {key:'building',icon:'🏢',label:'العمارة والملاك',items:[['building','🏢','بيانات العمارة'],['blocks','🏘️','مباني وفلل الكمبوند'],['apartments','🚪','الشقق والملاك'],['users','👥','المستخدمون'],['vendors','🛠️','مقاولون وموردون'],['maintenance','🔧','بلاغات الصيانة'],['floors','🏗️','تقرير الأدوار']]},
+  {key:'building',icon:'🏢',label:'العمارة والملاك',items:[['building','🏢','بيانات العمارة'],['blocks','🏘️','مباني وفلل الكمبوند'],['apartments','🚪','الشقق والملاك'],['users','👥','المستخدمون'],['vendors','🛠️','مقاولون وموردون'],['maintenance','🔧','بلاغات الصيانة']]},
   {key:'finance',icon:'💰',label:'الماليات',items:[['collections','🧾','التحصيل والدفعات'],['paymentRequests','📥','طلبات دفع من الملاك'],['projects','🏗️','المشاريع'],['treasury','🏦','الخزينة والحسابات'],['expenses','💳','المصروفات'],['expenseCategories','📋','بنود الصرف'],['distweights','⚖️','نسب توزيع المصروفات']]},
   {key:'engage',icon:'💬',label:'التواصل مع الملاك',items:[['chat','💬','محادثة السكان'],['polls','🗳️','استطلاعات الرأي'],['announcements','📢','الإعلانات'],['suggestions','💡','المقترحات'],['meetings','🗓️','الاجتماعات']]},
   {key:'settings',icon:'⚙️',label:'الإعدادات والأدوات',items:[['settings','⚙️','الإعدادات'],['aireports','🤖','تقارير الذكاء الاصطناعي'],['license','🪪','الرخصة والاشتراك'],['referral','🎁','برنامج الإحالة'],['activity','📜','سجل النشاط'],['myproposals','💡','مقترحاتي لصاحب البرنامج'],['support','🎫','الدعم الفني'],['whatsnew','🆕','ما الجديد']]},
 ];
-var OWNER_NAV_GROUPS=[
+const OWNER_NAV_GROUPS=[
   {key:'home',icon:'🏠',label:'الرئيسية',items:[['home','🏠','حسابي وشقتي']]},
   {key:'engage',icon:'💬',label:'التواصل مع العمارة',items:[['chat','💬','محادثة السكان'],['expenses','💳','مصروفات العمارة'],['polls','🗳️','استطلاعات الرأي'],['announcements','📢','الإعلانات'],['suggestions','💡','المقترحات'],['meetings','🗓️','الاجتماعات'],['maintenance','🔧','بلاغات الصيانة']]},
   {key:'profile',icon:'👤',label:'حسابي',items:[['profile','👤','بياناتي'],['paymentRequests','💸','تسجيل دفعة'],['myproposals','💡','مقترحاتي لصاحب البرنامج']]},
 ];
-var SYS_NAV_GROUPS=[
+const SYS_NAV_GROUPS=[
   {key:'overview',icon:'🏙️',label:'نظرة عامة',items:[['sysdash','🏙️','كل العمارات'],['sysusers','👥','كل المستخدمين'],['sysdailysummary','📊','الملخص اليومي'],['sysreports','📈','تقارير الفترات'],['sysactivitylog','📜','سجل نشاطي']]},
   {key:'marketing',icon:'📣',label:'التسويق والمبيعات',items:[['syspipeline','🎯','قمع المبيعات'],['sysleads','📋','أرقام تسويقية'],['sysoffers','🎉','عروض العملاء الجدد'],['sysreferrals','🎁','برنامج الإحالة'],['syscoupons','🎟️','أكواد الخصم'],['sysmessages','💬','قوالب الرسائل']]},
   {key:'subscriptions',icon:'🪪',label:'الاشتراكات والتراخيص',items:[['syslicenses','🪪','التراخيص والاشتراكات'],['sysrenewals','📥','طلبات التجديد'],['sysplans','💲','خطط الاشتراك والأسعار'],['syslicensehistory','📜','سجل حركات الاشتراكات'],['sysrevenue','💰','كشف حساب التحصيلات']]},
@@ -5888,16 +5749,15 @@ function renderContent(){
   if(pg&&!hasGroupPermission(u,pg)){curPage=defaultPage;toast('ليس لديك صلاحية الوصول لهذه الشاشة');}
   window.__navExpandedGroup=findGroupKeyForPage(visibleNavGroups(u),curPage)||window.__navExpandedGroup;
   const nc=document.getElementById('navContainer'); if(nc)nc.innerHTML=renderNavGroups(visibleNavGroups(u));
-  const titleMap={dashboard:'لوحة التحكم',building:'بيانات العمارة',blocks:'مباني وفلل الكمبوند',apartments:'الشقق والملاك',collections:'التحصيل والدفعات',paymentRequests:'طلبات الدفع',projects:'المشاريع',treasury:'الخزينة والحسابات',expenses:'المصروفات',expenseCategories:'بنود الصرف',distweights:'نسب توزيع المصروفات',polls:'استطلاعات الرأي',announcements:'الإعلانات',suggestions:'المقترحات',meetings:'الاجتماعات',chat:'محادثة السكان',users:'المستخدمون',vendors:'مقاولون وموردون',maintenance:'بلاغات الصيانة',floors:'تقرير الأدوار',analytics:'التحليلات والاتجاهات',settings:'الإعدادات',aireports:'تقارير الذكاء الاصطناعي',license:'الرخصة والاشتراك',referral:'برنامج الإحالة',activity:'سجل النشاط',myproposals:'مقترحاتي لصاحب البرنامج',support:'الدعم الفني',whatsnew:'ما الجديد',home:'حسابي وشقتي',profile:'بياناتي'};
+  const titleMap={dashboard:'لوحة التحكم',building:'بيانات العمارة',blocks:'مباني وفلل الكمبوند',apartments:'الشقق والملاك',collections:'التحصيل والدفعات',paymentRequests:'طلبات الدفع',projects:'المشاريع',treasury:'الخزينة والحسابات',expenses:'المصروفات',expenseCategories:'بنود الصرف',distweights:'نسب توزيع المصروفات',polls:'استطلاعات الرأي',announcements:'الإعلانات',suggestions:'المقترحات',meetings:'الاجتماعات',chat:'محادثة السكان',users:'المستخدمون',vendors:'مقاولون وموردون',maintenance:'بلاغات الصيانة',analytics:'التحليلات والاتجاهات',settings:'الإعدادات',aireports:'تقارير الذكاء الاصطناعي',license:'الرخصة والاشتراك',referral:'برنامج الإحالة',activity:'سجل النشاط',myproposals:'مقترحاتي لصاحب البرنامج',support:'الدعم الفني',whatsnew:'ما الجديد',home:'حسابي وشقتي',profile:'بياناتي'};
   const t=document.getElementById('pageTitle'); if(t)t.textContent=titleMap[curPage]||'';
   const c=document.getElementById('content');
   const fn={
     dashboard:pageAdminDashboard,building:pageBuilding,apartments:pageApartments,collections:pageCollections,paymentRequests:pagePaymentRequests,projects:pageProjects,
     treasury:pageTreasury,expenses:pageExpenses,expenseCategories:pageExpenseCategories,distweights:pageDistributionWeights,polls:pagePolls,announcements:pageAnnouncements,suggestions:pageSuggestions,meetings:pageMeetings,users:pageUsers,
-    settings:pageSettings,aireports:pageAIReports,blocks:pageCompoundBlocks,vendors:pageVendors,maintenance:pageMaintenance,floors:()=>pageFloorsReport(),analytics:pageAnalytics,chat:pageBuildingChat,license:pageLicense,referral:pageReferralProgram,activity:pageActivity,myproposals:pageMyProposals,support:pageMySupportTickets,whatsnew:pageWhatsNew,home:pageOwnerHome,profile:pageProfile
+    settings:pageSettings,aireports:pageAIReports,blocks:pageCompoundBlocks,vendors:pageVendors,maintenance:pageMaintenance,analytics:pageAnalytics,chat:pageBuildingChat,license:pageLicense,referral:pageReferralProgram,activity:pageActivity,myproposals:pageMyProposals,support:pageMySupportTickets,whatsnew:pageWhatsNew,home:pageOwnerHome,profile:pageProfile
   }[curPage]||pageAdminDashboard;
   c.innerHTML=(u.role==='admin'?licenseBannerHTML():'')+fn(u);
-  if(window.hydrateStorageImages) hydrateStorageImages(c);
   const bw=document.getElementById('notifBellWrap'); if(bw)bw.innerHTML=renderNotifBell();
   bindPageEvents(curPage,u);
 }
@@ -6532,7 +6392,8 @@ function openVendorModal(id){
     <div class="field2"><label>الاسم / اسم الشركة</label><input id="vName" value="${v?esc(v.name):''}"></div>
     <div class="field2"><label>التخصص</label><select id="vCategory">${VENDOR_CATEGORIES.map(c=>`<option ${v&&v.category===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
     <div class="grid g2">
-      ${phoneField('vPhoneCountry','vPhone',v?v.phoneCountry:'+20',v?esc(v.phone||''):'','رقم الهاتف',false)}
+      <div class="field2"><label>مفتاح الدولة</label><select id="vPhoneCountry">${countryOptions(v?v.phoneCountry:'+20')}</select></div>
+      <div class="field2"><label>رقم الهاتف</label><input id="vPhone" value="${v?esc(v.phone||''):''}"></div>
     </div>
     <div class="field2"><label>البريد الإلكتروني (اختياري)</label><input id="vEmail" type="email" value="${v?esc(v.email||''):''}"></div>
     <div class="grid g2">
@@ -7050,7 +6911,7 @@ async function createBuildingBlock(){
   const unitsCount=isVilla?1:groundCount+floors*perFloor;
   const fee=Number(document.getElementById('blkFee').value||0);
   if(!enforceLicenseOrAlert('apartment'))return;
-  const prefix=usernamePrefixFromCode((findBuildingRec(activeBuildingId)||{}).code||'');
+  const prefix=usernamePrefixFromCode(REG.buildings.find(b=>b.id===activeBuildingId).code);
   const safeBlock=blockName.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g,'').toLowerCase().slice(0,10)||'blk';
   for(let i=1;i<=unitsCount;i++){
     const newId=uid();
@@ -7073,7 +6934,7 @@ function pageBuilding(){
     <div class="spacer"></div>
     <button class="btn sm gold" onclick="navigator.clipboard&&navigator.clipboard.writeText('${regRec?regRec.code:''}');toast('تم نسخ الكود')">📋 نسخ</button>
     <button class="btn sm red" onclick="regenerateBuildingCode()">🔄 إعادة توليد</button></div>
-    <p class="small mtop">شارك الكود ده مع كل ملاك الشقق - محتاجينه مع رقم الموبايل وكلمة المرور بتاعتهم لتسجيل الدخول. إعادة التوليد بتلغي الكود القديم فورًا.</p>
+    <p class="small mtop">شارك الكود ده مع كل ملاك الشقق - محتاجينه مع اسم المستخدم وكلمة المرور بتاعتهم لتسجيل الدخول. إعادة التوليد بتلغي الكود القديم فورًا.</p>
   </div>
   <div class="card content-narrow mtop2">
     <h3>بيانات العمارة</h3>
@@ -7217,7 +7078,7 @@ async function confirmApartmentsImport(){
   await runApartmentsImport(rows);
 }
 async function runApartmentsImport(rows){
-  const prefix=usernamePrefixFromCode((findBuildingRec(activeBuildingId)||{}).code||'');
+  const prefix=usernamePrefixFromCode(REG.buildings.find(b=>b.id===activeBuildingId).code);
   const existingUsernames=new Set(D.users.map(u=>u.username));
   const uniqueUsername=(base)=>{let u=base,n=1;while(existingUsernames.has(u)){u=base+n;n++;}existingUsernames.add(u);return u;};
   let imported=0;
@@ -7260,23 +7121,6 @@ function pageApartments(){
     {key:'monthlyFee',label:'الاشتراك الشهري',value:a=>a.monthlyFee,cell:feeCell},
     {key:'username',label:'اسم الدخول',value:a=>a.username,cell:a=>`<code>${esc(a.username)}</code>`},
     {key:'balance',label:'الرصيد',value:a=>apBalance(a.id),cell:a=>{const bal=apBalance(a.id);return bal>0?`<span class="badge r">${money(bal)}</span>`:bal<0?`<span class="badge g">رصيد ${money(-bal)}</span>`:'<span class="badge n">صفر</span>';}},
-    {key:'status',label:'الحالة',value:a=>a.closed?'مقفولة':'مفتوحة',
-     cell:a=>a.closed?'<span class="badge n">🔒 مقفولة</span>':'<span class="badge g">✅ مفتوحة</span>'},
-    {key:'email',label:'البريد الإلكتروني',value:a=>a.email||'',cell:a=>esc(a.email||'-')},
-    {key:'openingBalance',label:'رصيد افتتاحي',value:a=>Number(a.openingBalance)||0,
-     cell:a=>Number(a.openingBalance)?money(a.openingBalance):'-'},
-    {key:'charges',label:'إجمالي المستحق',value:a=>apCharges(a.id),cell:a=>money(apCharges(a.id))},
-    {key:'payments',label:'إجمالي المحصّل',value:a=>apPayments(a.id),cell:a=>money(apPayments(a.id))},
-    {key:'lastPay',label:'آخر دفعة',
-     value:a=>{const l=(D.ledger||[]).filter(x=>x.apartmentId===a.id&&x.type==='دفعة').map(x=>x.date||'').sort();return l.length?l[l.length-1]:'';},
-     cell:a=>{const l=(D.ledger||[]).filter(x=>x.apartmentId===a.id&&x.type==='دفعة').map(x=>x.date||'').sort();return l.length?esc(l[l.length-1]):'<span class="small" style="color:var(--muted)">مفيش</span>';}},
-    {key:'account',label:'حالة الحساب',
-     value:a=>{const u=(D.users||[]).find(x=>x.apartmentId===a.id);return u?(u.inviteStatus==='pending'?'دعوة مستنية':'عنده حساب'):'مفيش حساب';},
-     cell:a=>{const u=(D.users||[]).find(x=>x.apartmentId===a.id);
-       return !u?'<span class="badge n">— مفيش حساب</span>'
-         :u.inviteStatus==='pending'?'<span class="badge y">⏳ دعوة مستنية</span>'
-         :'<span class="badge g">✅ عنده حساب</span>';}},
-    {key:'notes',label:'ملاحظات',value:a=>a.notes||'',cell:a=>esc(a.notes||'-')},
   ];
   window.__apartmentColsDef=APARTMENT_COLS;
   const cols=[...APARTMENT_COLS,{key:'x',label:'',value:null,cell:a=>`<div class="flexrow"><button class="btn sm" onclick="openApartmentModal('${a.id}')">تعديل</button><button class="btn sm ghost" onclick="openApartmentDetail('${a.id}')">تفاصيل</button></div>`}];
@@ -7319,8 +7163,8 @@ function openAddTenantAccountModal(apartmentId){
   if(!a.tenantName)return showMessage('اكتب اسم المستأجر في الحقل بالأعلى الأول');
   openModal(`<h3>حساب دخول للمستأجر</h3>
     <p class="small">المستأجر: ${esc(a.tenantName)} - ${unitLabel(a)}</p>
-    <div class="field2 mtop"><label>معرّف المستأجر <span class="small" style="color:var(--muted)">(الدخول بيتم برقم موبايله)</span></label><input id="taUser" value="${esc(usernamePrefixFromCode((findBuildingRec(activeBuildingId)||{}).code||'')+'tenant'+unitTypeIndex(a))}"></div>
-    <div class="field2"><label>كلمة المرور</label>${pwField('taPass','','','new-password')}<p class="small" style="margin-top:4px">٨ خانات على الأقل</p></div>
+    <div class="field2 mtop"><label>اسم المستخدم</label><input id="taUser" value="${esc(usernamePrefixFromCode(REG.buildings.find(b=>b.id===activeBuildingId).code)+'tenant'+unitTypeIndex(a))}"></div>
+    <div class="field2"><label>كلمة المرور</label>${pwField('taPass','','','new-password')}<p class="small" style="margin-top:4px">8 حروف على الأقل، حرف ورقم ورمز</p></div>
     <div class="modal-actions"><button class="btn primary" onclick="addTenantAccount('${apartmentId}')">✅ إنشاء الحساب</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
 }
 async function addTenantAccount(apartmentId){
@@ -7336,7 +7180,7 @@ async function addTenantAccount(apartmentId){
   openApartmentModal(apartmentId);
 }
 async function resetTenantPassword(userId){
-  promptModal('كلمة مرور جديدة للمستأجر','٨ خانات على الأقل','',async(newPass)=>{
+  promptModal('كلمة مرور جديدة للمستأجر','8 حروف على الأقل، حرف ورقم ورمز','',async(newPass)=>{
     if(!newPass)return;
     const pwErr=passwordPolicyError(newPass); if(pwErr)return showMessage(pwErr);
     const u=D.users.find(x=>x.id===userId); if(!u)return;
@@ -7380,11 +7224,12 @@ function openApartmentModal(id){
       <div class="field2"><label>الدور</label>${floorSelectHTML('mFloor',a?(allFloorLabels().includes(a.floor)?a.floor:floorLabel(a.number,groundCount,perFloor)):floorLabel(nextNum,groundCount,perFloor))}</div>
       <div class="field2"><label>اسم المالك</label><input id="mOwner" value="${a?esc(a.ownerName):''}"></div>
       <div class="field2"><label>اسم المستأجر (إن وجد)</label><input id="mTenant" value="${a?esc(a.tenantName||''):''}"></div>
-      ${phoneField('mCountry','mPhone',a?a.phoneCountry:'+20',a?esc(a.phone||''):'','رقم الهاتف',true)}
+      <div class="field2"><label>مفتاح الدولة</label><select id="mCountry">${countryOptions(a?a.phoneCountry:'+20')}</select></div>
+      <div class="field2"><label>رقم الهاتف <span style="color:var(--red)">*</span></label><input id="mPhone" value="${a?esc(a.phone||''):''}"></div>
       <div class="field2"><label>البريد الإلكتروني (اختياري)</label><input id="mEmail" type="email" value="${a?esc(a.email||''):''}"></div>
       <div class="field2"><label>الاشتراك الشهري <span style="color:var(--red)">*</span></label><input id="mFee" type="number" value="${a?a.monthlyFee:''}" placeholder="أدخل القيمة" min="0"></div>
       <div class="field2"><label>رصيد افتتاحي <span style="font-weight:400">(موجب = عليه من قبل، سالب = دائن/دفع مقدمًا)</span></label><input id="mOpeningBalance" type="number" value="${a?(a.openingBalance||0):0}"></div>
-      <div class="field2"><label>معرّف الوحدة <span class="small" style="color:var(--muted)">(اختياري — الدخول بيتم برقم الموبايل)</span></label><input id="mUser" value="${a?esc(a.username):''}" placeholder="سيبه فاضي — هيتسجّل برقم الموبايل"></div>
+      <div class="field2"><label>اسم المستخدم (دخول)</label><input id="mUser" value="${a?esc(a.username):usernamePrefixFromCode(REG.buildings.find(b=>b.id===activeBuildingId).code)+'shaqa'+nextNum}"></div>
       <div class="field2"><label>كلمة مرور جديدة (اتركها فارغة للإبقاء)</label>${pwField('mPass','اختياري')}</div>
     </div>
     <div class="field2"><label>ملاحظات</label><textarea id="mNotes">${a?esc(a.notes||''):''}</textarea></div>
@@ -7397,30 +7242,15 @@ function openApartmentModal(id){
 }
 async function saveApartment(id){
   const number=Number(document.getElementById('mNumber').value);
-  let username=document.getElementById('mUser').value.trim();
+  const username=document.getElementById('mUser').value.trim();
   const ownerName=document.getElementById('mOwner').value.trim();
   const phone=document.getElementById('mPhone').value.trim();
   const fee=Number(document.getElementById('mFee').value||0);
-  if(!number||!ownerName)return showMessage('برجاء ملء رقم الوحدة واسم المالك');
+  if(!number||!username||!ownerName)return showMessage('برجاء ملء رقم الوحدة واسم المالك واسم المستخدم');
   if(!phone)return showMessage('رقم الهاتف مطلوب');
   if(!id&&fee<=0)return showMessage('أدخل قيمة الاشتراك الشهري لهذه الوحدة');
   if(!id&&!enforceLicenseOrAlert('apartment'))return;
   const ownerUserId=id?(D.users.find(u=>u.apartmentId===id)||{}).id:null;
-  // اسم الدخول اختياري: لو فاضي بنولّد واحد تلقائي، والمالك يقدر يغيّره
-  // بعدين أو يدخل عن طريق رابط الدعوة من غير ما يعرفه أصلًا.
-  if(!username){
-    // الدخول بيتم برقم الموبايل أو الإيميل — فالمعرّف بياخد رقم الموبايل نفسه.
-    // (لو الوحدة مالهاش رقم بنستخدم رقم الوحدة كحل أخير)
-    const cc=(document.getElementById('mCountry').value||'+20');
-    // نفس تطبيع الرقم اللي بيستخدمه تسجيل الدخول: بنشيل الصفر الأول
-    // ونضيف كود الدولة — عشان المعرّف يطابق اللي هيدخل بيه صاحب الوحدة.
-    let d=String(phone||'').replace(/[^\d+]/g,'');
-    if(d.startsWith('00')) d='+'+d.slice(2);
-    const e164 = d.startsWith('+') ? d : (cc + d.replace(/^0+/,''));
-    const digits = e164.replace(/\D/g,'');
-    let base=digits||('unit'+number), n=1; username=base;
-    while(isUsernameTaken(username,activeBuildingId,ownerUserId)){username=base+'_'+(++n);}
-  }
   if(isUsernameTaken(username,activeBuildingId,ownerUserId))return showMessage('اسم المستخدم هذا مستخدم بالفعل، اختر اسمًا آخر');
   const blockNameEl=document.getElementById('mBlockName');
   const data={number,blockName:blockNameEl?blockNameEl.value.trim():'',type:document.getElementById('mType').value,usageType:document.getElementById('mUsage').value,closed:document.getElementById('mClosed').checked,openingBalance:Number(document.getElementById('mOpeningBalance').value||0),floor:document.getElementById('mFloor').value.trim(),ownerName,tenantName:document.getElementById('mTenant').value.trim(),phoneCountry:document.getElementById('mCountry').value,phone,email:document.getElementById('mEmail').value.trim(),monthlyFee:fee,username,notes:document.getElementById('mNotes').value.trim()};
@@ -7854,12 +7684,24 @@ function addProjectAttachment(projectId){
   const fileInput=document.getElementById('prjFile');
   const file=fileInput.files[0]; if(!file)return showMessage('اختر صورة أولًا');
   if(file.size>8*1024*1024)return showMessage('حجم الصورة كبير جدًا (أكبر من 8 ميجا)');
-  compressImage(file).then(compressed=>{
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const img=new Image();
+    img.onload=()=>{
+      const maxW=1920;
+      const scale=Math.min(1,maxW/img.width);
+      const canvas=document.createElement('canvas');
+      canvas.width=img.width*scale; canvas.height=img.height*scale;
+      canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+      const compressed=canvas.toDataURL('image/jpeg',0.85);
       const p=D.projects.find(x=>x.id===projectId);
       p.attachments=p.attachments||[];
       p.attachments.push({id:uid(),name:file.name,dataUrl:compressed,uploadedAt:new Date().toISOString()});
       save();toast('تم إضافة المرفق');renderContent();
-  }).catch(err=>showMessage(err.message));
+    };
+    img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 function viewExpenseAttachment(expenseId,attId){
   const e=D.expenses.find(x=>x.id===expenseId); const att=e&&e.attachments.find(a=>a.id===attId); if(!att)return;
@@ -7869,12 +7711,24 @@ function addExpenseAttachment(expenseId){
   const fileInput=document.getElementById('eAddFile');
   const file=fileInput.files[0]; if(!file)return showMessage('اختر صورة أولًا');
   if(file.size>8*1024*1024)return showMessage('حجم الصورة كبير جدًا (أكبر من 8 ميجا)');
-  compressImage(file).then(compressed=>{
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const img=new Image();
+    img.onload=()=>{
+      const maxW=1920;
+      const scale=Math.min(1,maxW/img.width);
+      const canvas=document.createElement('canvas');
+      canvas.width=img.width*scale; canvas.height=img.height*scale;
+      canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+      const compressed=canvas.toDataURL('image/jpeg',0.85);
       const e=D.expenses.find(x=>x.id===expenseId);
       e.attachments=e.attachments||[];
       e.attachments.push({id:uid(),name:file.name,dataUrl:compressed,uploadedAt:new Date().toISOString()});
       save();toast('تم إضافة المرفق');openExpenseDetail(expenseId);
-  }).catch(err=>showMessage(err.message));
+    };
+    img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 function deleteExpenseAttachment(expenseId,attId){
   const e=D.expenses.find(x=>x.id===expenseId); if(!e)return;
@@ -8543,7 +8397,7 @@ function pagePaymentRequests(u){
       {key:'amount',label:'المبلغ',value:r=>r.amount,cell:r=>money(r.amount)},
       {key:'date',label:'تاريخ الطلب',value:r=>r.requestedAt,cell:r=>esc(new Date(r.requestedAt).toLocaleString('ar-EG'))},
       {key:'status',label:'الحالة',value:r=>r.status,cell:r=>r.status==='pending'?'<span class="badge y">بانتظار المراجعة</span>':r.status==='approved'?'<span class="badge g">تم القبول</span>':'<span class="badge r">مرفوض</span>'},
-      {key:'proof',label:'الإثبات',value:null,cell:r=>r.imageDataUrl?imgTag(r.imageDataUrl,'width:50px;height:50px;object-fit:cover;border-radius:6px;cursor:pointer').replace('<img ',`<img onclick="viewPaymentRequestImage('${r.id}')" `):'-'},
+      {key:'proof',label:'الإثبات',value:null,cell:r=>r.imageDataUrl?`<img src="${r.imageDataUrl}" style="width:50px;height:50px;object-fit:cover;border-radius:6px;cursor:pointer" onclick="viewPaymentRequestImage('${r.id}')">`:'-'},
       {key:'x',label:'',value:null,cell:r=>r.status==='pending'?`<div class="flexrow"><button class="btn sm primary" onclick="approvePaymentRequest('${r.id}')">✅ قبول</button><button class="btn sm ghost" onclick="rejectPaymentRequest('${r.id}')">رفض</button></div>`:(r.reviewNote?`<span class="small">${esc(r.reviewNote)}</span>`:'')},
     ];
     return `
@@ -8580,14 +8434,14 @@ function paymentRequestCardHTML(r,isAdmin){
     <p class="small mtop">المبلغ: <b>${money(r.amount)}</b></p>
     <p class="small">تاريخ الطلب: ${esc(new Date(r.requestedAt).toLocaleString('ar-EG'))}</p>
     ${r.note?`<p class="small">ملاحظة: ${esc(r.note)}</p>`:''}
-    ${imgTag(r.imageDataUrl,'width:100%;max-height:180px;object-fit:contain;border-radius:8px;border:1px solid var(--line);cursor:pointer;margin-top:8px').replace('<img ',`<img onclick="viewPaymentRequestImage('${r.id}')" `)}
+    <img src="${r.imageDataUrl}" style="width:100%;max-height:180px;object-fit:contain;border-radius:8px;border:1px solid var(--line);cursor:pointer;margin-top:8px" onclick="viewPaymentRequestImage('${r.id}')">
     ${r.reviewNote?`<p class="small mtop" style="color:var(--gold-dark)">رد رئيس الاتحاد: ${esc(r.reviewNote)}</p>`:''}
     ${isAdmin&&r.status==='pending'?`<div class="flexrow mtop"><button class="btn sm primary" onclick="approvePaymentRequest('${r.id}')">✅ قبول وتسجيل الدفعة</button><button class="btn sm ghost" onclick="rejectPaymentRequest('${r.id}')">رفض</button></div>`:''}
   </div>`;
 }
 function viewPaymentRequestImage(id){
   const r=(D.paymentRequests||[]).find(x=>x.id===id); if(!r)return;
-  openModal(`<h3>صورة إثبات الدفع</h3>${imgTag(r.imageDataUrl,'width:100%;border-radius:8px;margin-top:10px')}<div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`,true);
+  openModal(`<h3>صورة إثبات الدفع</h3><img src="${r.imageDataUrl}" style="width:100%;border-radius:8px;margin-top:10px"><div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`,true);
 }
 function openSubmitPaymentModal(){
   const ap=myApartment(); if(!ap)return;
@@ -8616,7 +8470,7 @@ function syncPaymentAmountDefault(){
     if(bal>0)document.getElementById('prAmount').value=bal;
   }
 }
-async function submitPaymentRequest(){
+function submitPaymentRequest(){
   const ap=myApartment(); if(!ap)return;
   const paymentFor=document.getElementById('prFor').value;
   const projectName=paymentFor==='project'?document.getElementById('prProjectName').value.trim():'';
@@ -8627,20 +8481,7 @@ async function submitPaymentRequest(){
   if(!window.__prImageData)return showMessage('أرفق صورة إثبات التحويل أولًا');
   const u=currentUser();
   D.paymentRequests=D.paymentRequests||[];
-
-  // الصورة بتترفع في Storage (مجلد العمارة → مجلد الشقة) مش في قاعدة البيانات
-  let proof=window.__prImageData;
-  if(window.CLOUD&&CLOUD.storage){
-    try{
-      const bU=CLOUD.storage.uuidOfBuilding(activeBuildingId);
-      const aU=CLOUD.storage.uuidOfApartment(activeBuildingId,ap.id);
-      if(bU&&aU) proof=await CLOUD.storage.uploadDataUrl('proofs',[bU,aU],proof);
-    }catch(err){
-      return showMessage('تعذّر رفع الصورة: '+(window.cloudErrorText?cloudErrorText(err):err.message));
-    }
-  }
-
-  D.paymentRequests.push({id:uid(),apartmentId:ap.id,username:u.username,paymentFor,projectName,amount,imageDataUrl:proof,note,status:'pending',requestedAt:new Date().toISOString()});
+  D.paymentRequests.push({id:uid(),apartmentId:ap.id,username:u.username,paymentFor,projectName,amount,imageDataUrl:window.__prImageData,note,status:'pending',requestedAt:new Date().toISOString()});
   window.__prImageData=null;
   save();closeModal();toast('تم إرسال الدفعة للمراجعة');
   pushNotification({type:'payment',title:'طلب دفعة جديد',message:`${unitLabel(ap)} - ${money(amount)} - ${paymentForLabel({paymentFor,projectName})}`,audience:'admins',link:'paymentRequests'});
@@ -8731,7 +8572,8 @@ function openUserModal(id){
       ${editorUnrestricted||u.role==='admin'?`<option value="admin" ${currentRole==='admin'?'selected':''}>رئيس اتحاد إضافي (صلاحيات قابلة للتخصيص)</option>`:''}
     </select>${editorUnrestricted?`<p class="small mtop">لو رقّيته لرئيس اتحاد، هيفضل مرتبط بشقته لكن هيقدر يدخل على صفحات الإدارة اللي تحددها تحت.</p>`:`<p class="small mtop" style="color:var(--gold-dark)">بس رئيس الاتحاد الأساسي يقدر يرقّي مستخدم لرئيس اتحاد.</p>`}</div>`:''}
     <div class="grid g2">
-      ${phoneField('uCountry','uPhone',u?u.phoneCountry:'+20',u?esc(u.phone||''):'','رقم الهاتف',true)}
+      <div class="field2"><label>مفتاح الدولة</label><select id="uCountry">${countryOptions(u?u.phoneCountry:'+20')}</select></div>
+      <div class="field2"><label>رقم الهاتف <span style="color:var(--red)">*</span></label><input id="uPhone" value="${u?esc(u.phone||''):''}"></div>
     </div>
     <div class="field2"><label>البريد الإلكتروني (اختياري)</label><input id="uEmail" type="email" value="${u?esc(u.email||''):''}"></div>
     <div class="field2"><label>كلمة مرور جديدة (اتركها فارغة للإبقاء)</label>${pwField('uPass')}</div>
@@ -9152,8 +8994,8 @@ function buildSysAIReportData(){
   });
   return{
     إجمالي_العملاء:REG.buildings.length,
-    عملاء_نشطين:REG.buildings.filter(b=>licenseIsLive(ensureLicense(b))).length,
-    عملاء_موقوفين_أو_منتهيين:REG.buildings.filter(b=>!licenseIsLive(ensureLicense(b))).length,
+    عملاء_نشطين:REG.buildings.filter(b=>ensureLicense(b).status==='active').length,
+    عملاء_موقوفين_أو_منتهيين:REG.buildings.filter(b=>ensureLicense(b).status!=='active').length,
     عملاء_تجريبي:REG.buildings.filter(b=>{const p=findPlan(ensureLicense(b).plan);return p&&p.isTrial}).length,
     طلبات_تجديد_معلّقة:pendingRenewalsCount(),
     عمارات_في_سلة_المحذوفات:(REG.deletedBuildings||[]).length,
@@ -9188,7 +9030,8 @@ function openPaymentContactModal(){
     <div id="payMethodsList">${paymentMethodsListHTML(b.paymentMethods)}</div>
     <div class="flexrow"><select id="newPayType">${PAYMENT_METHOD_TYPES.map(t=>`<option>${t}</option>`).join('')}</select><input id="newPayDetails" placeholder="التفاصيل (رقم المحفظة، آيبان...)" style="flex:1"><button class="btn sm" onclick="addPaymentMethod()">+ إضافة</button></div>
     <div class="grid g2 mtop">
-      ${phoneField('payCountry','payPhone',b.contactPhoneCountry||'+20',esc(b.contactPhone||''),'رقم هاتف/واتساب رئيس الاتحاد',false)}
+      <div class="field2"><label>مفتاح الدولة</label><select id="payCountry">${countryOptions(b.contactPhoneCountry||'+20')}</select></div>
+      <div class="field2"><label>رقم هاتف/واتساب رئيس الاتحاد</label><input id="payPhone" value="${esc(b.contactPhone||'')}"></div>
     </div>
     <div class="modal-actions"><button class="btn primary" onclick="savePaymentContact()">💾 حفظ</button><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`);
 }
@@ -9259,7 +9102,7 @@ function importBackup(file){
 function resetAllData(){
   confirmDelete('سيتم حذف كل بيانات هذه العمارة نهائيًا (الشقق، الحركات، المصروفات، الاستطلاعات، كل شيء) والبدء من جديد. لا يمكن التراجع عن هذا الإجراء إطلاقًا.',async()=>{
     const perFloor=D.building.apartmentsPerFloor||4, groundCount=D.building.groundFloorCount||4, count=D.apartments.length, name=D.building.name;
-    const rec=findBuildingRec(activeBuildingId);
+    const rec=REG.buildings.find(b=>b.id===activeBuildingId);
     const curAdmin=D.users.find(u=>u.role==='admin');
     D=await seedBuildingData(name,count,perFloor,curAdmin?curAdmin.username:'admin','Admin@1234',null,null,null,null,null,usernamePrefixFromCode(rec?rec.code:''));
     D.building.groundFloorCount=groundCount;
@@ -9315,7 +9158,8 @@ function pageProfile(u){
   <div class="card content-narrow"><h3>بياناتي</h3>
     <div class="grid g2 mtop">
       <div class="field2"><label>الاسم</label><input id="prName" value="${esc(u.name)}"></div>
-      ${phoneField('prCountry','prPhone',u.phoneCountry,esc(u.phone||''),'رقم الهاتف',true)}
+      <div class="field2"><label>مفتاح الدولة</label><select id="prCountry">${countryOptions(u.phoneCountry)}</select></div>
+      <div class="field2"><label>رقم الهاتف <span style="color:var(--red)">*</span></label><input id="prPhone" value="${esc(u.phone||'')}"></div>
       <div class="field2"><label>البريد الإلكتروني (اختياري)</label><input id="prEmail" type="email" value="${esc(u.email||'')}"></div>
     </div>
     <button class="btn primary" onclick="saveProfile()">💾 حفظ</button></div>
@@ -9373,7 +9217,7 @@ function setupPWA(){
     // Basic service worker for offline shell caching (works when hosted; harmless no-op when opened as a local file)
     if('serviceWorker' in navigator && location.protocol!=='file:'){
       const swCode=`
-        const CACHE_NAME='omaretna-shell-v2';
+        const CACHE_NAME='omaretna-shell-v1';
         self.addEventListener('install',e=>{
           e.waitUntil(caches.open(CACHE_NAME).then(c=>c.add(self.registration.scope)));
           self.skipWaiting();
@@ -9397,7 +9241,6 @@ function setupPWA(){
   }catch(e){}
 }
 document.addEventListener('DOMContentLoaded',async()=>{
-  if(window.cloudAuthBoot){ await window.cloudAuthBoot(); }
   await loadRegistry();
   captureCampaignSource();
   setupPWA();
@@ -9408,26 +9251,5 @@ document.addEventListener('DOMContentLoaded',async()=>{
   initIdleWatcher();
 });
 </script>
-
-<!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js"></script>
-<script type="module" src="emartna-auth.js"></script>
-<script type="module" src="emartna-users.js"></script>
-<script type="module" src="emartna-platform.js"></script>
-<script type="module" src="emartna-recycle.js"></script>
-<script type="module" src="emartna-floors.js"></script>
-<script type="module" src="emartna-modal-size.js"></script>
-<script type="module" src="emartna-guard.js"></script>
-<script type="module" src="emartna-statement.js"></script>
-<script type="module" src="emartna-reports.js"></script>
-<script type="module" src="emartna-admin.js"></script>
-<script type="module" src="emartna-ui.js"></script>
-<script type="module" src="emartna-excel.js"></script>
-<script type="module" src="emartna-send.js"></script>
-<script type="module" src="emartna-pwa.js"></script>
-<script type="module" src="emartna-landing.js"></script>
-<script type="module" src="emartna-comm.js"></script>
-<script type="module" src="emartna-period.js"></script>
-
 </body>
 </html>
