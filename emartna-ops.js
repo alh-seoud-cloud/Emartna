@@ -70,6 +70,12 @@
       return;
     }
 
+    // مفتاح تجاوز مؤقت للجلسة — عشان صاحب البرنامج يقدر يوصل
+    // لشاشة الدخول وهو مش مسجّل، من غير ما يتقفل برّه.
+    try{
+      if (sessionStorage.getItem('emartna_maint_bypass') === '1') return;
+    }catch(e){}
+
     const d = document.createElement('div');
     d.id = 'maintScreen';
     d.style.cssText = 'position:fixed;inset:0;z-index:99999;background:var(--bg,#F8FAF9);' +
@@ -83,9 +89,34 @@
           'بنعمل تحديث سريع عشان الخدمة تبقى أحسن. البيانات كلها محفوظة وما فيش حاجة هتضيع.')}</p>
         ${period ? `<p style="margin-top:14px;font-weight:700">⏰ ${esc2(period)}</p>` : ''}
         <button class="btn primary" style="margin-top:18px" onclick="location.reload()">🔄 حاول تاني</button>
+        <div style="margin-top:22px;padding-top:14px;border-top:1px solid var(--line,#e3e8e6)">
+          <button onclick="maintenanceOwnerLogin()"
+            style="background:none;border:0;color:var(--muted,#6b7c78);font-size:12px;
+                   cursor:pointer;text-decoration:underline">دخول صاحب البرنامج</button>
+        </div>
       </div>`;
     document.body.appendChild(d);
   }
+
+  /* تجاوز مؤقت: بيخفي شاشة الصيانة عشان يقدر يسجّل دخول.
+     لو طلع مش صاحب برنامج، الشاشة بترجع تاني بعد الدخول. */
+  window.maintenanceOwnerLogin = function(){
+    try{ sessionStorage.setItem('emartna_maint_bypass','1'); }catch(e){}
+    const scr = document.getElementById('maintScreen');
+    if (scr) scr.remove();
+    if (window.toast) toast('اتفتحت شاشة الدخول — سجّل دخولك');
+    if (window.goToLogin) goToLogin();
+    else if (window.renderRoot) renderRoot();
+  };
+
+  /* بعد أي تغيير في الجلسة: لو مش صاحب برنامج، الشاشة ترجع */
+  window.recheckMaintenance = function(){
+    const owner = !!(window.isSysOwner && isSysOwner());
+    if (owner){
+      try{ sessionStorage.removeItem('emartna_maint_bypass'); }catch(e){}
+    }
+    applyMaintenance();
+  };
 
   /* نافذة إدارة الصيانة لصاحب البرنامج */
   window.openMaintenanceModal = function(){
@@ -106,6 +137,10 @@
           <input id="mtTo" type="datetime-local" value="${val(m.to)}"></div>
       </div>
       <p class="small">سيب الخانتين فاضيين لو الإيقاف مفتوح المدة.</p>
+      <p class="small" style="color:var(--accent)">
+        ℹ️ إنت مش هتتأثر — هتفضل داخل عادي. ولو خرجت، في رابط
+        <b>"دخول صاحب البرنامج"</b> تحت شاشة الصيانة يرجّعك لشاشة الدخول.
+      </p>
 
       <div class="field2 mtop"><label>رسالة للمستخدمين</label>
         <textarea id="mtMsg" rows="3" style="width:100%">${esc2(m.message||'')}</textarea></div>
@@ -292,6 +327,14 @@
     if (window.CLOUD && window.CLOUD._sb){ clearInterval(t); loadMaintenance(); }
   }, 100);
   setInterval(loadMaintenance, 5 * 60 * 1000);      // إعادة فحص كل ٥ دقايق
+
+  // لما المستخدم يسجّل دخول أو خروج، نعيد تقييم الشاشة
+  let lastKind = null;
+  setInterval(() => {
+    const s = window.getSession && getSession();
+    const kind = s ? s.type : 'none';
+    if (kind !== lastKind){ lastKind = kind; recheckMaintenance(); }
+  }, 1500);
 
   console.log('[عمارتنا] الصيانة والنسخ الاحتياطي جاهز');
 })();
