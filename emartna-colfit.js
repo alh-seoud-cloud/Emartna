@@ -64,15 +64,15 @@
     if (!wrap || !cfg) return;
     const ths = wrap.querySelectorAll('.table-wrap thead th');
     if (!ths.length) return;
-    const cols = window.orderedVisibleCols
-      ? orderedVisibleCols(tableId+'_order', tableId+'_vis', cfg.columns)
-      : cfg.columns;
     window[tableId+'_widths'] = window[tableId+'_widths'] || {};
     const W = window[tableId+'_widths'];
-    ths.forEach((th,i) => {
-      const c = cols[i]; if (!c) return;
-      if (typeof W[c.key] !== 'number')
-        W[c.key] = Math.max(60, Math.round(th.getBoundingClientRect().width));
+    // بنقرا مفتاح كل عمود من الرأس نفسه (data-colkey) — أضمن من
+    // الاعتماد على ترتيب القائمة، لأن في أعمدة بتتحقن وقت التشغيل.
+    ths.forEach(th => {
+      const key = th.getAttribute('data-colkey');
+      if (!key) return;
+      if (typeof W[key] !== 'number')
+        W[key] = Math.max(60, Math.round(th.getBoundingClientRect().width));
     });
   }
 

@@ -29,13 +29,13 @@
       /* أول عمودين بيفضلوا مكانهم أثناء التمرير الأفقي */
       #sysBldTable_wrap .table-wrap th:nth-child(1), #sysBldTable_wrap .table-wrap td:nth-child(1),
       #supportBldTable_wrap .table-wrap th:nth-child(1), #supportBldTable_wrap .table-wrap td:nth-child(1){
-        position:sticky; inset-inline-end:0; z-index:3;
-        background:var(--panel); box-shadow:-3px 0 6px -3px rgba(0,0,0,.16);
+        position:sticky; inset-inline-start:0; z-index:3;
+        background:var(--panel); box-shadow:3px 0 6px -3px rgba(0,0,0,.16);
       }
       #sysBldTable_wrap .table-wrap th:nth-child(2), #sysBldTable_wrap .table-wrap td:nth-child(2),
       #supportBldTable_wrap .table-wrap th:nth-child(2), #supportBldTable_wrap .table-wrap td:nth-child(2){
-        position:sticky; inset-inline-end:var(--pin1,150px); z-index:2;
-        background:var(--panel); box-shadow:-3px 0 6px -3px rgba(0,0,0,.10);
+        position:sticky; inset-inline-start:var(--pin1,150px); z-index:2;
+        background:var(--panel); box-shadow:3px 0 6px -3px rgba(0,0,0,.10);
       }
       #sysBldTable_wrap .table-wrap thead th, #supportBldTable_wrap .table-wrap thead th{
         position:sticky; top:0; z-index:4; background:var(--tablehead,#F4F1E8);
