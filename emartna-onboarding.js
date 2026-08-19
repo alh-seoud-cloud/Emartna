@@ -234,13 +234,17 @@
 
   /* زرار التسليم في شاشة المستخدمين */
   const origUsers = window.pageUsers;
-  if (origUsers) window.pageUsers = function(){
+  if (origUsers && !origUsers.__handoverWrapped){
+    const wrapped = function(){
     const html = origUsers.apply(this, arguments);
     const btn = `<button class="btn ghost" onclick="openHandoverModal()">👑 تسليم إدارة العمارة</button>`;
     const m = html.match(/<button class="btn ghost" onclick="openUserModal\(\)">[^<]*<\/button>/);
     return m ? html.replace(m[0], m[0] + btn)
              : `<div class="flexrow" style="margin-bottom:10px">${btn}</div>` + html;
-  };
+    };
+    wrapped.__handoverWrapped = true;
+    window.pageUsers = wrapped;
+  }
 
   /* زرار المعالج في الشريط العلوي */
   setTimeout(() => {
