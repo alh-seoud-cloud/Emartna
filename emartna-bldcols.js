@@ -332,6 +332,58 @@
         <span class="small" style="color:var(--muted);min-width:130px">${esc2(label)}</span>
         <span class="small" style="flex:1"><b>${val}</b></span></div>`;
 
+
+  /* فتح نافذة تانية بعد ما البطاقة تتقفل — من غير التأخير ده
+     النافذة الجديدة بتتقفل مع القديمة فمتبانش. */
+  window.bldCardGo = function(fnName, arg){
+    closeModal();
+    setTimeout(() => {
+      const f = window[fnName];
+      if (typeof f === 'function') f(arg);
+      else showMessage('الإجراء ده مش متاح دلوقتي');
+    }, 120);
+  };
+
+  /* بيانات تواصل رئيس الاتحاد — تعديل سريع */
+  window.openBuildingContact = function(bid){
+    const b = ((window.REG && REG.buildings) || []).find(x => x.id === bid);
+    if (!b) return;
+    openModal(`
+      <h3>📞 بيانات التواصل — ${esc2(b.name||'')}</h3>
+      <p class="small mtop">بتستخدمها في تذكير التجديد والتواصل مع رئيس الاتحاد.</p>
+      <div class="field2 mtop"><label>اسم رئيس الاتحاد</label>
+        <input id="bcName" value="${esc2(b.adminName||'')}"></div>
+      <div class="grid g2">
+        <div class="field2"><label>مفتاح الدولة</label>
+          <input id="bcCC" value="${esc2(b.contactPhoneCountry||'+20')}" dir="ltr"></div>
+        <div class="field2"><label>الموبايل / واتساب</label>
+          <input id="bcPhone" value="${esc2(b.contactPhone||'')}" dir="ltr"></div>
+      </div>
+      <div class="field2"><label>البريد الإلكتروني</label>
+        <input id="bcEmail" value="${esc2(b.adminEmail||'')}" dir="ltr"></div>
+      <div class="field2"><label>صفحة فيسبوك (اختياري)</label>
+        <input id="bcFb" value="${esc2(b.facebookUrl||'')}" dir="ltr" placeholder="https://facebook.com/..."></div>
+      <div class="modal-actions">
+        <button class="btn primary" onclick="saveBuildingContact('${bid}')">💾 حفظ</button>
+        <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+      </div>`, true);
+  };
+
+  window.saveBuildingContact = function(bid){
+    const b = ((window.REG && REG.buildings) || []).find(x => x.id === bid);
+    if (!b) return;
+    const g = i => (document.getElementById(i)||{}).value || '';
+    b.adminName = g('bcName').trim();
+    b.contactPhoneCountry = g('bcCC').trim() || '+20';
+    b.contactPhone = g('bcPhone').replace(/[^\d]/g,'');
+    b.adminEmail = g('bcEmail').trim();
+    b.facebookUrl = g('bcFb').trim();
+    saveRegistry();
+    closeModal();
+    if (window.toast) toast('اتحفظت بيانات التواصل');
+    if (window.renderSysContent) renderSysContent();
+  };
+
   window.openBuildingCard = function(bid){
     const b = ((window.REG && REG.buildings) || []).find(x => x.id === bid);
     if (!b) return;
@@ -386,6 +438,7 @@
             ${F('الاسم', esc2(b.adminName || '—'))}
             ${F('الموبايل', `<span dir="ltr">${esc2((b.contactPhoneCountry||'')+' '+(b.contactPhone||''))}</span>`)}
             ${F('البريد', `<span dir="ltr">${esc2(b.adminEmail || '—')}</span>`)}
+            ${b.facebookUrl ? F('فيسبوك', `<a href="${esc2(b.facebookUrl)}" target="_blank" rel="noopener">📘 الصفحة ↗</a>`) : ''}
           </div>
           <b class="mtop2" style="display:block">📍 الموقع</b>
           <div class="mtop">
@@ -398,12 +451,13 @@
       </div>
 
       <div class="flexrow mtop2" style="flex-wrap:wrap;gap:8px">
-        <button class="btn primary" onclick="closeModal();impersonateBuilding('${b.id}')">🏢 افتح العمارة</button>
-        <button class="btn gold" onclick="closeModal();openLicenseManage('${b.id}')">🪪 الاشتراك</button>
+        <button class="btn primary" onclick="bldCardGo('impersonateBuilding','${b.id}')">🏢 افتح العمارة</button>
+        <button class="btn gold" onclick="bldCardGo('openLicenseManage','${b.id}')">🪪 الاشتراك</button>
         ${b.contactPhone || b.adminPhoneRaw
           ? `<a class="btn ghost" target="_blank" onclick="closeModal()"
                href="${window.renewalWhatsAppLink ? renewalWhatsAppLink(b) : '#'}">💬 تذكير تجديد</a>` : ''}
-        <button class="btn ghost" onclick="closeModal();renameBuildingPrompt&&renameBuildingPrompt('${b.id}')">✏️ تعديل الاسم</button>
+        <button class="btn ghost" onclick="bldCardGo('renameBuildingPrompt','${b.id}')">✏️ تعديل الاسم</button>
+        <button class="btn ghost" onclick="bldCardGo('openBuildingContact','${b.id}')">📞 بيانات التواصل</button>
       </div>
       <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`, true);
   };

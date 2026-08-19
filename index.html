@@ -2604,7 +2604,7 @@ function renderSysContent(){
     c.innerHTML=supportStaffPageContent(curPage);
     return;
   }
-  const fn={sysdash:pageSysDashboard,syspipeline:pageSysPipeline,sysleads:pageSysMarketingLeads,sysoffers:pageSysOffers,syscoupons:pageSysCoupons,sysmessages:pageSysMessageTemplates,sysusers:pageSysUsers,syslicenses:pageSysLicenses,syslicensehistory:pageSysLicenseHistory,sysplans:pageSysPlans,sysrevenue:pageSysRevenue,syslanding:pageSysLandingSettings,sysrenewals:pageSysRenewals,sysproposals:pageSysProposals,systickets:pageSysSupportTickets,sysstaff:pageSupportStaff,systasks:pageSysTasks,sysdailysummary:pageSysDailySummary,sysreports:pageSysReports,sysactivitylog:pageSysActivityLog,sysreferrals:pageSysReferrals,sysversions:pageSysVersions,sysmarketing:pageMarketingCard,systrash:pageSysTrash,sysaisettings:pageSysAISettings,sysaireports:pageSysAIReports,syssettings:pageSysSettings}[curPage]||pageSysDashboard;
+  const fn={sysdash:pageSysDashboard,syspipeline:pageSysPipeline,sysleads:pageSysMarketingLeads,sysvisits:(window.pageSysVisits||(()=>'<p class="small">جاري التحميل…</p>')),sysoffers:pageSysOffers,syscoupons:pageSysCoupons,sysmessages:pageSysMessageTemplates,sysusers:pageSysUsers,syslicenses:pageSysLicenses,syslicensehistory:pageSysLicenseHistory,sysplans:pageSysPlans,sysrevenue:pageSysRevenue,syslanding:pageSysLandingSettings,sysrenewals:pageSysRenewals,sysproposals:pageSysProposals,systickets:pageSysSupportTickets,sysstaff:pageSupportStaff,systasks:pageSysTasks,sysdailysummary:pageSysDailySummary,sysreports:pageSysReports,sysactivitylog:pageSysActivityLog,sysreferrals:pageSysReferrals,sysversions:pageSysVersions,sysmarketing:pageMarketingCard,systrash:pageSysTrash,sysaisettings:pageSysAISettings,sysaireports:pageSysAIReports,syssettings:pageSysSettings}[curPage]||pageSysDashboard;
   c.innerHTML=fn();
   if(curPage==='sysmarketing')renderMarketingQr();
   const bw=document.getElementById('sysNotifBellWrap'); if(bw)bw.innerHTML=renderSysNotifBell();
@@ -5838,7 +5838,7 @@ var OWNER_NAV_GROUPS=[
 ];
 var SYS_NAV_GROUPS=[
   {key:'overview',icon:'🏙️',label:'نظرة عامة',items:[['sysdash','🏙️','كل العمارات'],['sysusers','👥','كل المستخدمين'],['sysdailysummary','📊','الملخص اليومي'],['sysreports','📈','تقارير الفترات'],['sysactivitylog','📜','سجل نشاطي']]},
-  {key:'marketing',icon:'📣',label:'التسويق والمبيعات',items:[['syspipeline','🎯','قمع المبيعات'],['sysleads','📋','أرقام تسويقية'],['sysoffers','🎉','عروض العملاء الجدد'],['sysreferrals','🎁','برنامج الإحالة'],['syscoupons','🎟️','أكواد الخصم'],['sysmessages','💬','قوالب الرسائل']]},
+  {key:'marketing',icon:'📣',label:'التسويق والمبيعات',items:[['syspipeline','🎯','قمع المبيعات'],['sysleads','📋','أرقام تسويقية'],['sysvisits','📈','مصادر الزيارات'],['sysoffers','🎉','عروض العملاء الجدد'],['sysreferrals','🎁','برنامج الإحالة'],['syscoupons','🎟️','أكواد الخصم'],['sysmessages','💬','قوالب الرسائل']]},
   {key:'subscriptions',icon:'🪪',label:'الاشتراكات والتراخيص',items:[['syslicenses','🪪','التراخيص والاشتراكات'],['sysrenewals','📥','طلبات التجديد'],['sysplans','💲','خطط الاشتراك والأسعار'],['syslicensehistory','📜','سجل حركات الاشتراكات'],['sysrevenue','💰','كشف حساب التحصيلات']]},
   {key:'site',icon:'🖥️',label:'الموقع العام',items:[['syslanding','🖥️','الصفحة الرئيسية وإعدادات العرض'],['sysversions','🆕','سجل الإصدارات والتحديثات'],['sysmarketing','🖨️','بطاقة دعاية للطباعة']]},
   {key:'feedback',icon:'💬',label:'التواصل مع العملاء',items:[['sysproposals','💡','مقترحات العملاء'],['systickets','🎫','طلبات الدعم الفني'],['sysstaff','🧑‍💼','فريق الدعم الفني'],['systasks','✅','مهام الفريق']]},
@@ -9526,6 +9526,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
 <script type="module" src="emartna-coupons.js"></script>
 <script type="module" src="emartna-videos.js"></script>
 <script type="module" src="emartna-colfit.js"></script>
+<script type="module" src="emartna-visits.js"></script>
 
 </body>
 </html>
