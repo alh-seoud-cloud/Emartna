@@ -66,7 +66,15 @@
 
   function pinBar(){
     const on = pinned();
+    let full = false;
+    try{ full = localStorage.getItem('sysBldTable_colsTouched') === '1'; }catch(e){}
     return `<div class="flexrow mtop" style="gap:8px;flex-wrap:wrap">
+      <span style="display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden">
+        <button class="btn sm ${full?'ghost':'primary'}" style="border-radius:0"
+          onclick="showEssentialBldCols('sysBldTable')">📋 عرض مبسّط</button>
+        <button class="btn sm ${full?'primary':'ghost'}" style="border-radius:0"
+          onclick="showAllBldCols('sysBldTable')">📊 كل الأعمدة</button>
+      </span>
       <button class="btn sm ${on?'primary':'ghost'}" onclick="togglePinnedCols()">
         ${on ? '📌 العمودين مثبّتين' : '📍 تثبيت اسم العمارة والكود'}</button>
       <span class="small" style="color:var(--muted)">
@@ -273,6 +281,133 @@
     </div>`;
   }
 
+
+  /* ============================================================
+     ٤) عرض مبسّط: أعمدة أساسية + بطاقة تفاصيل كاملة
+     ============================================================ */
+
+  /* الأعمدة اللي تظهر افتراضيًا — الباقي في البطاقة */
+  const ESSENTIALS = ['name','code','apCount','status','health','setupPct','joined','lastAct','x'];
+
+  function applyDefaultVisibility(tableId, cols){
+    const visKey = tableId + '_vis';
+    try{
+      if (localStorage.getItem(tableId + '_colsTouched') === '1') return;   // المستخدم عدّل بنفسه
+    }catch(e){}
+    if (window.__bldVisDone) return;
+    window.__bldVisDone = true;
+    window[visKey] = cols.map(c => c.key).filter(k => ESSENTIALS.includes(k));
+  }
+
+  /* لو المستخدم فتح مخصّص الأعمدة، نحترم اختياره بعد كده */
+  const origCust = window.openColumnCustomizer;
+  if (origCust && !origCust.__bld){
+    const w2 = function(){
+      try{ localStorage.setItem('sysBldTable_colsTouched','1'); }catch(e){}
+      return origCust.apply(this, arguments);
+    };
+    w2.__bld = true;
+    window.openColumnCustomizer = w2;
+  }
+
+  window.showAllBldCols = function(tableId){
+    const cfg = window.__tableConfigs && window.__tableConfigs[tableId];
+    if (!cfg) return;
+    window[tableId + '_vis'] = cfg.columns.map(c => c.key);
+    try{ localStorage.setItem(tableId + '_colsTouched','1'); }catch(e){}
+    if (window.renderSysContent) renderSysContent(); else renderContent();
+  };
+  window.showEssentialBldCols = function(tableId){
+    const cfg = window.__tableConfigs && window.__tableConfigs[tableId];
+    if (!cfg) return;
+    window[tableId + '_vis'] = cfg.columns.map(c => c.key).filter(k => ESSENTIALS.includes(k));
+    try{ localStorage.removeItem(tableId + '_colsTouched'); }catch(e){}
+    if (window.renderSysContent) renderSysContent(); else renderContent();
+  };
+
+  /* ---------- بطاقة العمارة ---------- */
+
+  const F = (label, val) => val === '' || val === null || val === undefined
+    ? '' : `<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px dashed var(--line)">
+        <span class="small" style="color:var(--muted);min-width:130px">${esc2(label)}</span>
+        <span class="small" style="flex:1"><b>${val}</b></span></div>`;
+
+  window.openBuildingCard = function(bid){
+    const b = ((window.REG && REG.buildings) || []).find(x => x.id === bid);
+    if (!b) return;
+    const m = metrics(b);
+    const lic = window.ensureLicense ? ensureLicense(b) : (b.license || {});
+    const st  = window.licenseState ? licenseState(lic) : { label: lic.status || '' };
+
+    const health = !m.loaded ? '—'
+      : (m.daysIdle !== null && m.daysIdle > 30) ? '<span class="badge r">🔴 متوقفة</span>'
+      : m.setup < 3 ? '<span class="badge y">🟡 إعداد ناقص</span>'
+      : m.joined === 0 ? '<span class="badge y">🟠 بدون سكان</span>'
+      : m.perMonth >= 10 ? '<span class="badge g">💚 نشطة جدًا</span>'
+      : '<span class="badge g">🟢 شغّالة</span>';
+
+    openModal(`
+      <h3>🏢 ${esc2(b.name || '')} <span class="small" style="color:var(--muted)">${esc2(b.code || '')}</span></h3>
+
+      <div class="flexrow mtop" style="flex-wrap:wrap;gap:7px">
+        ${health}
+        <span class="badge ${st.badge || 'n'}">${esc2(st.label || '')}</span>
+        ${m.loaded ? `<span class="badge n">اكتمال الإعداد ${m.setup*20}%</span>` : ''}
+      </div>
+
+      <div class="grid g2 mtop2">
+        <div class="card">
+          <b>📊 مؤشرات الاستخدام</b>
+          <div class="mtop">
+            ${F('إجمالي الوحدات', m.loaded ? m.aps : (b.apartmentsCount || '—'))}
+            ${F('وحدات مفتوحة', m.loaded ? m.open : '')}
+            ${F('وحدات بأرقام موبايل', m.loaded ? `${m.withPhone} من ${m.aps}` : '')}
+            ${F('اشتراكات محدّدة', m.loaded ? `${m.withFee} من ${m.open}` : '')}
+            ${F('دعوات مستنية', m.loaded ? m.invited : '')}
+            ${F('وحدات عندها حساب', m.loaded ? m.joined : '')}
+            ${F('نسبة انضمام السكان', m.loaded && m.aps ? Math.round(m.joined/m.aps*100)+'%' : '')}
+            ${F('الحركات المالية', m.loaded ? m.moves : '')}
+            ${F('متوسط الحركات شهريًا', m.loaded ? m.perMonth : '')}
+            ${F('آخر نشاط', m.lastAct ? `${m.lastAct} <span class="small">(${m.daysIdle} يوم)</span>` : 'مفيش')}
+          </div>
+        </div>
+
+        <div class="card">
+          <b>🪪 الاشتراك</b>
+          <div class="mtop">
+            ${F('الخطة', window.planName ? planName(lic.plan) : (lic.plan || '—'))}
+            ${F('تاريخ البدء', lic.startDate || '—')}
+            ${F('تاريخ الانتهاء', lic.endDate || 'بلا نهاية')}
+            ${F('المتبقّي', st.daysLeft !== null && st.daysLeft !== undefined ? st.daysLeft + ' يوم' : '')}
+            ${F('حد الوحدات', lic.maxApartments || 'غير محدود')}
+          </div>
+          <b class="mtop2" style="display:block">👤 رئيس الاتحاد</b>
+          <div class="mtop">
+            ${F('الاسم', esc2(b.adminName || '—'))}
+            ${F('الموبايل', `<span dir="ltr">${esc2((b.contactPhoneCountry||'')+' '+(b.contactPhone||''))}</span>`)}
+            ${F('البريد', `<span dir="ltr">${esc2(b.adminEmail || '—')}</span>`)}
+          </div>
+          <b class="mtop2" style="display:block">📍 الموقع</b>
+          <div class="mtop">
+            ${F('المدينة', esc2(b.city || '—'))}
+            ${F('المحافظة', esc2(b.governorate || '—'))}
+            ${F('العنوان', esc2(b.address || '—'))}
+            ${F('تاريخ الإنشاء', (b.createdAt || '').slice(0,10))}
+          </div>
+        </div>
+      </div>
+
+      <div class="flexrow mtop2" style="flex-wrap:wrap;gap:8px">
+        <button class="btn primary" onclick="closeModal();impersonateBuilding('${b.id}')">🏢 افتح العمارة</button>
+        <button class="btn gold" onclick="closeModal();openLicenseManage('${b.id}')">🪪 الاشتراك</button>
+        ${b.contactPhone || b.adminPhoneRaw
+          ? `<a class="btn ghost" target="_blank" onclick="closeModal()"
+               href="${window.renewalWhatsAppLink ? renewalWhatsAppLink(b) : '#'}">💬 تذكير تجديد</a>` : ''}
+        <button class="btn ghost" onclick="closeModal();renameBuildingPrompt&&renameBuildingPrompt('${b.id}')">✏️ تعديل الاسم</button>
+      </div>
+      <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`, true);
+  };
+
   /* بنحقن الأعمدة في نداء sortableTable لجدول العمارات */
   const origSortable = window.sortableTable;
   if (origSortable) window.sortableTable = function(id, rows, cols, groupBy, opts){
@@ -289,10 +424,15 @@
       if (last){
         const origCell = last.cell;
         cols.push(Object.assign({}, last, {
+          key: last.key || 'x',
           label: last.label || 'إجراءات',
-          cell: b => compactActions(origCell ? origCell(b) : '', b.id || b.code || 'x'),
+          cell: b => `<div class="flexrow" style="gap:5px;justify-content:flex-start">
+              <button class="btn sm primary" onclick="openBuildingCard('${b.id}')">تفاصيل</button>
+              ${compactActions(origCell ? origCell(b) : '', b.id || b.code || 'x')}
+            </div>`,
         }));
       }
+      if (id === 'sysBldTable') applyDefaultVisibility(id, cols);
       measurePins();
     }
     return origSortable.call(this, id, rows, cols, groupBy, opts);
