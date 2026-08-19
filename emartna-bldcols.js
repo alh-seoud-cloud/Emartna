@@ -22,6 +22,23 @@
 
   /* ---------- ١) تثبيت الأعمدة ---------- */
 
+  function tableRoomCss(){
+    return `<style id="bldRoomCss">
+      /* مساحة أوسع وصفوف أوضح لجدول العمارات */
+      #sysBldTable_wrap .table-wrap, #supportBldTable_wrap .table-wrap{
+        max-height:none; min-height:340px;
+      }
+      #sysBldTable_wrap .table-wrap td, #supportBldTable_wrap .table-wrap td{
+        padding:11px 10px; font-size:13px;
+      }
+      #sysBldTable_wrap .table-wrap th, #supportBldTable_wrap .table-wrap th{
+        padding:10px; font-size:12.5px;
+      }
+      #sysBldTable_wrap .table-wrap tbody tr:hover td,
+      #supportBldTable_wrap .table-wrap tbody tr:hover td{ background:var(--hover,#F3F8F7); }
+    </style>`;
+  }
+
   function pinStyle(){
     if (!pinned()) return '';
     // الحاوية اللي بتتحرك أفقيًا اسمها .table-wrap جوه #<id>_wrap
@@ -174,17 +191,52 @@
 
   /* ---------- ٣) عمود الإجراءات: "فتح" + قائمة ⋮ ---------- */
 
-  window.toggleRowMenu = function(id){
-    const m = document.getElementById(id);
-    if (!m) return;
-    const open = m.style.display === 'block';
-    document.querySelectorAll('.row-menu').forEach(x => x.style.display = 'none');
-    m.style.display = open ? 'none' : 'block';
+  /* القائمة بتتنقل لطبقة فوق الصفحة كلها.
+     لو فضلت جوه الجدول، الحاوية اللي بتتمرّر بتقصّها فمتبانش. */
+  function closeRowMenus(){
+    const layer = document.getElementById('rowMenuLayer');
+    if (layer) layer.remove();
+  }
+  window.closeRowMenus = closeRowMenus;
+
+  window.toggleRowMenu = function(id, ev){
+    const src = document.getElementById(id);
+    const already = document.getElementById('rowMenuLayer');
+    closeRowMenus();
+    if (already && already.dataset.src === id) return;      // نفس الزرار = قفل
+    if (!src) return;
+
+    const btn = (ev && ev.currentTarget) || document.activeElement ||
+                src.parentElement.querySelector('button[title="خيارات أكتر"]');
+    const r = btn && btn.getBoundingClientRect ? btn.getBoundingClientRect() : { bottom:80, right:200, left:120 };
+
+    const layer = document.createElement('div');
+    layer.id = 'rowMenuLayer';
+    layer.dataset.src = id;
+    layer.style.cssText =
+      'position:fixed;z-index:99000;min-width:210px;background:var(--panel);' +
+      'border:1px solid var(--line);border-radius:12px;padding:6px;' +
+      'box-shadow:0 14px 34px rgba(0,0,0,.20);direction:rtl;text-align:start';
+    layer.innerHTML = src.innerHTML;
+
+    document.body.appendChild(layer);
+    // بنحطها تحت الزرار، ولو مفيش مكان تحت بنطلّعها فوقه
+    const h = layer.offsetHeight || 180, w = layer.offsetWidth || 210;
+    let top = r.bottom + 6;
+    if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+    let left = r.right - w;
+    if (left < 8) left = 8;
+    if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
+    layer.style.top = top + 'px';
+    layer.style.left = left + 'px';
   };
+
   document.addEventListener('click', e => {
-    if (e.target.closest && e.target.closest('.row-menu-wrap')) return;
-    document.querySelectorAll('.row-menu').forEach(x => x.style.display = 'none');
+    if (e.target.closest && (e.target.closest('#rowMenuLayer') || e.target.closest('.row-menu-wrap'))) return;
+    closeRowMenus();
   });
+  window.addEventListener('scroll', closeRowMenus, true);
+  window.addEventListener('resize', closeRowMenus);
 
   /* بناخد أزرار العمود الأصلي ونعيد ترتيبها */
   function compactActions(html, rowId){
@@ -207,13 +259,13 @@
       if (/^🔑/.test(txt) && txt.length <= 3) txt = '🔑 إعادة تعيين كلمة السر';
       return `<button class="btn ghost" style="display:block;width:100%;text-align:start;border:0;
                 padding:8px 10px;margin:0;${isRed?'color:var(--red)':''}"
-                onclick="toggleRowMenu('${mid}');${onclick.replace(/"/g,'&quot;')}">${txt}</button>`;
+                onclick="closeRowMenus();${onclick.replace(/"/g,'&quot;')}">${txt}</button>`;
     }).join('');
 
     return `<div class="flexrow row-menu-wrap" style="gap:4px;position:relative;justify-content:flex-start">
       ${primary}
       <button class="btn sm ghost" style="padding:4px 9px;font-size:16px;line-height:1"
-        title="خيارات أكتر" onclick="toggleRowMenu('${mid}')">⋮</button>
+        title="خيارات أكتر" onclick="toggleRowMenu('${mid}', event)">⋮</button>
       <div id="${mid}" class="row-menu" style="display:none;position:absolute;z-index:70;
            top:calc(100% + 5px);inset-inline-end:0;min-width:190px;background:var(--panel);
            border:1px solid var(--line);border-radius:11px;box-shadow:0 10px 28px rgba(0,0,0,.16);
@@ -253,7 +305,7 @@
     window[name] = function(){
       const html = orig.apply(this, arguments);
       measurePins();
-      return pinStyle() + pinBar() + html;
+      return tableRoomCss() + pinStyle() + pinBar() + html;
     };
   });
 
