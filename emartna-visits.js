@@ -307,5 +307,41 @@
     return html + card;
   };
 
+
+  /* نفس البطاقة في "إعدادات حسابي" — جنب بيانات التواصل
+     عشان تكون في المكان اللي المستخدم بيدوّر فيه طبيعيًا */
+  ['pageSysAccountSettings','pageSysSettings','pageSysLandingSettings'].forEach(name => {
+    const orig = window[name];
+    if (typeof orig !== 'function' || orig.__socialCard) return;
+    const wrapped = function(){
+      const so = (window.REG && REG.sysOwner) || {};
+      const rows = [
+        ['📘 فيسبوك',   so.facebookUrl],
+        ['📸 إنستجرام', so.instagramUrl],
+        ['▶️ يوتيوب',   so.youtubeUrl],
+        ['💬 واتساب',   so.whatsappNumber],
+      ].filter(r => r[1]);
+      const card = `
+        <div class="card content-narrow">
+          <div class="flexrow" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
+            <div>
+              <b>🔗 روابط التواصل الاجتماعي</b>
+              <div class="small" style="color:var(--muted)">
+                بتظهر في آخر الصفحة الرئيسية للزوّار</div>
+            </div>
+            <button class="btn gold sm" onclick="openSocialLinksModal()">
+              ${rows.length ? 'تعديل الروابط' : '+ ضيف روابطك'}</button>
+          </div>
+          ${rows.length ? `<div class="mtop">${rows.map(([l,v]) =>
+            `<div class="small" style="padding:4px 0;border-bottom:1px dashed var(--line)">
+               ${l}: <span dir="ltr">${esc2(v)}</span></div>`).join('')}</div>`
+            : '<p class="small mtop" style="color:var(--muted)">لسه محطّتش صفحة فيسبوك ولا أي روابط.</p>'}
+        </div>`;
+      return card + orig.apply(this, arguments);
+    };
+    wrapped.__socialCard = true;
+    window[name] = wrapped;
+  });
+
   console.log('[عمارتنا] تتبّع مصادر الزيارات جاهز');
 })();
