@@ -33,6 +33,12 @@
     const utm = (p.get('utm_source') || p.get('src') || p.get('ref') || '').trim();
     if (utm) return { source: utm.toLowerCase(), campaign: p.get('utm_campaign') || '' };
 
+    // فيسبوك بيحط fbclid على أي ضغطة من إعلان أو منشور، وجوجل بيحط gclid.
+    // المتصفح الداخلي بتاع فيسبوك مبيبعتش referrer، فدي أدق طريقة للتعرّف.
+    if (p.get('fbclid')) return { source: 'facebook', campaign: p.get('utm_campaign') || 'fb-click' };
+    if (p.get('gclid'))  return { source: 'google',   campaign: 'google-ads' };
+    if (p.get('igshid')) return { source: 'instagram', campaign: '' };
+
     const r = document.referrer || '';
     if (!r) return { source: 'direct', campaign: '' };
     try{
@@ -193,6 +199,112 @@
         💡 عشان تقيس حملة معيّنة بدقة، حط علامة في الرابط:
         <code dir="ltr">myemartna.com/?utm_source=facebook&utm_campaign=aug</code>
       </p>`;
+  };
+
+
+  /* ============================================================
+     روابط التواصل الاجتماعي في الصفحة الرئيسية
+     ============================================================ */
+
+  function socials(){
+    const so = (window.REG && REG.sysOwner) || {};
+    const wa = (so.whatsappNumber || ((so.contactPhoneCountry||'') + (so.contactPhone||'')))
+      .replace(/[^\d]/g,'');
+    return [
+      so.facebookUrl  && { icon:'📘', label:'فيسبوك',   url:so.facebookUrl },
+      so.instagramUrl && { icon:'📸', label:'إنستجرام', url:so.instagramUrl },
+      so.youtubeUrl   && { icon:'▶️', label:'يوتيوب',   url:so.youtubeUrl },
+      wa && { icon:'💬', label:'واتساب', url:'https://wa.me/' + wa },
+      so.contactEmail && { icon:'📧', label:'البريد', url:'mailto:' + so.contactEmail },
+    ].filter(Boolean);
+  }
+
+  const origLanding = window.landingHTML;
+  if (origLanding && !origLanding.__socialWrapped){
+    const wrapped = function(){
+      const html = origLanding.apply(this, arguments);
+      const items = socials();
+      if (!items.length) return html;
+      const bar = `
+        <div style="text-align:center;margin:26px auto 8px">
+          <p class="small" style="color:var(--muted);margin-bottom:8px">تابعنا وتواصل معانا</p>
+          <div class="flexrow" style="justify-content:center;flex-wrap:wrap;gap:9px">
+            ${items.map(s => `<a class="btn ghost sm" href="${esc2(s.url)}"
+               target="_blank" rel="noopener">${s.icon} ${esc2(s.label)}</a>`).join('')}
+          </div>
+        </div>`;
+      return html + bar;
+    };
+    wrapped.__socialWrapped = true;
+    window.landingHTML = wrapped;
+  }
+
+  /* إعداد الروابط من شاشة صاحب البرنامج */
+  window.openSocialLinksModal = function(){
+    const so = (window.REG && REG.sysOwner) || {};
+    openModal(`
+      <h3>🔗 روابط التواصل الاجتماعي</h3>
+      <p class="small mtop">بتظهر في آخر الصفحة الرئيسية، وبتساعد الزائر يتواصل معاك.</p>
+      <div class="field2 mtop"><label>📘 صفحة فيسبوك</label>
+        <input id="soFb" dir="ltr" value="${esc2(so.facebookUrl||'')}"
+          placeholder="https://www.facebook.com/..."></div>
+      <div class="field2"><label>📸 إنستجرام</label>
+        <input id="soIg" dir="ltr" value="${esc2(so.instagramUrl||'')}"></div>
+      <div class="field2"><label>▶️ يوتيوب</label>
+        <input id="soYt" dir="ltr" value="${esc2(so.youtubeUrl||'')}"></div>
+      <div class="field2"><label>💬 رقم واتساب (لو مختلف عن رقم التواصل)</label>
+        <input id="soWa" dir="ltr" value="${esc2(so.whatsappNumber||'')}" placeholder="201234567890"></div>
+      <div class="modal-actions">
+        <button class="btn primary" onclick="saveSocialLinks()">💾 حفظ</button>
+        <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+      </div>`, true);
+  };
+
+  window.saveSocialLinks = function(){
+    const so = REG.sysOwner = REG.sysOwner || {};
+    const g = i => (document.getElementById(i)||{}).value.trim();
+    so.facebookUrl = g('soFb');
+    so.instagramUrl = g('soIg');
+    so.youtubeUrl = g('soYt');
+    so.whatsappNumber = g('soWa').replace(/[^\d]/g,'');
+    saveRegistry();
+    closeModal();
+    if (window.toast) toast('اتحفظت روابط التواصل');
+    if (window.renderSysContent) renderSysContent();
+  };
+
+  /* بطاقة الإعداد + مولّد روابط الحملات في شاشة مصادر الزيارات */
+  const origVisits = window.pageSysVisits;
+  window.pageSysVisits = function(){
+    const html = origVisits.apply(this, arguments);
+    const so = (window.REG && REG.sysOwner) || {};
+    const base = location.origin + location.pathname.replace(/[^/]*$/, '');
+    const link = (src, camp) => `${base}?utm_source=${src}&utm_campaign=${camp}`;
+    const card = `
+      <div class="card mtop2">
+        <div class="flexrow" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <div><b>🔗 روابط التواصل</b>
+            <div class="small" style="color:var(--muted)">
+              ${so.facebookUrl ? '📘 فيسبوك متصل' : '📘 لسه محطّتش صفحة فيسبوك'}</div></div>
+          <button class="btn sm gold" onclick="openSocialLinksModal()">إعداد الروابط</button>
+        </div>
+      </div>
+      <div class="card mtop">
+        <b>🎯 روابط جاهزة لحملاتك</b>
+        <p class="small mtop">استخدم الرابط المناسب في كل إعلان عشان التقرير يفرّق بينهم:</p>
+        ${[['فيسبوك — إعلان مدفوع','facebook','fb-ads'],
+           ['فيسبوك — منشور عادي','facebook','fb-post'],
+           ['جروبات الكمبوندات','facebook','fb-groups'],
+           ['واتساب','whatsapp','wa'],
+           ['إنستجرام','instagram','ig']].map(([l,s,c]) => `
+          <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap;align-items:center">
+            <span class="small" style="min-width:170px">${l}</span>
+            <input class="small" readonly dir="ltr" style="flex:1;min-width:220px"
+              value="${link(s,c)}" onclick="this.select()">
+            <button class="btn sm ghost" onclick="navigator.clipboard&&navigator.clipboard.writeText('${link(s,c)}');toast&&toast('اتنسخ')">📋</button>
+          </div>`).join('')}
+      </div>`;
+    return html + card;
   };
 
   console.log('[عمارتنا] تتبّع مصادر الزيارات جاهز');

@@ -48,6 +48,7 @@ const DOC_KEY = c => 'reg:' + c;
 const SYSOWNER_PUBLIC_FIELDS = [
   'contactPhoneCountry','contactPhone','contactEmail',
   'paymentLink','siteUrl','paymentMethods','bankInfo','notes',
+  'facebookUrl','instagramUrl','whatsappNumber','youtubeUrl',
 ];
 const SYSOWNER_DOC = 'reg:sysOwnerPublic';
 
