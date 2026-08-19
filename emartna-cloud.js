@@ -210,6 +210,7 @@ const BUILDING_FIELDS = {
   lastReminderMonth:'last_reminder_month',
   lastChargeReminderMonth:'last_charge_reminder_month',
   lastBackupDate:'last_backup_date',
+  aiSettings:'ai_settings',
 };
 
 
@@ -832,6 +833,11 @@ const CLOUD = {
         referredBy: b.referred_by || null,
         appliedCoupon: b.applied_coupon || null,
         signupSource: b.signup_source || '',
+        adminName: b.admin_name || '',
+        adminEmail: b.admin_email || '',
+        facebookUrl: b.facebook_url || '',
+        claimedOfferId: b.claimed_offer_id || null,
+        referralRewardGiven: !!b.referral_reward_given,
         // مهم: البرنامج بيقرا الترخيص بأسماء startDate/endDate/plan/status.
         // كان بيتبني بأسماء تانية (start/end) فالشاشة كانت تقول
         // "بلا تاريخ انتهاء" و"الخطة null" وتحسبه منتهي — رغم إن
