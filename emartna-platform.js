@@ -69,8 +69,12 @@ const BUILDING_LICENSE_FIELDS = b => ({
 
 function pickSysOwnerPublic(so){
   const out = {};
-  if (!so) return out;
-  SYSOWNER_PUBLIC_FIELDS.forEach(k => { if (so[k] !== undefined) out[k] = so[k]; });
+  so = so || {};
+  // بنكتب كل الحقول حتى لو فاضية — عشان لو مسحت قيمة، المسح يوصل
+  // للخادم بدل ما القيمة القديمة تفضل هناك.
+  SYSOWNER_PUBLIC_FIELDS.forEach(k => {
+    out[k] = so[k] ?? (k === 'paymentMethods' ? [] : '');
+  });
   return out;
 }
 

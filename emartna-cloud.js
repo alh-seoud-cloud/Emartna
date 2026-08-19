@@ -799,12 +799,22 @@ const CLOUD = {
 
     // REG لازم يبقى فيه كل الحقول اللي البرنامج بيتوقعها،
     // وإلا دوال ensure* بتقع. الفاضي منها البرنامج بيملاه بنفسه.
+    // بيانات صاحب البرنامج العامة (تواصل · دفع · روابط) محفوظة
+    // كمستند على الخادم. لازم نقراها هنا — من غير كده بتتكتب
+    // من متصفح ومتظهرش في متصفح تاني.
+    let sysPub = {};
+    try{
+      const r = await sb.from('platform_settings')
+        .select('value').eq('key', 'reg:sysOwnerPublic').maybeSingle();
+      if (r.data && r.data.value && typeof r.data.value === 'object') sysPub = r.data.value;
+    }catch(e){}
+
     cache.registry = {
-      sysOwner: {
+      sysOwner: Object.assign({
         username: 'sys', name: 'مسؤول المنصة',
         paymentMethods: [], aiSettings: null,
         phoneCountry: '+20', phone: '', email: '',
-      },
+      }, sysPub),
       buildings: bs.data.map(b => ({
         id: b.code || b.id,
         __uuid: b.id,
