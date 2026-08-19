@@ -1,112 +1,139 @@
 /* ============================================================
-   عمارتنا — تنسيق أعمدة الجداول
+   عمارتنا — تنسيق أعمدة كل الجداول (٤٥ جدول)
    ------------------------------------------------------------
-   مشكلتين اتصلحوا:
-
-   ١) الجدول كان بيوزّع عرضه على عدد الأعمدة، فمع ٣٠ عمود
-      كلهم بيتزنقوا والنص بيتلخبط فوق بعضه.
-      الحل: كل عمود ياخد عرضه الطبيعي والجدول يتمرّر أفقيًا.
-
-   ٢) تغيير عرض عمود واحد كان بيسحب من عرض باقي الأعمدة.
-      الحل: أول ما تعدّل عمود، بنثبّت عرض كل الأعمدة على
-      قياسها الحالي — فالتعديل يبقى على العمود ده وحده.
+     • الجدول العريض (أكتر من ٨ أعمدة ظاهرة) → كل عمود ياخد
+       قياسه الطبيعي والجدول يتمرّر أفقيًا بدل ما يتزنق.
+     • الجدول الضيّق → يفضل زي ما هو، بيملا العرض.
+     • تعديل عرض أي عمود → بنثبّت الباقي على قياسه الحالي الأول.
    ============================================================ */
 
 (function(){
   'use strict';
 
-  const WIDE = ['sysBldTable','supportBldTable','apTable','usersTable','ledgerTable',
-                'expTable','payReqTable','licTable','couponsTable','leadsTable'];
-
-  /* ---------- ١) الأعمدة تاخد عرضها الطبيعي ---------- */
+  const WIDE_AT = 8;
 
   function injectCss(){
     if (document.getElementById('colFitCss')) return;
     const st = document.createElement('style');
     st.id = 'colFitCss';
     st.textContent = `
-      /* الجداول العريضة: العمود ياخد قياسه ومفيش زنقة */
-      ${WIDE.map(id => `#${id}_wrap .table-wrap`).join(',')}{
-        overflow-x:auto; overflow-y:visible; -webkit-overflow-scrolling:touch;
+      [data-colfit="wide"] .table-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+      [data-colfit="wide"] .table-wrap > table{ width:max-content; min-width:100%; }
+      [data-colfit="wide"] .table-wrap th,
+      [data-colfit="wide"] .table-wrap td{ white-space:nowrap; vertical-align:middle; }
+      [data-colfit="wide"] .table-wrap td.wrap-cell,
+      [data-colfit="wide"] .table-wrap th.wrap-cell{
+        white-space:normal; word-break:break-word; max-width:280px;
       }
-      ${WIDE.map(id => `#${id}_wrap .table-wrap > table`).join(',')}{
-        width:max-content; min-width:100%;
-      }
-      ${WIDE.map(id => `#${id}_wrap .table-wrap th, #${id}_wrap .table-wrap td`).join(',')}{
-        white-space:nowrap; vertical-align:middle;
-      }
-      /* الخلايا اللي جواها أزرار أو شارات تفضل مرنة */
-      ${WIDE.map(id => `#${id}_wrap .table-wrap td:has(.flexrow)`).join(',')}{
-        white-space:normal;
-      }
-      /* لو المستخدم ثبّت عرض معيّن، النص يتلف جواه */
-      ${WIDE.map(id => `#${id}_wrap .table-wrap td[data-fixed="1"]`).join(',')}{
+      [data-colfit="wide"] .table-wrap table[style*="fixed"] td{
         white-space:normal; word-break:break-word;
       }`;
     document.head.appendChild(st);
   }
 
-  /* ---------- ٢) تعديل عمود واحد ما يأثرش على الباقي ---------- */
+  const WRAPPY = /ملاحظ|تفاصيل|وصف|العنوان|النص|البيان|الرسالة|المقترح|النتائج|الخطأ|السبب/;
+
+  function markTables(){
+    try{
+      const cfgs = window.__tableConfigs || {};
+      Object.keys(cfgs).forEach(id => {
+        const wrap = document.getElementById(id + '_wrap');
+        if (!wrap) return;
+        const cols = window.orderedVisibleCols
+          ? orderedVisibleCols(id+'_order', id+'_vis', cfgs[id].columns)
+          : cfgs[id].columns;
+        const wide = (cols || []).length > WIDE_AT;
+        wrap.setAttribute('data-colfit', wide ? 'wide' : 'fit');
+        if (!wide) return;
+        const ths = wrap.querySelectorAll('.table-wrap thead th');
+        const idx = [];
+        cols.forEach((c,i) => { if (WRAPPY.test(String(c.label||''))) idx.push(i); });
+        if (!idx.length) return;
+        idx.forEach(i => { if (ths[i]) ths[i].classList.add('wrap-cell'); });
+        wrap.querySelectorAll('.table-wrap tbody tr').forEach(tr => {
+          idx.forEach(i => { if (tr.children[i]) tr.children[i].classList.add('wrap-cell'); });
+        });
+      });
+    }catch(e){}
+  }
+  window.markWideTables = markTables;
 
   function freezeAllWidths(tableId){
     const wrap = document.getElementById(tableId + '_wrap');
-    if (!wrap) return;
     const cfg = window.__tableConfigs && window.__tableConfigs[tableId];
-    if (!cfg) return;
+    if (!wrap || !cfg) return;
     const ths = wrap.querySelectorAll('.table-wrap thead th');
     if (!ths.length) return;
-
-    const cols = (window.orderedVisibleCols
+    const cols = window.orderedVisibleCols
       ? orderedVisibleCols(tableId+'_order', tableId+'_vis', cfg.columns)
-      : cfg.columns);
-
+      : cfg.columns;
     window[tableId+'_widths'] = window[tableId+'_widths'] || {};
     const W = window[tableId+'_widths'];
-    ths.forEach((th, i) => {
-      const c = cols[i];
-      if (!c) return;
-      if (typeof W[c.key] !== 'number'){
-        // بنثبّت القياس اللي هو عليه دلوقتي — مش قيمة افتراضية
+    ths.forEach((th,i) => {
+      const c = cols[i]; if (!c) return;
+      if (typeof W[c.key] !== 'number')
         W[c.key] = Math.max(60, Math.round(th.getBoundingClientRect().width));
-      }
     });
   }
 
-  ['setColWidthDirect','nudgeColWidth','setColWidthPreset'].forEach(fn => {
+  ['setColWidthDirect','nudgeColWidth','setColWidthPreset','setColWidth'].forEach(fn => {
     const orig = window[fn];
     if (typeof orig !== 'function' || orig.__colFit) return;
-    const wrapped = function(tableId, colKey){
-      // نثبّت الباقي الأول، وبعدين نطبّق التعديل
-      try{ freezeAllWidths(tableId); }catch(e){}
+    const wrapped = function(tableId){
+      try{
+        const id = (window.__tableConfigs && window.__tableConfigs[tableId])
+          ? tableId : window.__widthEditTable;
+        if (id) freezeAllWidths(id);
+      }catch(e){}
       return orig.apply(this, arguments);
     };
     wrapped.__colFit = true;
     window[fn] = wrapped;
   });
 
-  /* إعادة كل الأعمدة لقياسها الطبيعي */
+  const origMenu = window.openColumnQuickMenu;
+  if (origMenu && !origMenu.__colFit){
+    const wrapped = function(evt, tableId){
+      window.__widthEditTable = tableId;
+      return origMenu.apply(this, arguments);
+    };
+    wrapped.__colFit = true;
+    window.openColumnQuickMenu = wrapped;
+  }
+
   window.resetColWidths = function(tableId){
     window[tableId+'_widths'] = {};
-    if (window.refreshSortable) refreshSortable(tableId);
-    else renderContent();
+    if (window.refreshSortable) refreshSortable(tableId); else renderContent();
+    setTimeout(markTables, 50);
     if (window.toast) toast('رجعت الأعمدة لقياسها الطبيعي');
   };
 
-  /* زرار الإرجاع في شريط أدوات الجدول */
   const origSortable = window.sortableTable;
   if (origSortable && !origSortable.__colFitWrapped){
-    const wrapped = function(tableId, rows, cols, rowRenderer, opts){
+    const wrapped = function(tableId, rows, cols){
       const html = origSortable.apply(this, arguments);
-      if (!WIDE.includes(tableId)) return html;
       injectCss();
-      const btn = `<button class="btn sm ghost" onclick="resetColWidths('${tableId}')"
-        title="رجّع كل الأعمدة لقياسها الطبيعي">↔️ ضبط الأعمدة</button>`;
+      setTimeout(markTables, 30);
+      if (!Array.isArray(cols) || cols.length <= WIDE_AT) return html;
+      const btn = `<button class="btn sm ghost" onclick="resetColWidths('${tableId}')" title="رجّع كل الأعمدة لقياسها الطبيعي">↔️ ضبط الأعمدة</button>`;
       return html.replace('طباعة</button></div>', 'طباعة</button>' + btn + '</div>');
     };
     wrapped.__colFitWrapped = true;
     window.sortableTable = wrapped;
   }
 
-  setTimeout(injectCss, 1200);
-  console.log('[عمارتنا] تنسيق أعمدة الجداول جاهز');
+  ['renderContent','renderSysContent','refreshSortable'].forEach(fn => {
+    const orig = window[fn];
+    if (typeof orig !== 'function' || orig.__colFitR) return;
+    const wrapped = function(){
+      const r = orig.apply(this, arguments);
+      setTimeout(markTables, 30);
+      return r;
+    };
+    wrapped.__colFitR = true;
+    window[fn] = wrapped;
+  });
+
+  setTimeout(() => { injectCss(); markTables(); }, 1200);
+  console.log('[عمارتنا] تنسيق أعمدة كل الجداول جاهز');
 })();
