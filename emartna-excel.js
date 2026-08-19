@@ -469,11 +469,23 @@
     }catch(e){
       // بعض الدوال معرّفة في الصفحة نفسها ومينفعش نعيد تعريف خاصيتها،
       // فبنستبدلها مباشرة — ولو ملف تاني استبدلها بعدنا بنرجّع اللفّة.
+      wrapper.__excelWrapped = true;
       window[name] = wrapper;
       let tries = 0;
       const t = setInterval(() => {
         if (++tries > 20) return clearInterval(t);
-        if (window[name] !== wrapper){ raw = window[name]; window[name] = wrapper; }
+        const cur = window[name];
+        if (cur === wrapper) return;
+        // مهم: لو الملف اللي بعدنا لفّ لفّتنا (مش استبدلها)، منرجعش
+        // لفّتنا فوقه — ده كان بيعمل حلقة لا نهائية وبيوقّع الشاشة.
+        if (typeof cur === 'function' && !cur.__excelWrapped){
+          const probe = cur.toString();
+          if (probe.includes('__excelWrapped') || probe.includes('apply(this, arguments)')){
+            // لفّة تانية فوقنا — نسيبها ونوقف المراقبة
+            return clearInterval(t);
+          }
+        }
+        raw = cur; window[name] = wrapper;
       }, 500);
     }
   }
