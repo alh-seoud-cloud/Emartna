@@ -384,6 +384,99 @@
     if (window.renderSysContent) renderSysContent();
   };
 
+
+  /* ---------- تعطيل / تفعيل العمارة بسبب وتاريخ ---------- */
+
+  window.openSuspendModal = function(bid){
+    const b = ((window.REG && REG.buildings) || []).find(x => x.id === bid);
+    if (!b) return;
+    const lic = window.ensureLicense ? ensureLicense(b) : (b.license || {});
+    const isOff = lic.status === 'suspended';
+    const sus = lic.suspension || {};
+
+    if (isOff){
+      openModal(`
+        <h3>▶️ إعادة تفعيل ${esc2(b.name||'')}</h3>
+        <div class="card mtop" style="border:1px solid var(--red)">
+          <b>العمارة موقوفة حاليًا</b>
+          <p class="small mtop">السبب: ${esc2(sus.reason || 'مش مسجّل')}</p>
+          <p class="small">تاريخ الإيقاف: ${esc2((sus.at||'').slice(0,10) || '—')}</p>
+          ${sus.until ? `<p class="small">مفترض ينتهي: ${esc2(sus.until)}</p>` : ''}
+          ${sus.by ? `<p class="small" style="color:var(--muted)">أوقفها: ${esc2(sus.by)}</p>` : ''}
+        </div>
+        <p class="small mtop">رئيس الاتحاد والسكان مش بيقدروا يستخدموا العمارة وهي موقوفة.</p>
+        <div class="modal-actions">
+          <button class="btn primary" onclick="applySuspend('${bid}',false)">▶️ فعّلها تاني</button>
+          <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+        </div>`, true);
+      return;
+    }
+
+    const reasons = ['عدم سداد الاشتراك','مخالفة شروط الاستخدام','بطلب من رئيس الاتحاد',
+                     'بيانات غير صحيحة','إيقاف مؤقت للمراجعة','سبب آخر'];
+    openModal(`
+      <h3>⏸️ تعطيل ${esc2(b.name||'')}</h3>
+      <p class="small mtop">لما تعطّلها، رئيس الاتحاد والسكان هيشوفوا رسالة إن الاشتراك موقوف
+      ومش هيقدروا يستخدموا البرنامج. <b>البيانات كلها بتفضل محفوظة.</b></p>
+
+      <div class="field2 mtop2"><label>سبب التعطيل</label>
+        <select id="spReason" onchange="document.getElementById('spOtherWrap').style.display=this.value==='سبب آخر'?'block':'none'">
+          ${reasons.map(r => `<option>${r}</option>`).join('')}
+        </select></div>
+      <div class="field2" id="spOtherWrap" style="display:none"><label>اكتب السبب</label>
+        <input id="spOther" placeholder="السبب بالتفصيل"></div>
+
+      <div class="grid g2">
+        <div class="field2"><label>تاريخ التعطيل</label>
+          <input id="spAt" type="date" value="${window.todayISO?todayISO():''}"></div>
+        <div class="field2"><label>مفترض ينتهي (اختياري)</label>
+          <input id="spUntil" type="date"></div>
+      </div>
+
+      <div class="field2"><label>ملاحظة داخلية (اختياري)</label>
+        <input id="spNote" placeholder="مش بتظهر للعميل"></div>
+
+      <div class="modal-actions">
+        <button class="btn red" onclick="applySuspend('${bid}',true)">⏸️ عطّل العمارة</button>
+        <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+      </div>`, true);
+  };
+
+  window.applySuspend = function(bid, off){
+    const b = ((window.REG && REG.buildings) || []).find(x => x.id === bid);
+    if (!b) return;
+    const lic = window.ensureLicense ? ensureLicense(b) : (b.license = b.license || {});
+    const g = i => (document.getElementById(i) || {}).value || '';
+
+    if (off){
+      let reason = g('spReason');
+      if (reason === 'سبب آخر') reason = g('spOther').trim() || 'سبب آخر';
+      lic.status = 'suspended';
+      lic.suspension = {
+        reason,
+        at: g('spAt') || (window.todayISO ? todayISO() : ''),
+        until: g('spUntil') || '',
+        note: g('spNote').trim(),
+        by: (window.REG && REG.sysOwner && REG.sysOwner.name) || 'صاحب البرنامج',
+      };
+    }else{
+      lic.status = (lic.endDate && lic.endDate < (window.todayISO?todayISO():'')) ? 'expired'
+                 : (lic.plan && /trial|promo/.test(String(lic.plan)) ? 'trial' : 'active');
+      lic.suspension = Object.assign({}, lic.suspension || {}, {
+        liftedAt: window.todayISO ? todayISO() : '',
+      });
+    }
+
+    try{
+      if (window.logLicenseEvent)
+        logLicenseEvent(bid, off ? ('إيقاف الاشتراك — ' + lic.suspension.reason) : 'إعادة تفعيل الاشتراك');
+    }catch(e){}
+    saveRegistry();
+    closeModal();
+    if (window.toast) toast(off ? '⏸️ اتعطّلت العمارة' : '▶️ اترجّعت العمارة للخدمة');
+    if (window.renderSysContent) renderSysContent();
+  };
+
   window.openBuildingCard = function(bid){
     const b = ((window.REG && REG.buildings) || []).find(x => x.id === bid);
     if (!b) return;
@@ -406,6 +499,15 @@
         <span class="badge ${st.badge || 'n'}">${esc2(st.label || '')}</span>
         ${m.loaded ? `<span class="badge n">اكتمال الإعداد ${m.setup*20}%</span>` : ''}
       </div>
+
+      ${lic.status==='suspended' ? `
+        <div class="card mtop" style="border:1px solid var(--red);background:#FFF6F5">
+          <b style="color:var(--red)">⏸️ العمارة موقوفة</b>
+          <p class="small mtop">السبب: <b>${esc2((lic.suspension||{}).reason || 'مش مسجّل')}</b>
+            ${(lic.suspension||{}).at ? ` · من ${esc2(lic.suspension.at)}` : ''}
+            ${(lic.suspension||{}).until ? ` · لحد ${esc2(lic.suspension.until)}` : ''}</p>
+          ${(lic.suspension||{}).note ? `<p class="small" style="color:var(--muted)">${esc2(lic.suspension.note)}</p>` : ''}
+        </div>` : ''}
 
       <div class="grid g2 mtop2">
         <div class="card">
@@ -458,6 +560,9 @@
                href="${window.renewalWhatsAppLink ? renewalWhatsAppLink(b) : '#'}">💬 تذكير تجديد</a>` : ''}
         <button class="btn ghost" onclick="bldCardGo('renameBuildingPrompt','${b.id}')">✏️ تعديل الاسم</button>
         <button class="btn ghost" onclick="bldCardGo('openBuildingContact','${b.id}')">📞 بيانات التواصل</button>
+        <button class="btn ${lic.status==='suspended'?'primary':'red'}"
+          onclick="bldCardGo('openSuspendModal','${b.id}')">
+          ${lic.status==='suspended' ? '▶️ إعادة تفعيل' : '⏸️ تعطيل العمارة'}</button>
       </div>
       <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`, true);
   };
