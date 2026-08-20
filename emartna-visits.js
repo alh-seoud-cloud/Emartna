@@ -49,16 +49,29 @@
     catch(e){ return { source: 'other', campaign: '' }; }
   }
 
-  async function send(signup){
+  /* مفتاح جلسة عشان الحدث ما يتسجّلش مرتين */
+  function sessionKey(){
+    try{
+      let k = sessionStorage.getItem('emartna_sess_key');
+      if (!k){ k = Math.random().toString(36).slice(2) + Date.now().toString(36); 
+               sessionStorage.setItem('emartna_sess_key', k); }
+      return k;
+    }catch(e){ return null; }
+  }
+
+  async function send(event){
     try{
       const sb = window.CLOUD && window.CLOUD._sb;
       if (!sb) return;
       const d = detect();
-      if (d.source === 'internal' && !signup) return;
+      const ev = event || 'visit';
+      if (d.source === 'internal' && ev === 'visit') return;
       await sb.rpc('record_visit', {
         p_source: d.source, p_campaign: d.campaign,
         p_landed_on: (location.pathname || '/').slice(0,60),
-        p_signup: !!signup,
+        p_signup: ev === 'signup',
+        p_event: ev,
+        p_session: sessionKey(),
       });
     }catch(e){}
   }
@@ -69,7 +82,7 @@
       if (sessionStorage.getItem(SESS) === '1') return;
       sessionStorage.setItem(SESS, '1');
     }catch(e){}
-    send(false);
+    send('visit');
   }
 
   let tries = 0;
@@ -79,12 +92,18 @@
   }, 150);
 
   /* التسجيل الناجح بيتسجّل كتحويل */
-  ['doSignup','createBuildingFromSignup'].forEach(fn => {
+  /* كل خطوة في رحلة الزائر بتتسجّل */
+  const EVENTS = {
+    doSignup: 'signup', createBuildingFromSignup: 'signup',
+    loginAsDemo: 'demo', tryDemoNow: 'demo',
+    cloudLogin: 'login', loginWithBiometric: 'login',
+  };
+  Object.keys(EVENTS).forEach(fn => {
     const orig = window[fn];
     if (typeof orig !== 'function' || orig.__visit) return;
     const wrapped = async function(){
       const r = await orig.apply(this, arguments);
-      send(true);
+      try{ send(EVENTS[fn]); }catch(e){}
       return r;
     };
     wrapped.__visit = true;
@@ -108,14 +127,12 @@
   window.loadVisitReport = async function(days){
     const sb = window.CLOUD && window.CLOUD._sb;
     if (!sb) return;
-    const since = new Date(Date.now() - (days||30)*86400000).toISOString().slice(0,10);
+    window.__visitDays = days || 30;
     try{
-      const { data, error } = await sb.from('visit_stats')
-        .select('day,source,campaign,is_signup')
-        .gte('day', since).order('day', { ascending:false }).limit(20000);
+      const { data, error } = await sb.rpc('visit_daily_report', { p_days: days || 30 });
       if (error) throw error;
       window.__visitRows = data || [];
-      window.__visitDays = days || 30;
+      window.__visitErr = null;
     }catch(e){
       window.__visitRows = [];
       window.__visitErr = (window.cloudErrorText ? cloudErrorText(e) : e.message);
@@ -123,49 +140,93 @@
     if (window.renderSysContent) renderSysContent();
   };
 
+  const LBL = {
+    facebook:'فيسبوك', instagram:'إنستجرام', whatsapp:'واتساب', google:'بحث جوجل',
+    twitter:'إكس', linkedin:'لينكدإن', youtube:'يوتيوب', tiktok:'تيك توك',
+    search:'محركات بحث', direct:'دخول مباشر', print:'بطاقة مطبوعة', other:'أخرى',
+  };
+  const IC = {
+    facebook:'📘', instagram:'📸', whatsapp:'💬', google:'🔍', twitter:'✖️',
+    linkedin:'💼', youtube:'▶️', tiktok:'🎵', search:'🔎', direct:'🔗', print:'🖨️',
+  };
+  const nm = k => LBL[k] || k;
+  const ic = k => IC[k] || '🌐';
+
   window.pageSysVisits = function(){
     const rows = window.__visitRows;
     const days = window.__visitDays || 30;
-
-    if (rows === null){
+    if (rows === null || rows === undefined){
       setTimeout(() => loadVisitReport(30), 30);
-      return '<div class="card"><p class="small">⏳ بيحمّل تقرير مصادر الزيارات…</p></div>';
+      return '<div class="card"><p class="small">⏳ بيحمّل التقرير…</p></div>';
     }
 
-    const by = {};
-    rows.forEach(r => {
-      const k = r.source || 'other';
-      by[k] = by[k] || { visits:0, signups:0 };
-      by[k].visits++;
-      if (r.is_signup) by[k].signups++;
-    });
-    const totalV = rows.length;
-    const totalS = rows.filter(r => r.is_signup).length;
-    const list = Object.entries(by)
-      .map(([k,v]) => ({ key:k, ...v, rate: v.visits ? Math.round(v.signups/v.visits*100) : 0 }))
-      .sort((a,b) => b.visits - a.visits);
+    const S = k => rows.reduce((a,r) => a + Number(r[k]||0), 0);
+    const T = { visits:S('visits'), demos:S('demos'), signups:S('signups'), logins:S('logins') };
+    const pct = (a,b) => b ? Math.round(a/b*100) : 0;
 
-    const cols = [
-      { key:'src', label:'المصدر', value:r => LABEL[r.key] || r.key,
-        cell:r => `${ICON[r.key]||'🌐'} <b>${esc2(LABEL[r.key] || r.key)}</b>` },
-      { key:'visits', label:'الزيارات', value:r => r.visits, cell:r => String(r.visits) },
-      { key:'share', label:'النسبة', value:r => totalV ? r.visits/totalV : 0,
-        cell:r => `${totalV ? Math.round(r.visits/totalV*100) : 0}%` },
-      { key:'signups', label:'تسجيلات', value:r => r.signups,
-        cell:r => r.signups ? `<span class="badge g">${r.signups}</span>` : '0' },
-      { key:'rate', label:'نسبة التحويل', value:r => r.rate,
-        cell:r => `<span class="badge ${r.rate>=5?'g':r.rate>0?'y':'n'}">${r.rate}%</span>` },
+    /* تجميع يومي */
+    const byDay = {};
+    rows.forEach(r => {
+      const d = byDay[r.day] = byDay[r.day] || { day:r.day, visits:0, demos:0, signups:0, logins:0, src:{} };
+      ['visits','demos','signups','logins'].forEach(k => d[k] += Number(r[k]||0));
+      d.src[r.source] = (d.src[r.source]||0) + Number(r.visits||0);
+    });
+    const daily = Object.values(byDay).sort((a,b) => (b.day||'').localeCompare(a.day||''));
+
+    /* تجميع بالمصدر */
+    const bySrc = {};
+    rows.forEach(r => {
+      const s = bySrc[r.source] = bySrc[r.source] || { source:r.source, visits:0, demos:0, signups:0, logins:0 };
+      ['visits','demos','signups','logins'].forEach(k => s[k] += Number(r[k]||0));
+    });
+    const srcList = Object.values(bySrc).sort((a,b) => b.visits - a.visits);
+
+    const max = Math.max(1, ...daily.slice(0,14).map(d => d.visits));
+    const chart = daily.slice(0,14).reverse();
+
+    const dailyCols = [
+      { key:'day', label:'اليوم', value:d => d.day||'',
+        cell:d => `<b>${esc2(d.day)}</b><br><span class="small" style="color:var(--muted)">${
+          new Date(d.day).toLocaleDateString('ar-EG',{weekday:'long'})}</span>` },
+      { key:'visits', label:'👁️ زيارات', value:d => d.visits, cell:d => `<b>${d.visits}</b>` },
+      { key:'demos', label:'🎬 تجارب', value:d => d.demos,
+        cell:d => d.demos ? `<span class="badge b">${d.demos}</span>` : '0' },
+      { key:'signups', label:'✅ تسجيلات', value:d => d.signups,
+        cell:d => d.signups ? `<span class="badge g">${d.signups}</span>` : '0' },
+      { key:'logins', label:'🔑 دخول', value:d => d.logins, cell:d => String(d.logins) },
+      { key:'rate', label:'التحويل', value:d => pct(d.signups, d.visits),
+        cell:d => `<span class="badge ${pct(d.signups,d.visits)>=5?'g':d.signups?'y':'n'}">${pct(d.signups,d.visits)}%</span>` },
+      { key:'top', label:'أكتر مصدر', value:d => '',
+        cell:d => { const t = Object.entries(d.src).sort((a,b) => b[1]-a[1])[0];
+          return t ? `${ic(t[0])} ${esc2(nm(t[0]))} <span class="small">(${t[1]})</span>` : '—'; } },
     ];
 
-    // آخر ٧ أيام
-    const byDay = {};
-    rows.forEach(r => { byDay[r.day] = (byDay[r.day]||0) + 1; });
-    const last7 = Object.keys(byDay).sort().slice(-7);
-    const max = Math.max(1, ...last7.map(d => byDay[d]));
+    const srcCols = [
+      { key:'src', label:'المصدر', value:r => nm(r.source),
+        cell:r => `${ic(r.source)} <b>${esc2(nm(r.source))}</b>` },
+      { key:'visits', label:'زيارات', value:r => r.visits, cell:r => String(r.visits) },
+      { key:'share', label:'النسبة', value:r => r.visits,
+        cell:r => `${pct(r.visits, T.visits)}%` },
+      { key:'demos', label:'تجارب', value:r => r.demos, cell:r => String(r.demos) },
+      { key:'signups', label:'تسجيلات', value:r => r.signups,
+        cell:r => r.signups ? `<span class="badge g">${r.signups}</span>` : '0' },
+      { key:'d2v', label:'زيارة ← تجربة', value:r => pct(r.demos, r.visits),
+        cell:r => `<span class="badge ${pct(r.demos,r.visits)>=15?'g':r.demos?'y':'n'}">${pct(r.demos,r.visits)}%</span>` },
+      { key:'s2d', label:'تجربة ← تسجيل', value:r => pct(r.signups, r.demos),
+        cell:r => r.demos ? `<span class="badge ${pct(r.signups,r.demos)>=20?'g':'y'}">${pct(r.signups,r.demos)}%</span>` : '—' },
+    ];
+
+    const step = (icon, label, n, of, note) => `
+      <div class="card" style="text-align:center">
+        <div style="font-size:22px">${icon}</div>
+        <h3 style="margin:4px 0;color:var(--accent)">${n}</h3>
+        <p class="small">${label}</p>
+        ${of !== null ? `<p class="small" style="color:var(--muted)">${pct(n,of)}% من ${of}</p>` : ''}
+        ${note ? `<p class="small" style="color:var(--gold)">${note}</p>` : ''}
+      </div>`;
 
     return `
-      <p class="small">مصدر كل زيارة للموقع خلال آخر ${days} يوم — والتسجيلات اللي جت من كل مصدر.
-      مفيش أي بيانات شخصية بتتسجّل.</p>
+      <p class="small">رحلة الزائر خطوة بخطوة خلال آخر ${days} يوم — من فين جه، جرّب ولا لأ، وسجّل ولا مشي.</p>
 
       <div class="flexrow mtop" style="gap:8px;flex-wrap:wrap">
         ${[7,30,90].map(d => `<button class="btn sm ${days===d?'primary':'ghost'}"
@@ -173,34 +234,42 @@
         <button class="btn sm ghost" onclick="loadVisitReport(${days})">🔄 تحديث</button>
       </div>
 
-      <div class="grid g3 mtop2">
-        <div class="card"><h3 style="color:var(--accent)">${totalV}</h3><p class="small">إجمالي الزيارات</p></div>
-        <div class="card"><h3>${totalS}</h3><p class="small">تسجيلات</p></div>
-        <div class="card"><h3>${totalV?Math.round(totalS/totalV*100):0}%</h3><p class="small">نسبة التحويل</p></div>
+      <div class="section-title mtop2"><h3>قمع الزوّار</h3></div>
+      <div class="grid g4">
+        ${step('👁️','زيارة الموقع', T.visits, null, '')}
+        ${step('🎬','جرّبوا البرنامج', T.demos, T.visits, T.visits && !T.demos ? 'محدش جرّب!' : '')}
+        ${step('✅','سجّلوا حساب', T.signups, T.demos || T.visits, '')}
+        ${step('🔑','دخول متكرر', T.logins, null, '')}
       </div>
 
-      ${last7.length ? `<div class="card mtop2">
-        <b>الزيارات اليومية (آخر ٧ أيام)</b>
-        <div class="flexrow mtop" style="align-items:flex-end;gap:10px;height:110px">
-          ${last7.map(d => `<div style="flex:1;text-align:center">
-            <div style="background:var(--accent);border-radius:5px 5px 0 0;
-                 height:${Math.round(byDay[d]/max*80)}px;min-height:3px"></div>
-            <div class="small" style="margin-top:4px">${byDay[d]}</div>
-            <div class="small" style="color:var(--muted);font-size:10px">${esc2(d.slice(5))}</div>
+      ${chart.length ? `<div class="card mtop2">
+        <b>الزيارات اليومية (آخر ١٤ يوم)</b>
+        <div class="flexrow mtop" style="align-items:flex-end;gap:6px;height:130px;overflow-x:auto">
+          ${chart.map(d => `<div style="flex:1;min-width:34px;text-align:center">
+            <div class="small" style="font-size:10px">${d.visits}</div>
+            <div style="background:var(--accent);border-radius:4px 4px 0 0;
+                 height:${Math.round(d.visits/max*72)}px;min-height:3px"></div>
+            ${d.signups ? `<div style="background:var(--gold);height:${Math.round(d.signups/max*72)}px;min-height:3px"></div>` : ''}
+            <div class="small" style="color:var(--muted);font-size:9px">${esc2(String(d.day).slice(5))}</div>
           </div>`).join('')}
-        </div></div>` : ''}
+        </div>
+        <p class="small" style="color:var(--muted)">🟢 زيارات · 🟡 تسجيلات</p>
+      </div>` : ''}
 
-      <div class="mtop2">${sortableTable('visitsTable', list, cols, null,
-        { defaultKey:'visits', emptyText:'مفيش زيارات مسجّلة لسه', exportName:'مصادر الزيارات' })}</div>
+      <div class="section-title mtop2"><h3>يوم بيوم</h3></div>
+      ${sortableTable('visitDailyTable', daily, dailyCols, null,
+        { defaultKey:'day', emptyText:'مفيش زيارات مسجّلة', exportName:'الزيارات اليومية' })}
+
+      <div class="section-title mtop2"><h3>حسب المصدر</h3></div>
+      ${sortableTable('visitSrcTable', srcList, srcCols, null,
+        { defaultKey:'visits', emptyText:'مفيش بيانات', exportName:'مصادر الزيارات' })}
 
       ${window.__visitErr ? `<p class="small mtop" style="color:var(--red)">${esc2(window.__visitErr)}</p>` : ''}
 
       <p class="small mtop2" style="color:var(--muted)">
-        💡 عشان تقيس حملة معيّنة بدقة، حط علامة في الرابط:
-        <code dir="ltr">myemartna.com/?utm_source=facebook&utm_campaign=aug</code>
+        💡 لقياس كل حملة على حدة: <code dir="ltr">myemartna.com/?utm_source=facebook&utm_campaign=fb-ads</code>
       </p>`;
   };
-
 
   /* ============================================================
      روابط التواصل الاجتماعي في الصفحة الرئيسية
