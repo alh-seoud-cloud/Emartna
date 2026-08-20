@@ -124,12 +124,27 @@
 
   window.__visitRows = null;
 
+  const iso = d => d.toISOString().slice(0,10);
+  const daysAgo = n => { const d = new Date(); d.setDate(d.getDate() - n + 1); return iso(d); };
+
+  /* الفترة الحالية — إما آخر كذا يوم أو تواريخ محددة */
+  window.__visitFrom = window.__visitFrom || daysAgo(30);
+  window.__visitTo   = window.__visitTo   || iso(new Date());
+
   window.loadVisitReport = async function(days){
     const sb = window.CLOUD && window.CLOUD._sb;
     if (!sb) return;
-    window.__visitDays = days || 30;
+    if (days){                                  // زرار سريع
+      window.__visitDays = days;
+      window.__visitFrom = daysAgo(days);
+      window.__visitTo   = iso(new Date());
+    }else{
+      window.__visitDays = null;                // فترة مخصصة
+    }
     try{
-      const { data, error } = await sb.rpc('visit_daily_report', { p_days: days || 30 });
+      const { data, error } = await sb.rpc('visit_range_report', {
+        p_from: window.__visitFrom, p_to: window.__visitTo,
+      });
       if (error) throw error;
       window.__visitRows = data || [];
       window.__visitErr = null;
@@ -138,6 +153,33 @@
       window.__visitErr = (window.cloudErrorText ? cloudErrorText(e) : e.message);
     }
     if (window.renderSysContent) renderSysContent();
+  };
+
+  /* تطبيق التواريخ اللي المستخدم اختارها */
+  window.applyVisitRange = function(){
+    const f = (document.getElementById('vsFrom')||{}).value;
+    const t = (document.getElementById('vsTo')||{}).value;
+    if (!f || !t) return showMessage('حدد التاريخين');
+    if (f > t) return showMessage('تاريخ البداية لازم يكون قبل النهاية');
+    window.__visitFrom = f; window.__visitTo = t;
+    loadVisitReport(null);
+  };
+
+  /* اختصارات جاهزة */
+  window.visitPreset = function(kind){
+    const now = new Date();
+    let f, t = iso(now);
+    if (kind === 'today')      f = t;
+    else if (kind === 'week')  f = daysAgo(7);
+    else if (kind === 'month'){ f = iso(new Date(now.getFullYear(), now.getMonth(), 1)); }
+    else if (kind === 'lastMonth'){
+      f = iso(new Date(now.getFullYear(), now.getMonth()-1, 1));
+      t = iso(new Date(now.getFullYear(), now.getMonth(), 0));
+    }
+    else if (kind === 'year')  f = now.getFullYear() + '-01-01';
+    else if (kind === 'all')   f = '2020-01-01';
+    window.__visitFrom = f; window.__visitTo = t;
+    loadVisitReport(null);
   };
 
   const LBL = {
@@ -226,12 +268,33 @@
       </div>`;
 
     return `
-      <p class="small">رحلة الزائر خطوة بخطوة خلال آخر ${days} يوم — من فين جه، جرّب ولا لأ، وسجّل ولا مشي.</p>
+      <p class="small">رحلة الزائر خطوة بخطوة — من فين جه، جرّب ولا لأ، وسجّل ولا مشي.</p>
 
-      <div class="flexrow mtop" style="gap:8px;flex-wrap:wrap">
-        ${[7,30,90].map(d => `<button class="btn sm ${days===d?'primary':'ghost'}"
-          onclick="loadVisitReport(${d})">آخر ${d} يوم</button>`).join('')}
-        <button class="btn sm ghost" onclick="loadVisitReport(${days})">🔄 تحديث</button>
+      <div class="card mtop" style="padding:12px">
+        <div class="grid g2">
+          <div class="field2"><label>من تاريخ</label>
+            <input id="vsFrom" type="date" value="${esc2(window.__visitFrom||'')}"
+              onchange="applyVisitRange()"></div>
+          <div class="field2"><label>إلى تاريخ</label>
+            <input id="vsTo" type="date" value="${esc2(window.__visitTo||'')}"
+              onchange="applyVisitRange()"></div>
+        </div>
+        <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
+          <button class="btn sm ghost" onclick="visitPreset('today')">النهاردة</button>
+          <button class="btn sm ghost" onclick="visitPreset('week')">آخر ٧ أيام</button>
+          <button class="btn sm ${days===30?'primary':'ghost'}" onclick="loadVisitReport(30)">آخر ٣٠ يوم</button>
+          <button class="btn sm ${days===90?'primary':'ghost'}" onclick="loadVisitReport(90)">آخر ٩٠ يوم</button>
+          <button class="btn sm ghost" onclick="visitPreset('month')">الشهر ده</button>
+          <button class="btn sm ghost" onclick="visitPreset('lastMonth')">الشهر اللي فات</button>
+          <button class="btn sm ghost" onclick="visitPreset('year')">السنة دي</button>
+          <button class="btn sm ghost" onclick="visitPreset('all')">كل الفترة</button>
+          <span style="flex:1"></span>
+          <button class="btn sm ghost" onclick="loadVisitReport(null)">🔄 تحديث</button>
+        </div>
+        <p class="small mtop" style="color:var(--muted)">
+          الفترة المعروضة: <b>${esc2(window.__visitFrom)}</b> إلى <b>${esc2(window.__visitTo)}</b>
+          · ${daily.length} يوم فيه نشاط
+        </p>
       </div>
 
       <div class="section-title mtop2"><h3>قمع الزوّار</h3></div>
