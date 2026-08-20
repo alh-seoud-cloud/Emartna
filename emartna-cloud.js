@@ -803,11 +803,21 @@ const CLOUD = {
     // بيانات صاحب البرنامج العامة (تواصل · دفع · روابط) محفوظة
     // كمستند على الخادم. لازم نقراها هنا — من غير كده بتتكتب
     // من متصفح ومتظهرش في متصفح تاني.
+    // كل مستندات المنصة اللي مسموح للمستخدم يقراها — مش بيانات
+    // صاحب البرنامج بس. من غير كده أي مستخدم بيشوف النسخة
+    // المحلية القديمة (سجل الإصدارات · الهوية · نصوص الصفحة).
     let sysPub = {};
+    const docs = {};
     try{
-      const r = await sb.from('platform_settings')
-        .select('value').eq('key', 'reg:sysOwnerPublic').maybeSingle();
-      if (r.data && r.data.value && typeof r.data.value === 'object') sysPub = r.data.value;
+      const r = await sb.from('platform_settings').select('key,value').like('key', 'reg:%');
+      (r.data || []).forEach(row => {
+        const k = String(row.key || '').replace(/^reg:/, '');
+        if (k === 'sysOwnerPublic'){
+          if (row.value && typeof row.value === 'object') sysPub = row.value;
+        }else if (row.value !== null && row.value !== undefined){
+          docs[k] = row.value;
+        }
+      });
     }catch(e){}
 
     cache.registry = {
@@ -880,6 +890,9 @@ const CLOUD = {
         console.warn('[عمارتنا/سحابة] تعذّر تحميل عمارة', b.name, e.message);
       }
     }));
+
+    // المستندات اللي جت من الخادم بتغلب النسخة الافتراضية المحلية
+    Object.keys(docs).forEach(k => { cache.registry[k] = docs[k]; });
 
     window.__cloudReady = true;
     window.__bootError = null;
