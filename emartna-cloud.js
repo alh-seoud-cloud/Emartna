@@ -793,6 +793,8 @@ const CLOUD = {
       ctaText:   o.description?.ctaText   || 'جرب الآن مجانًا',
       footnote:  o.description?.footnote  || '',
       targetAudience: o.description?.targetAudience || 'new',
+      imageUrl: o.image_url || '',
+      theme: o.theme || null,
       trialDays: o.trial_days, planKey: o.plan_key || 'custom',
       active: o.active !== false,
       createdAt: o.created_at,
@@ -1254,6 +1256,8 @@ async function pushRegistry(){
         plan_key: o.planKey || null,
         trial_days: Number(o.trialDays) || null,
         active: o.active !== false,
+        image_url: o.imageUrl || null,
+        theme: o.theme || null,
       }));
       for (let i = 0; i < rows.length; i++){
         const row = rows[i];
