@@ -166,11 +166,35 @@
   };
 
   /* اختصارات جاهزة */
+  /* أي اختصار مطابق للفترة المعروضة دلوقتي؟ */
+  window.activeVisitPreset = function(){
+    const f = window.__visitFrom, t = window.__visitTo, now = new Date();
+    const today = iso(now);
+    if (!f || !t) return '';
+    if (t !== today && !(f === '2020-01-01')) {
+      // فترة قديمة مخصصة — مفيش اختصار نشط إلا لو الشهر اللي فات
+      const lmF = iso(new Date(now.getFullYear(), now.getMonth()-1, 1));
+      const lmT = iso(new Date(now.getFullYear(), now.getMonth(), 0));
+      if (f === lmF && t === lmT) return 'lastMonth';
+      return '';
+    }
+    if (f === today) return 'today';
+    if (f === daysAgo(7))  return 'w7';
+    if (f === daysAgo(30)) return 'd30';
+    if (f === daysAgo(90)) return 'd90';
+    if (f === iso(new Date(now.getFullYear(), now.getMonth(), 1))) return 'month';
+    if (f === now.getFullYear() + '-01-01') return 'year';
+    if (f === '2020-01-01') return 'all';
+    return '';
+  };
+
   window.visitPreset = function(kind){
     const now = new Date();
     let f, t = iso(now);
     if (kind === 'today')      f = t;
-    else if (kind === 'week')  f = daysAgo(7);
+    else if (kind === 'w7' || kind === 'week') f = daysAgo(7);
+    else if (kind === 'd30')   f = daysAgo(30);
+    else if (kind === 'd90')   f = daysAgo(90);
     else if (kind === 'month'){ f = iso(new Date(now.getFullYear(), now.getMonth(), 1)); }
     else if (kind === 'lastMonth'){
       f = iso(new Date(now.getFullYear(), now.getMonth()-1, 1));
@@ -223,6 +247,7 @@
     });
     const srcList = Object.values(bySrc).sort((a,b) => b.visits - a.visits);
 
+    const act = activeVisitPreset();
     const max = Math.max(1, ...daily.slice(0,14).map(d => d.visits));
     const chart = daily.slice(0,14).reverse();
 
@@ -280,14 +305,10 @@
               onchange="applyVisitRange()"></div>
         </div>
         <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
-          <button class="btn sm ghost" onclick="visitPreset('today')">النهاردة</button>
-          <button class="btn sm ghost" onclick="visitPreset('week')">آخر ٧ أيام</button>
-          <button class="btn sm ${days===30?'primary':'ghost'}" onclick="loadVisitReport(30)">آخر ٣٠ يوم</button>
-          <button class="btn sm ${days===90?'primary':'ghost'}" onclick="loadVisitReport(90)">آخر ٩٠ يوم</button>
-          <button class="btn sm ghost" onclick="visitPreset('month')">الشهر ده</button>
-          <button class="btn sm ghost" onclick="visitPreset('lastMonth')">الشهر اللي فات</button>
-          <button class="btn sm ghost" onclick="visitPreset('year')">السنة دي</button>
-          <button class="btn sm ghost" onclick="visitPreset('all')">كل الفترة</button>
+          ${[['today','النهاردة'],['w7','آخر ٧ أيام'],['d30','آخر ٣٠ يوم'],['d90','آخر ٩٠ يوم'],
+             ['month','الشهر ده'],['lastMonth','الشهر اللي فات'],['year','السنة دي'],['all','كل الفترة']]
+            .map(([k,l]) => `<button class="btn sm ${act===k?'primary':'ghost'}"
+              onclick="visitPreset('${k}')">${l}</button>`).join('')}
           <span style="flex:1"></span>
           <button class="btn sm ghost" onclick="loadVisitReport(null)">🔄 تحديث</button>
         </div>

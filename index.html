@@ -945,7 +945,8 @@ async function createBuildingRecord(name,apartmentsCount,perFloor,adminUsername,
   if(opts.couponCodeUsed){
     const coupon=findValidCoupon(opts.couponCodeUsed);
     if(coupon){
-      appliedCoupon={code:coupon.code,discountPercent:coupon.discountPercent};
+      appliedCoupon={code:coupon.code,discountPercent:coupon.discountPercent,
+        appliedAt:new Date().toISOString(),couponId:coupon.id||null};
       coupon.usedCount=(coupon.usedCount||0)+1;
     }
   }
@@ -9549,6 +9550,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
 <script type="module" src="emartna-promo.js"></script>
 <script type="module" src="emartna-welcome.js"></script>
 <script type="module" src="emartna-offers.js"></script>
+<script type="module" src="emartna-dates.js"></script>
 
 </body>
 </html>
