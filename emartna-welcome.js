@@ -58,6 +58,25 @@
 
   /* ---------- النافذة ---------- */
 
+  /* العرض المفعّل حاليًا — عشان ندمجه في نفس النافذة */
+  function liveOffer(){
+    try{
+      const o = window.activeLandingOffer ? activeLandingOffer() : null;
+      return (o && o.active !== false) ? o : null;
+    }catch(e){ return null; }
+  }
+
+  /* بنمنع نافذة العرض القديمة تظهر لوحدها — بقت جزء من نافذة الترحيب */
+  (function suppressOldOffer(){
+    try{ sessionStorage.setItem('omaretna_offer_seen','1'); }catch(e){}
+    const orig = window.maybeShowOfferPopup;
+    if (typeof orig === 'function' && !orig.__merged){
+      const w = function(){ /* اتدمجت في نافذة الترحيب */ };
+      w.__merged = true;
+      window.maybeShowOfferPopup = w;
+    }
+  })();
+
   window.openWelcomePopup = function(manual){
     const c = cfg();
     if (!c) return;
@@ -65,6 +84,7 @@
     if (!manual && window.getSession && getSession()) return;   // مسجّل دخول بالفعل
     markSeen(false);
 
+    const off = liveOffer();
     const offer = offerText();
     const html = `
       <div style="text-align:center">
@@ -73,7 +93,10 @@
         <p class="small" style="color:var(--muted);line-height:1.9">${esc2(c.subtitle)}</p>
       </div>
 
-      <div class="mtop2">
+      <p class="small mtop" style="text-align:center;color:var(--muted)">
+        ــــــ اختار طريقك ــــــ</p>
+
+      <div class="mtop">
         <button class="btn primary" style="width:100%;padding:13px;font-size:15px"
           onclick="welcomeGo('admin')">
           🏢 جرّب كرئيس اتحاد
@@ -90,11 +113,21 @@
       </div>
 
       <div class="card mtop2" style="background:linear-gradient(135deg,rgba(216,163,59,.14),transparent);
-           border:1px solid var(--gold);text-align:center">
-        <b style="color:var(--gold);font-size:15px">🎁 ${esc2(offer)}</b>
-        <p class="small mtop">${esc2(c.offerLine)}</p>
-        <button class="btn gold mtop" style="width:100%;padding:11px"
-          onclick="welcomeSignup()">ابدأ اشتراكك المجاني</button>
+           border:1px solid var(--gold)">
+        <div style="text-align:center">
+          <b style="color:var(--gold);font-size:16px">🎁 ${esc2(off && off.title ? off.title : offer)}</b>
+          <p class="small mtop">${esc2((off && off.subtitle) || c.offerLine)}</p>
+        </div>
+        ${off && (off.features||[]).length ? `
+          <div style="margin-top:10px;padding:10px 12px;background:rgba(255,255,255,.5);
+               border-radius:10px;text-align:start">
+            ${(off.features||[]).slice(0,4).map(f =>
+              `<div class="small" style="padding:2px 0">✔️ ${esc2(f)}</div>`).join('')}
+          </div>` : ''}
+        <button class="btn gold mtop" style="width:100%;padding:12px;font-size:15px"
+          onclick="welcomeSignup()">${esc2((off && off.ctaText) || 'ابدأ اشتراكك المجاني')}</button>
+        ${off && off.footnote ? `<p class="small mtop" style="text-align:center;color:var(--muted)">
+          ${esc2(off.footnote)}</p>` : ''}
       </div>
 
       <p class="small mtop" style="text-align:center">
