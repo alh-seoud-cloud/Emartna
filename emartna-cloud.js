@@ -850,6 +850,8 @@ const CLOUD = {
         facebookUrl: b.facebook_url || '',
         claimedOfferId: b.claimed_offer_id || null,
         referralRewardGiven: !!b.referral_reward_given,
+        lastAdminLoginAt: b.last_admin_login_at || null,
+        lastAdminLoginName: b.last_admin_login_name || '',
         // مهم: البرنامج بيقرا الترخيص بأسماء startDate/endDate/plan/status.
         // كان بيتبني بأسماء تانية (start/end) فالشاشة كانت تقول
         // "بلا تاريخ انتهاء" و"الخطة null" وتحسبه منتهي — رغم إن
@@ -1299,6 +1301,19 @@ window.saveRegistry = function(){
 
 window.loadBuildingData = function(id){
   return cache.buildings[id] || null;      // متزامن، من الكاش
+};
+
+/* تسجيل آخر دخول لرئيس الاتحاد — بيتنادى مرة واحدة لكل جلسة عمارة.
+   الخادم نفسه بيتأكد من الصلاحية وبيحدّ التكرار لكل نصف ساعة. */
+const __touched = new Set();
+window.touchAdminLogin = async function(legacyId){
+  try{
+    if (!legacyId || __touched.has(legacyId)) return;
+    __touched.add(legacyId);
+    const uuid = cache.buildingUuid[legacyId];
+    if (!uuid) return;
+    await sb.rpc('touch_admin_login', { p_building: uuid });
+  }catch(e){ /* مش مهم لو فشل — مجرد إحصائية */ }
 };
 
 /* تحميل عمارة مش متحمّلة (لصاحب البرنامج اللي بيشوف عمارات مش عضو فيها) */

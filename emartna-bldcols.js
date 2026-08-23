@@ -287,7 +287,7 @@
      ============================================================ */
 
   /* الأعمدة اللي تظهر افتراضيًا — الباقي في البطاقة */
-  const ESSENTIALS = ['name','code','apCount','status','health','setupPct','joined','lastAct','x'];
+  const ESSENTIALS = ['name','code','apCount','status','health','setupPct','joined','adminLogin','lastAct','x'];
 
   function applyDefaultVisibility(tableId, cols){
     const visKey = tableId + '_vis';
@@ -523,6 +523,10 @@
             ${F('الحركات المالية', m.loaded ? m.moves : '')}
             ${F('متوسط الحركات شهريًا', m.loaded ? m.perMonth : '')}
             ${F('آخر نشاط', m.lastAct ? `${m.lastAct} <span class="small">(${m.daysIdle} يوم)</span>` : 'مفيش')}
+            ${F('آخر دخول للأدمن', b.lastAdminLoginAt
+              ? (window.fmtDateTime ? fmtDateTime(b.lastAdminLoginAt) : String(b.lastAdminLoginAt).slice(0,16)) +
+                (b.lastAdminLoginName ? ` <span class="small">(${esc2(b.lastAdminLoginName)})</span>` : '')
+              : 'مدخلش لسه')}
           </div>
         </div>
 
@@ -578,6 +582,26 @@
         value: b => c.value(M(b)),
         cell:  b => c.cell(M(b)),
       }));
+
+      /* آخر دخول لرئيس الاتحاد — بيتقرا من سجل العمارة مباشرة
+         مش من المؤشرات، عشان القيمة جاية من الخادم. */
+      const daysSince = v => v ? Math.floor((Date.now() - new Date(v).getTime())/86400000) : null;
+      extra.push({
+        key:'adminLogin', label:'آخر دخول للأدمن',
+        value: b => b.lastAdminLoginAt || '',
+        cell: b => {
+          const v = b.lastAdminLoginAt;
+          if (!v) return '<span class="small" style="color:var(--muted)">مدخلش لسه</span>';
+          const d = daysSince(v);
+          const txt = window.fmtDate ? fmtDate(String(v).slice(0,10)) : String(v).slice(0,10);
+          const rel = d === 0 ? 'النهاردة' : d === 1 ? 'إمبارح' : 'من ' + d + ' يوم';
+          const cls = d <= 3 ? 'g' : d <= 14 ? 'y' : 'r';
+          return `${esc2(txt)}<br><span class="badge ${cls}">${rel}</span>` +
+                 (b.lastAdminLoginName
+                   ? `<div class="small" style="color:var(--muted)">${esc2(b.lastAdminLoginName)}</div>` : '');
+        },
+      });
+
       let last = cols[cols.length-1] && !cols[cols.length-1].value ? cols.pop() : null;
       cols = cols.concat(extra);
       if (last){

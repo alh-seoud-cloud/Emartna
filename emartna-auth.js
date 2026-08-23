@@ -140,6 +140,22 @@ window.currentUser = function(){
     x.role === 'admin' && x.inviteStatus !== 'pending' && x.active !== false) || null;
 };
 
+/* أول ما رئيس الاتحاد يفتح عمارته، بنسجّل آخر دخول */
+(function watchAdminLogin(){
+  let last = null;
+  setInterval(() => {
+    try{
+      const s = __sess;
+      if (!s || s.type !== 'building') return;
+      const u = window.currentUser && currentUser();
+      if (!u || !['admin','manager','accountant'].includes(u.role)) return;
+      if (last === s.buildingId) return;
+      last = s.buildingId;
+      if (window.touchAdminLogin) touchAdminLogin(s.buildingId);
+    }catch(e){}
+  }, 3000);
+})();
+
 window.isSysOwner = () => !!(__sess && __sess.type === 'sysowner');
 
 /* صاحب البرنامج ممكن يكون رئيس اتحاد كمان — الزرار بيبان له */
