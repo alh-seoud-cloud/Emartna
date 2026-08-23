@@ -69,6 +69,10 @@
     let full = false;
     try{ full = localStorage.getItem('sysBldTable_colsTouched') === '1'; }catch(e){}
     return `<div class="flexrow mtop" style="gap:8px;flex-wrap:wrap">
+      <button class="btn sm ${demosShown()?'primary':'ghost'}"
+        onclick="showDemoBuildings(${demosShown()?'false':'true'})"
+        title="جلسات الزوّار المؤقتة">
+        ${demosShown()?'🧪 التجريبية ظاهرة':'🧪 إظهار التجريبية'}</button>
       <span style="display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden">
         <button class="btn sm ${full?'ghost':'primary'}" style="border-radius:0"
           onclick="showEssentialBldCols('sysBldTable')">📋 عرض مبسّط</button>
@@ -571,10 +575,24 @@
       <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`, true);
   };
 
+  /* العمارات التجريبية بتتخفي افتراضيًا — دي جلسات زوّار مش عملاء،
+     ووجودها بيلخبط العدّادات والقوايم. */
+  window.showDemoBuildings = function(on){
+    try{ localStorage.setItem('emartna_show_demos', on ? '1' : '0'); }catch(e){}
+    if (window.renderSysContent) renderSysContent();
+  };
+  function demosShown(){
+    try{ return localStorage.getItem('emartna_show_demos') === '1'; }catch(e){ return false; }
+  }
+  const isDemoRec = b => !!(b && (b.isDemo || b.is_demo ||
+    /\(تجريبية\)/.test(String(b.name || ''))));
+  window.__isDemoRec = isDemoRec;
+
   /* بنحقن الأعمدة في نداء sortableTable لجدول العمارات */
   const origSortable = window.sortableTable;
   if (origSortable) window.sortableTable = function(id, rows, cols, groupBy, opts){
     if ((id === 'sysBldTable' || id === 'supportBldTable') && Array.isArray(rows) && Array.isArray(cols)){
+      if (!demosShown()) rows = rows.filter(b => !isDemoRec(b));
       const cache = new Map();
       const M = b => { if (!cache.has(b.id)) cache.set(b.id, metrics(b)); return cache.get(b.id); };
       const extra = EXTRA_COLS.map(c => ({

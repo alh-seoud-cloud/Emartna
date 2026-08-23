@@ -845,6 +845,8 @@ const CLOUD = {
         referredBy: b.referred_by || null,
         appliedCoupon: b.applied_coupon || null,
         signupSource: b.signup_source || '',
+        isDemo: !!b.is_demo,
+        demoExpiresAt: b.demo_expires_at || null,
         adminName: b.admin_name || '',
         adminEmail: b.admin_email || '',
         facebookUrl: b.facebook_url || '',
@@ -1305,6 +1307,25 @@ window.loadBuildingData = function(id){
 
 /* تسجيل آخر دخول لرئيس الاتحاد — بيتنادى مرة واحدة لكل جلسة عمارة.
    الخادم نفسه بيتأكد من الصلاحية وبيحدّ التكرار لكل نصف ساعة. */
+/* نبض العمارة التجريبية: بيمدّد صلاحيتها كل ٥ دقايق طول ما
+   الزائر شغّال. أول ما يقفل التبويب، النبض بيقف والعمارة
+   بتتمسح خلال نص ساعة بحد أقصى. */
+(function demoHeartbeat(){
+  let last = 0;
+  setInterval(async () => {
+    try{
+      if (!window.isDemoSession || !isDemoSession()) return;
+      const id = window.activeBuildingId;
+      if (!id) return;
+      const uuid = cache.buildingUuid[id];
+      if (!uuid) return;
+      if (Date.now() - last < 4.5 * 60 * 1000) return;
+      last = Date.now();
+      await sb.rpc('touch_demo', { p_building: uuid });
+    }catch(e){}
+  }, 60 * 1000);
+})();
+
 const __touched = new Set();
 window.touchAdminLogin = async function(legacyId){
   try{
