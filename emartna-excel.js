@@ -460,15 +460,11 @@
       const html = typeof raw === 'function' ? raw.apply(this, arguments) : '';
       return transform(html);
     };
-    try{
-      Object.defineProperty(window, name, {
-        configurable: true,
-        get(){ return wrapper; },
-        set(v){ raw = v; },      // أي ملف يعيد تعريفها → بنخزنها كأصل
-      });
-    }catch(e){
-      // بعض الدوال معرّفة في الصفحة نفسها ومينفعش نعيد تعريف خاصيتها،
-      // فبنستبدلها مباشرة — ولو ملف تاني استبدلها بعدنا بنرجّع اللفّة.
+    /* ⚠️ كنا بنستخدم getter/setter هنا، وده كان بيعمل حلقة لا نهائية:
+       أي ملف يقرا الدالة بياخد لفّتنا، وبيحطها كأصل جوه لفّته،
+       فلفّتنا تنادي لفّته اللي تنادي لفّتنا… لحد ما الشاشة تقع.
+       الاستبدال المباشر + المراقبة أأمن. */
+    {
       wrapper.__excelWrapped = true;
       window[name] = wrapper;
       let tries = 0;
