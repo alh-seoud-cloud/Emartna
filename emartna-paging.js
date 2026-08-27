@@ -15,7 +15,7 @@
   const KEY = 'emartna_page_size';
   const SIZES = [10, 20, 30, 50, 100, 200, 0];      // ٠ = الكل
   const DEFAULT = 30;
-  const MIN_ROWS = 8;                                // أقل من كده مفيش داعي للترقيم
+  const MIN_ROWS = 1;                                // القائمة بتظهر دايمًا
 
   function prefs(){
     try{ return JSON.parse(localStorage.getItem(KEY) || '{}'); }catch(e){ return {}; }
@@ -88,6 +88,7 @@
   function bar(tableId){
     const total = (window.__tableTotals || {})[tableId] || 0;
     if (total < MIN_ROWS) return '';
+    const tiny = total <= 10;      // جدول صغير: القائمة بس من غير تنقّل
 
     const size = tablePageSize(tableId);
     const pages = size ? Math.ceil(total / size) : 1;
@@ -111,7 +112,7 @@
       <span class="small" style="color:var(--muted)">
         ${size && total > size ? `${from} – ${to} من ${total}` : `الكل (${total})`}
       </span>
-      ${pages > 1 ? `
+      ${(pages > 1 && !tiny) ? `
         <span style="flex:1"></span>
         ${btn(1, '⏮️', page > 1)}
         ${btn(page - 1, '‹ السابق', page > 1)}

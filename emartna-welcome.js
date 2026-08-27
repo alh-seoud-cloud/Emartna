@@ -158,6 +158,29 @@
     closeModal();
   };
 
+  /* زرار عائم يرجّع النافذة في أي وقت */
+  function floatBtn(){
+    try{
+      const on = (typeof __viewMode !== 'undefined' && __viewMode === 'landing')
+                 && !(window.getSession && getSession());
+      let b = document.getElementById('welcomeFab');
+      if (!on){ if (b) b.remove(); return; }
+      if (b) return;
+      b = document.createElement('button');
+      b.id = 'welcomeFab';
+      b.title = 'العرض والتجربة المجانية';
+      b.textContent = '🎁 جرّب مجانًا';
+      b.style.cssText = 'position:fixed;bottom:16px;inset-inline-start:16px;z-index:9200;' +
+        'background:var(--gold,#D8A33B);color:#fff;border:0;border-radius:26px;' +
+        'padding:11px 18px;font:700 14px system-ui;cursor:pointer;direction:rtl;' +
+        'box-shadow:0 6px 20px rgba(0,0,0,.22)';
+      b.onclick = () => openWelcomePopup(true);
+      document.body.appendChild(b);
+    }catch(e){}
+  }
+  setInterval(floatBtn, 1500);
+  setTimeout(floatBtn, 2000);
+
   /* التشغيل التلقائي على الصفحة الرئيسية */
   function maybeShow(){
     try{
