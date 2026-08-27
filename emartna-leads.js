@@ -116,22 +116,26 @@
   };
 
   function startDemo(role){
-    if (typeof window.__origTryDemo === 'function') return window.__origTryDemo(role);
-    if (typeof window.loginAsDemo === 'function') return loginAsDemo(role);
+    if (typeof window.__origLoginDemo === 'function') return window.__origLoginDemo(role);
+    if (typeof window.__origTryDemo === 'function')   return window.__origTryDemo(role);
   }
 
-  /* بنعترض زرار التجربة */
+  /* بنعترض كل مداخل التجربة.
+     مهم: أزرار شاشة الدخول بتنادي loginAsDemo مباشرة —
+     الاكتفاء بلفّ tryDemoNow كان بيخلّي المدخل ده يعدّي من غير طلب الرقم. */
   function hook(){
-    const orig = window.tryDemoNow;
-    if (typeof orig === 'function' && !orig.__leadHook){
-      window.__origTryDemo = orig;
-      const w = function(role){ return askPhoneThenDemo(role || 'admin'); };
-      w.__leadHook = true;
-      window.tryDemoNow = w;
-    }
+    ['loginAsDemo','tryDemoNow'].forEach(name => {
+      const orig = window[name];
+      if (typeof orig !== 'function' || orig.__leadHook) return;
+      if (name === 'loginAsDemo') window.__origLoginDemo = orig;
+      else                        window.__origTryDemo   = orig;
+      const wrapped = function(role){ return askPhoneThenDemo(role || 'admin'); };
+      wrapped.__leadHook = true;
+      window[name] = wrapped;
+    });
   }
   hook();
-  setTimeout(hook, 2500);
+  [800, 2000, 4000].forEach(ms => setTimeout(hook, ms));
 
   /* لما يسجّل حساب فعلًا، بنربطه بالعميل المحتمل */
   ['doSignup','createBuildingFromSignup'].forEach(fn => {

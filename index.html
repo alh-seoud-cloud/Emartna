@@ -9506,9 +9506,38 @@ function setupPWA(){
     }
   }catch(e){}
 }
+function showBootSplash(){
+  if(document.getElementById('bootSplash'))return;
+  const d=document.createElement('div');
+  d.id='bootSplash';
+  d.style.cssText='position:fixed;inset:0;z-index:99999;background:var(--bg,#F8FAF9);'+
+    'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;'+
+    'direction:rtl;font-family:system-ui,Tahoma,sans-serif';
+  d.innerHTML='<div style="width:54px;height:54px;border:4px solid #e3e8e6;'+
+    'border-top-color:#159A8C;border-radius:50%;animation:bspin .8s linear infinite"></div>'+
+    '<div style="font-weight:700;color:#159A8C;font-size:17px">عمارتنا</div>'+
+    '<div id="bootStep" style="font-size:12.5px;color:#6b7c78">بيحمّل بياناتك…</div>'+
+    '<style>@keyframes bspin{to{transform:rotate(360deg)}}</style>';
+  document.body.appendChild(d);
+  // لو حصل تعطيل، منسيبوش الشاشة مقفولة للأبد
+  setTimeout(()=>{const x=document.getElementById('bootStep');
+    if(x)x.textContent='لسه بيحمّل… لو طوّل، حدّث الصفحة';},7000);
+  setTimeout(hideBootSplash,20000);
+}
+function hideBootSplash(){
+  const d=document.getElementById('bootSplash');
+  if(!d)return;
+  d.style.transition='opacity .25s'; d.style.opacity='0';
+  setTimeout(()=>d.remove(),260);
+}
+window.showBootSplash=showBootSplash; window.hideBootSplash=hideBootSplash;
+
 document.addEventListener('DOMContentLoaded',async()=>{
+  /* شاشة انتظار خفيفة بدل الشاشة البيضا */
+  showBootSplash();
   if(window.cloudAuthBoot){ await window.cloudAuthBoot(); }
   await loadRegistry();
+  hideBootSplash();
   captureCampaignSource();
   setupPWA();
   document.getElementById('modalOverlay').addEventListener('click',e=>{if(e.target.id==='modalOverlay')closeModal()});
@@ -9554,6 +9583,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
 <script type="module" src="emartna-paging.js"></script>
 <script type="module" src="emartna-leads.js"></script>
 <script type="module" src="emartna-live.js"></script>
+<script type="module" src="emartna-wa.js"></script>
 <script type="module" src="emartna-lastlogin.js"></script>
 
 </body>
