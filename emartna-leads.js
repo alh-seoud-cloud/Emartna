@@ -103,6 +103,7 @@
     const full = (cc + ph.replace(/^0+/,'')).replace(/[^\d]/g,'');
     savePhone(full);
     saveLead(full, g('dlName').trim(), role);
+    ev('phone_given');           // حدث مستقل — 'demo' معناه جرّب البرنامج
     ev('demo');
     closeModal();
     setTimeout(() => startDemo(role), 120);
@@ -149,6 +150,78 @@
     window[fn] = wrapped;
   });
 
+
+  /* ---------- فترة التقرير ---------- */
+
+  const iso = d => d.toISOString().slice(0,10);
+  const ago = n => { const d = new Date(); d.setDate(d.getDate()-n+1); return iso(d); };
+
+  window.__leadFrom = window.__leadFrom || ago(30);
+  window.__leadTo   = window.__leadTo   || iso(new Date());
+
+  window.leadPreset = function(kind){
+    const now = new Date();
+    let f, t = iso(now);
+    if (kind === 'today')  f = t;
+    else if (kind === 'w7')  f = ago(7);
+    else if (kind === 'd30') f = ago(30);
+    else if (kind === 'd90') f = ago(90);
+    else if (kind === 'month') f = iso(new Date(now.getFullYear(), now.getMonth(), 1));
+    else if (kind === 'all') f = '2020-01-01';
+    window.__leadFrom = f; window.__leadTo = t;
+    reloadLeadReports();
+  };
+
+  window.applyLeadRange = function(){
+    const f = (document.getElementById('lrFrom')||{}).value;
+    const t = (document.getElementById('lrTo')||{}).value;
+    if (!f || !t) return showMessage('حدد التاريخين');
+    if (f > t) return showMessage('تاريخ البداية لازم يكون قبل النهاية');
+    window.__leadFrom = f; window.__leadTo = t;
+    reloadLeadReports();
+  };
+
+  window.activeLeadPreset = function(){
+    const f = window.__leadFrom, t = window.__leadTo, today = iso(new Date());
+    const now = new Date();
+    if (t !== today) return '';
+    if (f === today) return 'today';
+    if (f === ago(7))  return 'w7';
+    if (f === ago(30)) return 'd30';
+    if (f === ago(90)) return 'd90';
+    if (f === iso(new Date(now.getFullYear(), now.getMonth(), 1))) return 'month';
+    if (f === '2020-01-01') return 'all';
+    return '';
+  };
+
+  window.reloadLeadReports = async function(){
+    await loadDemoLeads();
+    await loadGateReport();
+  };
+
+  function rangeBar(){
+    const act = activeLeadPreset();
+    const b = (k,l) => `<button class="btn sm ${act===k?'primary':'ghost'}"
+      onclick="leadPreset('${k}')">${l}</button>`;
+    return `
+    <div class="card mtop" style="padding:12px">
+      <div class="grid g2">
+        <div class="field2"><label>من تاريخ</label>
+          <input id="lrFrom" type="date" value="${esc2(window.__leadFrom)}" onchange="applyLeadRange()"></div>
+        <div class="field2"><label>إلى تاريخ</label>
+          <input id="lrTo" type="date" value="${esc2(window.__leadTo)}" onchange="applyLeadRange()"></div>
+      </div>
+      <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
+        ${b('today','النهاردة')} ${b('w7','آخر ٧ أيام')} ${b('month','الشهر ده')}
+        ${b('d30','آخر ٣٠ يوم')} ${b('d90','آخر ٣ شهور')} ${b('all','كل الفترة')}
+        <span style="flex:1"></span>
+        <button class="btn sm ghost" onclick="reloadLeadReports()">🔄 تحديث</button>
+      </div>
+      <p class="small mtop" style="color:var(--muted)">
+        الفترة: <b>${esc2(window.__leadFrom)}</b> إلى <b>${esc2(window.__leadTo)}</b></p>
+    </div>`;
+  }
+
   /* ============================================================
      شاشة قمع المبيعات — اللي جرّبوا
      ============================================================ */
@@ -159,8 +232,8 @@
     try{
       const sb = window.CLOUD && window.CLOUD._sb;
       if (!sb) return;
-      const { data, error } = await sb.from('demo_leads')
-        .select('*').order('last_try_at', { ascending:false }).limit(2000);
+      const { data, error } = await sb.rpc('demo_leads_range', {
+        p_from: window.__leadFrom, p_to: window.__leadTo });
       if (error) throw error;
       window.__demoLeads = data || [];
       window.__demoLeadsErr = null;
@@ -219,6 +292,7 @@
     return `
       <div class="section-title mtop2"><h3>🎬 اللي جرّبوا البرنامج</h3></div>
       <p class="small">كل زائر ساب رقمه قبل التجربة — دول أقرب ناس للاشتراك.</p>
+      ${rangeBar()}
 
       <div class="grid g3 mtop">
         <div class="card" style="text-align:center">
@@ -250,10 +324,8 @@
     try{
       const sb = window.CLOUD && window.CLOUD._sb;
       if (!sb) return;
-      const from = window.__visitFrom ||
-        new Date(Date.now() - 29*86400000).toISOString().slice(0,10);
-      const to = window.__visitTo || new Date().toISOString().slice(0,10);
-      const { data, error } = await sb.rpc('phone_gate_report', { p_from: from, p_to: to });
+      const { data, error } = await sb.rpc('phone_gate_report', {
+        p_from: window.__leadFrom, p_to: window.__leadTo });
       if (error) throw error;
       window.__gateRows = data || [];
     }catch(e){ window.__gateRows = []; }
