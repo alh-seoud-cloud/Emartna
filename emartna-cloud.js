@@ -319,7 +319,12 @@ async function fetchAllRows(table, buildingUuid){
 async function fetchBuilding(buildingUuid, legacyId){
   const ctx = { buildingId: buildingUuid, uuidOf:{}, legacyOf:{} };
 
-  const b = await sb.from('buildings').select('*').eq('id', buildingUuid).single();
+  /* صف العمارة وبيانات الوحدات العامة بيتجابوا مع بعض بدل
+     ما نستنى الأول يخلص وبعدين نطلب التاني. */
+  const [b, unitsPub] = await Promise.all([
+    sb.from('buildings').select('*').eq('id', buildingUuid).single(),
+    sb.rpc('units_public', { b_id: buildingUuid }).then(r => r, () => ({ data:null })),
+  ]);
   if (b.error) throw b.error;
 
   const D = { building:{} };
@@ -350,7 +355,7 @@ async function fetchBuilding(buildingUuid, legacyId){
     // الساكن العادي مايقراش جدول الشقق كله — بياخد البيانات العامة
     // من دالة units_public، وشقته هو بتيجي كاملة من الجدول.
     if (coll === 'apartments'){
-      const pub = await sb.rpc('units_public', { b_id: buildingUuid });
+      const pub = unitsPub || { data:null };     // اتجابت بالتوازي فوق
       if (!pub.error && pub.data){
         const mine = new Map((res.data || []).map(r => [r.id, r]));
         res = { data: pub.data.map(u => mine.get(u.id) || {
@@ -767,14 +772,15 @@ const CLOUD = {
     const { data:{ user } } = await sb.auth.getUser();
     if (!user) { window.__cloudReady = false; return false; }
 
-    const bs = await sb.from('buildings').select('*').eq('is_deleted', false);
-    if (bs.error) throw bs.error;
-
-    // خطط الاشتراك والعروض — من قاعدة البيانات
-    const [plansRes, offersRes] = await Promise.all([
+    /* كل استعلامات البدء بالتوازي — كانت أربع رحلات ورا بعض،
+       وكل رحلة لفرانكفورت بتاخد ٢٠٠-٤٠٠ مللي ثانية. */
+    const [bs, plansRes, offersRes, docsRes] = await Promise.all([
+      sb.from('buildings').select('*').eq('is_deleted', false),
       sb.from('plans').select('*').order('sort_order'),
       sb.from('landing_offers').select('*').order('created_at'),
+      sb.from('platform_settings').select('key,value').like('key', 'reg:%'),
     ]);
+    if (bs.error) throw bs.error;
 
     const plans = (plansRes.data || []).map(p => ({
       key: p.key, name: p.name, icon: p.features?.icon || '💳',
@@ -811,7 +817,7 @@ const CLOUD = {
     let sysPub = {};
     const docs = {};
     try{
-      const r = await sb.from('platform_settings').select('key,value').like('key', 'reg:%');
+      const r = docsRes || { data: [] };          // اتجابت مع الباقي فوق
       (r.data || []).forEach(row => {
         const k = String(row.key || '').replace(/^reg:/, '');
         if (k === 'sysOwnerPublic'){
