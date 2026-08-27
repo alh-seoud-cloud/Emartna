@@ -28,6 +28,25 @@
     }catch(e){ return { s:'direct', c:'' }; }
   }
 
+  /* تسجيل حدث في تقرير الزيارات (بدون بيانات شخصية) */
+  async function ev(event){
+    try{
+      const sb = window.CLOUD && window.CLOUD._sb;
+      if (!sb) return;
+      const o = srcOf();
+      await sb.rpc('record_visit', {
+        p_source: o.s, p_campaign: o.c,
+        p_landed_on: (location.pathname || '/').slice(0,60),
+        p_signup: false, p_event: event,
+        p_session: (function(){ try{
+          let k = sessionStorage.getItem('emartna_sess_key');
+          if (!k){ k = Math.random().toString(36).slice(2) + Date.now().toString(36);
+                   sessionStorage.setItem('emartna_sess_key', k); }
+          return k; }catch(e){ return null; } })(),
+      });
+    }catch(e){}
+  }
+
   async function saveLead(phone, name, role){
     try{
       const sb = window.CLOUD && window.CLOUD._sb;
@@ -50,6 +69,7 @@
       return startDemo(role);
     }
 
+    ev('phone_shown');
     openModal(`
       <h3>${role === 'owner' ? '🏠' : '🏢'} تجربة ${role === 'owner' ? 'كصاحب شقة' : 'كرئيس اتحاد'}</h3>
       <p class="small mtop">التجربة مجانية بالكامل ومن غير تسجيل. سيبلنا رقمك عشان
@@ -83,11 +103,13 @@
     const full = (cc + ph.replace(/^0+/,'')).replace(/[^\d]/g,'');
     savePhone(full);
     saveLead(full, g('dlName').trim(), role);
+    ev('demo');
     closeModal();
     setTimeout(() => startDemo(role), 120);
   };
 
   window.skipDemoPhone = function(role){
+    ev('demo_skip');
     closeModal();
     setTimeout(() => startDemo(role), 120);
   };
@@ -217,9 +239,102 @@
       ${window.__demoLeadsErr ? `<p class="small mtop" style="color:var(--red)">${esc2(window.__demoLeadsErr)}</p>` : ''}`;
   }
 
+
+  /* ============================================================
+     تقرير: مين ساب رقمه ومين تخطّى
+     ============================================================ */
+
+  window.__gateRows = null;
+
+  window.loadGateReport = async function(){
+    try{
+      const sb = window.CLOUD && window.CLOUD._sb;
+      if (!sb) return;
+      const from = window.__visitFrom ||
+        new Date(Date.now() - 29*86400000).toISOString().slice(0,10);
+      const to = window.__visitTo || new Date().toISOString().slice(0,10);
+      const { data, error } = await sb.rpc('phone_gate_report', { p_from: from, p_to: to });
+      if (error) throw error;
+      window.__gateRows = data || [];
+    }catch(e){ window.__gateRows = []; }
+    if (window.renderSysContent) renderSysContent();
+  };
+
+  function gateSection(){
+    const rows = window.__gateRows;
+    if (rows === null){
+      setTimeout(loadGateReport, 30);
+      return '';
+    }
+    const S = k => rows.reduce((a,r) => a + Number(r[k]||0), 0);
+    const shown = S('shown'), gave = S('gave_phone'), skip = S('skipped');
+    if (!shown && !gave && !skip) return '';
+
+    const pct = (a,b) => b ? Math.round(a/b*100) : 0;
+
+    /* حسب المصدر */
+    const by = {};
+    rows.forEach(r => {
+      const k = r.source || 'direct';
+      by[k] = by[k] || { source:k, shown:0, gave:0, skip:0 };
+      by[k].shown += Number(r.shown||0);
+      by[k].gave  += Number(r.gave_phone||0);
+      by[k].skip  += Number(r.skipped||0);
+    });
+    const list = Object.values(by).sort((a,b) => b.shown - a.shown);
+
+    const cols = [
+      { key:'src', label:'المصدر', value:r => LB[r.source] || r.source,
+        cell:r => esc2(LB[r.source] || r.source || '—') },
+      { key:'shown', label:'اتعرض عليهم', value:r => r.shown, cell:r => String(r.shown) },
+      { key:'gave', label:'✅ سابوا رقم', value:r => r.gave,
+        cell:r => r.gave ? `<span class="badge g">${r.gave}</span>` : '0' },
+      { key:'skip', label:'⏭️ تخطّوا', value:r => r.skip,
+        cell:r => r.skip ? `<span class="badge y">${r.skip}</span>` : '0' },
+      { key:'rate', label:'نسبة الاستجابة', value:r => pct(r.gave, r.shown),
+        cell:r => `<span class="badge ${pct(r.gave,r.shown)>=50?'g':pct(r.gave,r.shown)>=25?'y':'r'}">${
+          pct(r.gave, r.shown)}%</span>` },
+    ];
+
+    const rate = pct(gave, shown);
+    const advice = !shown ? ''
+      : rate >= 60 ? '👍 نسبة ممتازة — الطلب مش بيزعّل حد.'
+      : rate >= 35 ? '🙂 نسبة معقولة. جرّب تختصر النص أو تشيل خانة الاسم.'
+      : '⚠️ أغلب الزوّار بيتخطّوا. فكّر تطلب الرقم <b>بعد</b> التجربة مش قبلها.';
+
+    return `
+      <div class="section-title mtop2"><h3>📱 طلب رقم الموبايل</h3></div>
+      <p class="small">كام واحد اتعرض عليه الطلب، ومين ساب رقمه ومين تخطّى.</p>
+
+      <div class="grid g3 mtop">
+        <div class="card" style="text-align:center">
+          <h3 style="margin:2px 0">${shown}</h3>
+          <p class="small">اتعرض عليهم الطلب</p></div>
+        <div class="card" style="text-align:center">
+          <h3 style="color:var(--accent);margin:2px 0">${gave}</h3>
+          <p class="small">سابوا رقمهم (${pct(gave, shown)}%)</p></div>
+        <div class="card" style="text-align:center">
+          <h3 style="margin:2px 0">${skip}</h3>
+          <p class="small">تخطّوا وكمّلوا (${pct(skip, shown)}%)</p></div>
+      </div>
+
+      ${advice ? `<div class="card mtop" style="border-inline-start:4px solid var(--gold)">
+        <p class="small">${advice}</p></div>` : ''}
+
+      <div class="mtop">${sortableTable('gateTable', list, cols, null,
+        { defaultKey:'shown', emptyText:'مفيش بيانات', exportName:'طلب رقم الموبايل' })}</div>
+
+      <p class="small mtop" style="color:var(--muted)">
+        ℹ️ اللي تخطّى بيدخل التجربة عادي — إحنا بس بنعرف إنه رفض يسيب رقمه.
+        مفيش أي بيانات شخصية بتتسجّل عنه.
+      </p>`;
+  }
+
   const origPipe = window.pageSysPipeline;
   if (typeof origPipe === 'function' && !origPipe.__leads){
-    const wrapped = function(){ return origPipe.apply(this, arguments) + leadsSection(); };
+    const wrapped = function(){
+      return origPipe.apply(this, arguments) + leadsSection() + gateSection();
+    };
     wrapped.__leads = true;
     window.pageSysPipeline = wrapped;
   }
