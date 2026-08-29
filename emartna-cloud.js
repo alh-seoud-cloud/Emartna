@@ -334,18 +334,29 @@ async function fetchBuilding(buildingUuid, legacyId){
   D.building.code  = b.data.code;      // كود دخول الملاك
   D.building.__uuid = b.data.id;
 
-  // الترتيب مهم: الجداول المرجعية الأول
-  const order = ['accounts','apartments','projects','vendors','expenses',
-                 'transfers','ledger','maintenanceReports','meetings','polls',
-                 'announcements','suggestions','paymentRequests','notifications',
-                 'buildingChat','activityLog'];
+  /* الترتيب مهم: الجداول المرجعية الأول.
+     والتقسيم لمرحلتين: اللي الشاشة الأولى محتاجاه فعلًا (CORE)
+     بيتجاب ويترسم، والباقي بيكمّل في الخلفية — بدل ما المستخدم
+     يستنى ١٦ جدول قبل ما يشوف أي حاجة. */
+  const CORE = ['accounts','apartments','projects','vendors','expenses',
+                'transfers','ledger'];
+  const REST = ['maintenanceReports','meetings','polls','announcements',
+                'suggestions','paymentRequests','notifications',
+                'buildingChat','activityLog'];
+  const order = CORE.concat(REST);
 
   // نجيب كل الجداول مرة واحدة بالتوازي — أسرع بكتير من واحد ورا التاني.
   // مهم: Supabase بيرجّع ١٠٠٠ صف كحد أقصى للطلب الواحد من غير أي رسالة خطأ،
   // فلازم نقسّم القراءة على صفحات لحد ما الجدول يخلص. من غير كده، عمارة
   // عندها أكتر من ١٠٠٠ حركة كانت هتتحمّل ناقصة، وأول حفظ بعدها كان هيمسح
   // الحركات الناقصة من الخادم نهائيًا.
-  const fetched = await Promise.all(order.map(coll => fetchAllRows(MAPS[coll].table, buildingUuid)));
+  // المرحلة الأولى: الجداول الأساسية بس
+  const coreRes = await Promise.all(CORE.map(c => fetchAllRows(MAPS[c].table, buildingUuid)));
+
+  // المرحلة التانية بتتطلب دلوقتي وبنستناها بس لو المستخدم احتاجها
+  const restPromise = Promise.all(REST.map(c => fetchAllRows(MAPS[c].table, buildingUuid)));
+
+  const fetched = coreRes.concat(REST.map(() => ({ data: [], error: null })));
 
   for (let oi = 0; oi < order.length; oi++){
     const coll = order[oi];
@@ -462,6 +473,39 @@ async function fetchBuilding(buildingUuid, legacyId){
   cache.uuid[legacyId]   = ctx.uuidOf;
   cache.legacy[legacyId] = ctx.legacyOf;
   cache.buildingUuid[legacyId] = buildingUuid;
+
+  /* باقي الجداول بتكمّل في الخلفية وبتتحط في نفس الكائن،
+     وبعدين نعيد الرسم عشان الشاشة تتحدّث لوحدها. */
+  D.__loading = true;
+  restPromise.then(restRes => {
+    try{
+      REST.forEach((coll, i) => {
+        const map = MAPS[coll];
+        const res = restRes[i];
+        if (!res || res.error) return;
+        // لو المستخدم ضاف حاجة أثناء التحميل، منمسحهاش
+        if (Array.isArray(D[coll]) && D[coll].length) return;
+        ctx.uuidOf[coll] = {}; ctx.legacyOf[coll] = {};
+        (res.data || []).forEach(r => {
+          const lid = r.legacy_id || r.id;
+          ctx.uuidOf[coll][lid] = r.id;
+          ctx.legacyOf[coll][r.id] = lid;
+        });
+        D[coll] = (res.data || []).map(r => toApp(r, map, ctx));
+      });
+      cache.uuid[legacyId]   = ctx.uuidOf;
+      cache.legacy[legacyId] = ctx.legacyOf;
+      D.__loading = false;
+      cache.snapshot[legacyId] = JSON.stringify(D);
+      // نعيد الرسم بس لو المستخدم لسه في نفس العمارة
+      if (window.activeBuildingId === legacyId && window.renderContent){
+        try{ renderContent(); }catch(e){}
+      }
+      document.dispatchEvent(new CustomEvent('emartna:building-complete',
+        { detail:{ id: legacyId } }));
+    }catch(e){ D.__loading = false; }
+  }).catch(() => { D.__loading = false; });
+
   cache.snapshot[legacyId] = JSON.stringify(D);
 
   return D;
@@ -769,16 +813,28 @@ const CLOUD = {
 
   /* تحميل كل حاجة المستخدم يقدر يشوفها */
   async bootstrap(){
-    const { data:{ user } } = await sb.auth.getUser();
+    /* getUser بترحّل للخادم في كل مرة. getSession بتقرا الجلسة
+       المحفوظة محليًا وفيها نفس بيانات المستخدم — فوّفرنا رحلة كاملة. */
+    let user = null;
+    try{
+      const { data:{ session } } = await sb.auth.getSession();
+      user = session && session.user;
+    }catch(e){}
+    if (!user){
+      const r = await sb.auth.getUser();
+      user = r && r.data && r.data.user;
+    }
     if (!user) { window.__cloudReady = false; return false; }
 
     /* كل استعلامات البدء بالتوازي — كانت أربع رحلات ورا بعض،
        وكل رحلة لفرانكفورت بتاخد ٢٠٠-٤٠٠ مللي ثانية. */
-    const [bs, plansRes, offersRes, docsRes] = await Promise.all([
+    const [bs, plansRes, offersRes, docsRes, mine] = await Promise.all([
       sb.from('buildings').select('*').eq('is_deleted', false),
       sb.from('plans').select('*').order('sort_order'),
       sb.from('landing_offers').select('*').order('created_at'),
       sb.from('platform_settings').select('key,value').like('key', 'reg:%'),
+      // العضويات كانت رحلة منفصلة بعد كل ده — دلوقتي بتيجي معاهم
+      sb.from('memberships').select('building_id').eq('user_id', user.id).eq('active', true),
     ]);
     if (bs.error) throw bs.error;
 
@@ -888,8 +944,6 @@ const CLOUD = {
 
     // مسؤول المنصة ممكن يشوف عشرات العمارات — مانحمّلش بياناتهم كلها
     // عند الدخول. بنحمّل بس العمارات اللي هو عضو فيها فعلًا.
-    const mine = await sb.from('memberships')
-      .select('building_id').eq('user_id', user.id).eq('active', true);
     const myIds = new Set((mine.data || []).map(m => m.building_id));
 
     const toLoad = bs.data.filter(b => myIds.has(b.id));
