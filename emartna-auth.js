@@ -60,21 +60,34 @@ window.clearSession = () => { __sess = null; };
 /* بعد تسجيل الدخول: نحدد المستخدم ده مين */
 async function establishSession(preferBuildingId){
   const sb = window.CLOUD._sb;
-  const { data:{ user } } = await sb.auth.getUser();
+
+  /* الجلسة محفوظة محليًا — getUser كانت رحلة شبكة كاملة زيادة */
+  let user = null;
+  try{
+    const { data:{ session } } = await sb.auth.getSession();
+    user = session && session.user;
+  }catch(e){}
+  if (!user){
+    const r = await sb.auth.getUser();
+    user = r && r.data && r.data.user;
+  }
   if (!user){ __sess = null; return null; }
   CLOUD_AUTH.user = user;
 
-  // مسؤول منصة؟ موظف دعم؟
-  const plat = window.PLATFORM_AUTH
-    ? await window.PLATFORM_AUTH.resolve()
-    : null;
+  /* كانت أربع رحلات ورا بعض: صلاحية المنصة، ثم قائمة العمارات،
+     ثم تحميل البيانات. الأولين مالهمش علاقة ببعض فبيتنفّذوا
+     مع بعض، والتحميل بيبدأ في نفس اللحظة كمان. */
+  const bootP = window.CLOUD.bootstrap();
+  const [plat, mb] = await Promise.all([
+    window.PLATFORM_AUTH ? window.PLATFORM_AUTH.resolve() : Promise.resolve(null),
+    sb.rpc('my_buildings'),
+  ]);
+
   CLOUD_AUTH.isPlatformAdmin = !!(plat && plat.type === 'sysowner');
   CLOUD_AUTH.supportStaff    = plat && plat.type === 'support' ? plat.staff : null;
+  CLOUD_AUTH.buildings = (mb && mb.data) || [];
 
-  const mb = await sb.rpc('my_buildings');
-  CLOUD_AUTH.buildings = mb.data || [];
-
-  await window.CLOUD.bootstrap();
+  await bootP;
 
   // موظف الدعم مالوش عمارة — لوحته منفصلة
   if (plat && plat.type === 'support'){
