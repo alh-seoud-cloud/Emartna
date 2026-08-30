@@ -32,13 +32,39 @@
     }catch(e){ return null; }
   }
 
+  /* بعد تسجيل الخروج بنصفّر العلامة — الزائر رجع للصفحة الرئيسية
+     ومن حقه يشوف العرض تاني. */
+  (function hookLogout(){
+    const wrap = () => {
+      const orig = window.logout;
+      if (typeof orig !== 'function' || orig.__welcomeReset) return;
+      const w = function(){
+        try{
+          sessionStorage.removeItem(KEY);
+          localStorage.removeItem(KEY);
+        }catch(e){}
+        const r = orig.apply(this, arguments);
+        setTimeout(() => { try{ openWelcomePopup(false); }catch(e){} }, 1200);
+        return r;
+      };
+      w.__welcomeReset = true;
+      window.logout = w;
+    };
+    wrap();
+    [1000, 3000].forEach(ms => setTimeout(wrap, ms));
+  })();
+
   function seen(){
-    try{ return sessionStorage.getItem(KEY) === '1' ||
-                localStorage.getItem(KEY) === '1'; }catch(e){ return false; }
+    try{
+      if (localStorage.getItem(KEY) === '1') return true;    // اختار "بلاش تفكّرني"
+      const t = Number(sessionStorage.getItem(KEY) || 0);
+      // بتظهر تاني بعد ساعتين حتى في نفس الجلسة
+      return t && (Date.now() - t) < 2 * 60 * 60 * 1000;
+    }catch(e){ return false; }
   }
   function markSeen(forever){
     try{
-      sessionStorage.setItem(KEY, '1');
+      sessionStorage.setItem(KEY, String(Date.now()));
       if (forever) localStorage.setItem(KEY, '1');
     }catch(e){}
   }
@@ -87,14 +113,30 @@
     const off = liveOffer();
     const offer = offerText();
     const html = `
-      <div style="text-align:center">
-        <div style="font-size:44px;line-height:1">🏢</div>
-        <h3 style="margin:8px 0 4px">${esc2(c.title)}</h3>
-        <p class="small" style="color:var(--muted);line-height:1.9">${esc2(c.subtitle)}</p>
+      <div style="margin:-18px -18px 0;padding:26px 20px 20px;text-align:center;
+           background:linear-gradient(135deg,#159A8C,#0f7a6f);color:#fff;
+           border-radius:16px 16px 0 0">
+        <div style="display:inline-block;background:rgba(255,255,255,.18);
+             border-radius:20px;padding:5px 14px;font-size:12px;font-weight:700;
+             margin-bottom:10px">🎁 ${esc2(offer)} · عرض لفترة محدودة</div>
+        <div style="font-size:40px;line-height:1">🏢</div>
+        <h3 style="margin:8px 0 4px;color:#fff;font-size:20px">${esc2(c.title)}</h3>
+        <p style="color:rgba(255,255,255,.92);line-height:1.85;font-size:13.5px;margin:0">
+          ${esc2(c.subtitle)}</p>
+      </div>
+
+      <div class="flexrow" style="justify-content:center;gap:14px;flex-wrap:wrap;
+           margin:14px 0 4px;text-align:center">
+        <div><b style="display:block;font-size:18px;color:var(--accent)">٢٨</b>
+          <span class="small" style="color:var(--muted)">وحدة جاهزة</span></div>
+        <div><b style="display:block;font-size:18px;color:var(--accent)">٢٤</b>
+          <span class="small" style="color:var(--muted)">شهر حركات</span></div>
+        <div><b style="display:block;font-size:18px;color:var(--accent)">٠</b>
+          <span class="small" style="color:var(--muted)">تسجيل مطلوب</span></div>
       </div>
 
       <p class="small mtop" style="text-align:center;color:var(--muted)">
-        ــــــ اختار طريقك ــــــ</p>
+        ادخل شوف بنفسك — من غير تسجيل ولا بيانات بنكية</p>
 
       <div class="mtop">
         <button class="btn primary" style="width:100%;padding:13px;font-size:15px"
