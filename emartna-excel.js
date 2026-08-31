@@ -155,7 +155,8 @@
      ١) الشقق والملاك
      ============================================================ */
 
-  const AP_COLS = ['رمز الوحدة (لا تغيّره)','رقم الوحدة','المبنى/الفيلا','النوع (شقة/محل)',
+  const AP_COLS = ['رمز الوحدة (لا تغيّره)','رقم الوحدة','الرقم المعروض (اختياري)',
+    'المبنى/الفيلا','النوع (شقة/محل)',
     'الاستخدام','الدور','اسم المالك','اسم المستأجر','مفتاح الدولة','رقم الجوال',
     'البريد الإلكتروني','الاشتراك الشهري','رصيد افتتاحي','مغلقة (نعم/لا)','ملاحظات',
     'الرصيد الحالي (للعرض فقط)'];
@@ -164,7 +165,7 @@
     if (noXLSX()) return;
     const rows = (D.apartments || []).slice()
       .sort((a,b) => (Number(a.number)||0) - (Number(b.number)||0))
-      .map(a => [ a.id, a.number, a.blockName || '',
+      .map(a => [ a.id, a.number, a.label || '', a.blockName || '',
                   a.type === 'shop' ? 'محل' : 'شقة',
                   a.usageType || '', a.floor || '',
                   a.ownerName || '', a.tenantName || '',
@@ -173,7 +174,7 @@
                   a.closed ? 'نعم' : 'لا', a.notes || '',
                   (window.apBalance ? apBalance(a.id) : '') ]);
     download(rows, AP_COLS, 'الشقق والملاك', 'الشقق والملاك',
-      [14,10,14,12,12,14,20,18,10,15,24,14,12,12,22,16]);
+      [14,10,16,14,12,12,14,20,18,10,15,24,14,12,12,22,16]);
   };
 
   function checkApRow(r, i, seen){
@@ -186,12 +187,13 @@
 
     const label = unit(ap);
     const num   = String(r[1] || '').trim();
-    const type  = String(r[3] || '').trim();
-    const cc    = String(r[8] || '+20').trim() || '+20';
-    const phone = normPhone(r[9], cc);
-    const email = String(r[10] || '').trim();
-    const feeRaw= String(r[11] ?? '').trim();
-    const openRaw=String(r[12] ?? '').trim();
+    const uLabel = String(r[2] || '').trim();     // الرقم المعروض
+    const type  = String(r[4] || '').trim();
+    const cc    = String(r[9] || '+20').trim() || '+20';
+    const phone = normPhone(r[10], cc);
+    const email = String(r[11] || '').trim();
+    const feeRaw= String(r[12] ?? '').trim();
+    const openRaw=String(r[13] ?? '').trim();
 
     if (!num || !/^\d+$/.test(num))
       return { line, status:'error', label, why:'رقم الوحدة لازم يكون رقم' };
@@ -199,7 +201,7 @@
       return { line, status:'error', label, why:'رقم الوحدة ده متكرر في السطر ' + seen.get(num) };
     seen.set(num, line);
 
-    if (!String(r[6] || '').trim())
+    if (!String(r[7] || '').trim())
       return { line, status:'error', label, why:'اسم المالك مطلوب' };
     if (type && !['شقة','محل'].includes(type))
       return { line, status:'error', label, why:'النوع لازم يكون "شقة" أو "محل"' };
@@ -214,20 +216,21 @@
 
     const next = {
       number: Number(num),
-      blockName: String(r[2] || '').trim(),
+      label: uLabel,
+      blockName: String(r[3] || '').trim(),
       type: type === 'محل' ? 'shop' : 'apartment',
-      usageType: String(r[4] || '').trim(),
-      floor: String(r[5] || '').trim(),
-      ownerName: String(r[6] || '').trim(),
-      tenantName: String(r[7] || '').trim(),
+      usageType: String(r[5] || '').trim(),
+      floor: String(r[6] || '').trim(),
+      ownerName: String(r[7] || '').trim(),
+      tenantName: String(r[8] || '').trim(),
       phoneCountry: cc, phone, email,
       monthlyFee: feeRaw === '' ? Number(ap.monthlyFee) || 0 : Number(feeRaw),
       openingBalance: openRaw === '' ? Number(ap.openingBalance) || 0 : Number(openRaw),
-      closed: isYes(r[13]),
-      notes: String(r[14] || '').trim(),
+      closed: isYes(r[14]),
+      notes: String(r[15] || '').trim(),
     };
 
-    const LBL = { number:'رقم الوحدة', blockName:'المبنى', type:'النوع', usageType:'الاستخدام',
+    const LBL = { number:'رقم الوحدة', label:'الرقم المعروض', blockName:'المبنى', type:'النوع', usageType:'الاستخدام',
       floor:'الدور', ownerName:'المالك', tenantName:'المستأجر', phoneCountry:'مفتاح الدولة',
       phone:'الجوال', email:'البريد', monthlyFee:'الاشتراك', openingBalance:'رصيد افتتاحي',
       closed:'مغلقة', notes:'ملاحظات' };
