@@ -771,6 +771,44 @@ window.addEventListener('beforeunload', e => {
   if (cache.dirty.size){ e.preventDefault(); e.returnValue = ''; }
 });
 
+/* أول ما المستخدم يسيب الصفحة (تبديل تبويب · قفل الشاشة · خروج من
+   التطبيق على الموبايل) بنرسل فورًا من غير انتظار الـ٦٠٠ مللي.
+   ده بيقفل الفجوة اللي كانت ممكن تضيّع آخر تعديل على الموبايل،
+   لأن beforeunload مش مضمون هناك. */
+function flushNow(){
+  try{
+    if (!cache.dirty.size || cache.syncing) return;
+    clearTimeout(flushTimer);
+    flush();
+  }catch(e){}
+}
+window.flushNow = flushNow;
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushNow();
+});
+window.addEventListener('pagehide', flushNow);
+window.addEventListener('blur', flushNow);
+
+/* وقبل تسجيل الخروج كمان */
+(function guardLogout(){
+  const wrap = () => {
+    const orig = window.logout;
+    if (typeof orig !== 'function' || orig.__flushed) return;
+    const w = async function(){
+      flushNow();
+      // ننتظر شوية لحد ما الطابور يفضى (بحد أقصى ٣ ثواني)
+      for (let i = 0; i < 30 && cache.dirty.size; i++)
+        await new Promise(r => setTimeout(r, 100));
+      return orig.apply(this, arguments);
+    };
+    w.__flushed = true;
+    window.logout = w;
+  };
+  wrap();
+  [1500, 4000].forEach(ms => setTimeout(wrap, ms));
+})();
+
 /* ============================================================
    8) استبدال دوال البرنامج
    ============================================================ */
