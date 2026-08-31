@@ -60,6 +60,36 @@
   }
   window.saveDemoLead = saveLead;
 
+
+  /* ---------- نبض الجلسة التجريبية ---------- */
+
+  function sessKey(){
+    try{
+      let k = sessionStorage.getItem('emartna_sess_key');
+      if (!k){ k = Math.random().toString(36).slice(2) + Date.now().toString(36);
+               sessionStorage.setItem('emartna_sess_key', k); }
+      return k;
+    }catch(e){ return null; }
+  }
+
+  /* بيسجّل إن الجلسة لسه شغّالة — كل دقيقة أثناء التجربة.
+     كده نعرف الزائر قعد قد إيه فعلًا، مش إنه دخل بس. */
+  let demoRole = '';
+  window.markDemoRole = r => { demoRole = r || ''; };
+
+  setInterval(async () => {
+    try{
+      const sb = window.CLOUD && window.CLOUD._sb;
+      if (!sb) return;
+      if (!(window.isDemoSession && isDemoSession())) return;
+      const o = srcOf();
+      await sb.rpc('touch_demo_session', {
+        p_session: sessKey(), p_phone: savedPhone() || null,
+        p_role: demoRole || null, p_source: o.s,
+      });
+    }catch(e){}
+  }, 60 * 1000);
+
   /* ---------- نافذة طلب الرقم ---------- */
 
   window.askPhoneThenDemo = function(role){
@@ -116,6 +146,19 @@
   };
 
   function startDemo(role){
+    markDemoRole(role);
+    // نبضة أولى فورية عشان الجلسة تتسجّل من أول ثانية
+    setTimeout(async () => {
+      try{
+        const sb = window.CLOUD && window.CLOUD._sb;
+        if (!sb) return;
+        const o = srcOf();
+        await sb.rpc('touch_demo_session', {
+          p_session: sessKey(), p_phone: savedPhone() || null,
+          p_role: role || null, p_source: o.s,
+        });
+      }catch(e){}
+    }, 2500);
     if (typeof window.__origLoginDemo === 'function') return window.__origLoginDemo(role);
     if (typeof window.__origTryDemo === 'function')   return window.__origTryDemo(role);
   }
@@ -200,6 +243,7 @@
 
   window.reloadLeadReports = async function(){
     await loadDemoLeads();
+    await loadDemoSessions();
     await loadGateReport();
   };
 
@@ -406,10 +450,95 @@
       </p>`;
   }
 
+
+  /* ============================================================
+     كل الجلسات التجريبية — بالرقم ومن غيره
+     ============================================================ */
+
+  window.__demoSess = null;
+
+  window.loadDemoSessions = async function(){
+    try{
+      const sb = window.CLOUD && window.CLOUD._sb;
+      if (!sb) return;
+      const { data, error } = await sb.rpc('demo_sessions_report',
+        { p_from: window.__leadFrom, p_to: window.__leadTo });
+      if (error) throw error;
+      window.__demoSess = data || [];
+    }catch(e){ window.__demoSess = []; }
+    if (window.renderSysContent) renderSysContent();
+  };
+
+  function sessionsSection(){
+    const rows = window.__demoSess;
+    if (rows === null){ setTimeout(loadDemoSessions, 30); return ''; }
+    if (!rows.length) return '';
+
+    const total = rows.length;
+    const withPhone = rows.filter(r => r.gave_phone).length;
+    const mins = rows.reduce((a,r) => a + (Number(r.minutes)||0), 0);
+    const avg = total ? Math.round(mins/total) : 0;
+    const serious = rows.filter(r => (Number(r.minutes)||0) >= 3).length;
+
+    const cols = [
+      { key:'when', label:'بدأ', value:r => r.started_at||'',
+        cell:r => { const d = new Date(r.started_at);
+          return (window.fmtDate ? fmtDate(r.started_at.slice(0,10)) : r.started_at.slice(0,10)) +
+            `<br><span class="small" style="color:var(--muted)">${
+              String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}</span>`; } },
+      { key:'mins', label:'قعد قد إيه', value:r => Number(r.minutes)||0,
+        cell:r => { const m = Number(r.minutes)||0;
+          const cls = m >= 5 ? 'g' : m >= 2 ? 'y' : 'n';
+          return `<span class="badge ${cls}">${m < 1 ? 'أقل من دقيقة' : m + ' دقيقة'}</span>`; } },
+      { key:'role', label:'جرّب كـ', value:r => r.role_tried||'',
+        cell:r => r.role_tried === 'owner' ? '🏠 صاحب شقة'
+                : r.role_tried === 'admin' ? '🏢 رئيس اتحاد' : '—' },
+      { key:'source', label:'المصدر', value:r => r.source||'',
+        cell:r => esc2(LB[r.source] || r.source || '—') },
+      { key:'phone', label:'الموبايل', value:r => r.phone||'',
+        cell:r => r.phone
+          ? `<a href="https://wa.me/${esc2(r.phone)}" target="_blank" dir="ltr"
+               style="font-weight:700">${esc2(r.phone)}</a>`
+          : '<span class="badge n">مساب رقمش</span>' },
+      { key:'x', label:'', value:null,
+        cell:r => r.phone
+          ? `<a class="btn sm gold" target="_blank" href="https://wa.me/${esc2(r.phone)}?text=${
+              encodeURIComponent('أهلًا 👋\nشكرًا إنك جرّبت عمارتنا. محتاج مساعدة؟')}">💬 كلّمه</a>`
+          : '' },
+    ];
+
+    return `
+      <div class="section-title mtop2"><h3>⏱️ جلسات التجربة</h3></div>
+      <p class="small">كل زائر فتح التجربة — بالرقم أو من غيره — وقعد قد إيه فعلًا.</p>
+
+      <div class="grid g4 mtop">
+        <div class="card" style="text-align:center">
+          <h3 style="color:var(--accent);margin:2px 0">${total}</h3>
+          <p class="small">جلسة تجربة</p></div>
+        <div class="card" style="text-align:center">
+          <h3 style="margin:2px 0">${withPhone}</h3>
+          <p class="small">سابوا رقم</p></div>
+        <div class="card" style="text-align:center">
+          <h3 style="margin:2px 0">${serious}</h3>
+          <p class="small">قعدوا ٣ دقايق+</p></div>
+        <div class="card" style="text-align:center">
+          <h3 style="margin:2px 0">${avg}</h3>
+          <p class="small">متوسط الدقايق</p></div>
+      </div>
+
+      <div class="mtop">${sortableTable('demoSessTable', rows, cols, null,
+        { defaultKey:'when', emptyText:'مفيش جلسات', exportName:'جلسات التجربة' })}</div>
+
+      <p class="small mtop" style="color:var(--muted)">
+        ℹ️ اللي قعد أقل من دقيقة غالبًا فتح وقفل. واللي قعد ٥ دقايق+ شاف البرنامج فعلًا —
+        ودول أولى بالمتابعة حتى لو مسابوش رقم.
+      </p>`;
+  }
+
   const origPipe = window.pageSysPipeline;
   if (typeof origPipe === 'function' && !origPipe.__leads){
     const wrapped = function(){
-      return origPipe.apply(this, arguments) + leadsSection() + gateSection();
+      return origPipe.apply(this, arguments) + leadsSection() + sessionsSection() + gateSection();
     };
     wrapped.__leads = true;
     window.pageSysPipeline = wrapped;
