@@ -31,7 +31,8 @@ const MAPS = {
   apartments: {
     table: 'apartments',
     fields: {
-      id:'legacy_id', number:'number', blockName:'block_name', floor:'floor',
+      id:'legacy_id', number:'number', label:'label',
+      blockName:'block_name', floor:'floor',
       type:'type', usageType:'usage_type', openingBalance:'opening_balance',
       ownerName:'owner_name', tenantName:'tenant_name',
       phoneCountry:'phone_country', phone:'phone', email:'email',

@@ -1345,7 +1345,13 @@ function syncUsageTypeDefault(){
     userEl.value=userEl.value.replace(/(shaqa|mahal)(\d+)$/,(type==='shop'?'mahal':'shaqa')+'$2');
   }
 }
-function unitLabel(a){if(!a)return'-';return(a.blockName?esc(a.blockName)+' - ':'')+unitTypeName(a)+' '+unitTypeIndex(a)}
+function unitLabel(a){
+  if(!a)return'-';
+  // الرقم المخصّص (زي A-12 أو محل ٣) بيغلب الترقيم التلقائي
+  if(a.label&&String(a.label).trim())
+    return (a.blockName?esc(a.blockName)+' - ':'')+esc(String(a.label).trim());
+  return(a.blockName?esc(a.blockName)+' - ':'')+unitTypeName(a)+' '+unitTypeIndex(a);
+}
 function apPaidForMonth(apId,month){
   const charge=D.ledger.find(l=>l.apartmentId===apId&&l.type==='شهري'&&l.month===month);
   if(!charge)return null;
@@ -2363,7 +2369,11 @@ function showPhoneMatchWarning(match){
       <button class="btn gold" onclick="closeModal();window.__signupPhoneConfirmed=true;doSignup()">✅ متابعة إنشاء حساب جديد</button>
     </div>`);
 }
-function unitLabelStatic(a){return(a.blockName?a.blockName+' - ':'')+(a.type==='shop'?'محل':'شقة')+' '+a.number}
+function unitLabelStatic(a){
+  if(a&&a.label&&String(a.label).trim())
+    return (a.blockName?a.blockName+' - ':'')+String(a.label).trim();
+  return(a.blockName?a.blockName+' - ':'')+(a.type==='shop'?'محل':'شقة')+' '+a.number;
+}
 async function doSignup(){
   const name=document.getElementById('suName').value.trim();
   const trialCap=trialPlan().maxApartments||24;
@@ -7440,6 +7450,9 @@ function openApartmentModal(id){
         <option value="شركة" ${a&&a.usageType==='شركة'?'selected':''}>شركة</option>
         <option value="عيادة" ${a&&a.usageType==='عيادة'?'selected':''}>عيادة</option>
       </select></div>
+      <div class="field2"><label>رقم الوحدة زي ما هو مكتوب على الباب (اختياري)</label>
+        <input id="mLabel" placeholder="مثال: A-12 · شقة ٥ب · محل ٣" value="${a?esc(a.label||''):''}">
+        <p class="small">سيبه فاضي لو الترقيم عادي — البرنامج هيرقّم تلقائيًا.</p></div>
       ${D.building.communityType==='compound'?`<div class="field2"><label>اسم/رقم المبنى أو الفيلا</label><input id="mBlockName" placeholder="مثال: عمارة 3 أو فيلا 12" value="${a?esc(a.blockName||''):''}"></div>`:''}
       <div class="field2"><label>حالة الوحدة</label><label class="checkline"><input type="checkbox" id="mClosed" ${a&&a.closed?'checked':''}> الوحدة مقفولة/غير مستخدمة حاليًا</label><p class="small mtop">بتأثر على نسبة توزيع المصروفات المشتركة (لو فعّلت التوزيع النسبي).</p></div>
       <div class="field2"><label>رقم الوحدة</label><input id="mNumber" type="number" value="${a?a.number:nextNum}" onchange="document.getElementById('mFloor').value=floorLabel(Number(this.value),${groundCount},${perFloor})"></div>
@@ -7489,7 +7502,9 @@ async function saveApartment(id){
   }
   if(isUsernameTaken(username,activeBuildingId,ownerUserId))return showMessage('اسم المستخدم هذا مستخدم بالفعل، اختر اسمًا آخر');
   const blockNameEl=document.getElementById('mBlockName');
-  const data={number,blockName:blockNameEl?blockNameEl.value.trim():'',type:document.getElementById('mType').value,usageType:document.getElementById('mUsage').value,closed:document.getElementById('mClosed').checked,openingBalance:Number(document.getElementById('mOpeningBalance').value||0),floor:document.getElementById('mFloor').value.trim(),ownerName,tenantName:document.getElementById('mTenant').value.trim(),phoneCountry:document.getElementById('mCountry').value,phone,email:document.getElementById('mEmail').value.trim(),monthlyFee:fee,username,notes:document.getElementById('mNotes').value.trim()};
+  const labelEl=document.getElementById('mLabel');
+  const data={number,label:labelEl?labelEl.value.trim():'',
+    blockName:blockNameEl?blockNameEl.value.trim():'',type:document.getElementById('mType').value,usageType:document.getElementById('mUsage').value,closed:document.getElementById('mClosed').checked,openingBalance:Number(document.getElementById('mOpeningBalance').value||0),floor:document.getElementById('mFloor').value.trim(),ownerName,tenantName:document.getElementById('mTenant').value.trim(),phoneCountry:document.getElementById('mCountry').value,phone,email:document.getElementById('mEmail').value.trim(),monthlyFee:fee,username,notes:document.getElementById('mNotes').value.trim()};
   const pass=document.getElementById('mPass').value;
   if(pass){const pwErr=passwordPolicyError(pass); if(pwErr)return showMessage(pwErr);}
   if(id){
@@ -9585,6 +9600,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
 <script type="module" src="emartna-live.js"></script>
 <script type="module" src="emartna-wa.js"></script>
 <script type="module" src="emartna-mobile.js"></script>
+<script type="module" src="emartna-numbering.js"></script>
 <script type="module" src="emartna-lastlogin.js"></script>
 
 </body>
