@@ -967,6 +967,36 @@ async function createBuildingRecord(name,apartmentsCount,perFloor,adminUsername,
   REG.buildings.push({id,name,code,createdAt:todayISO(),license,referralCode:generateReferralCode(name),referredBy,appliedCoupon,appliedOfferId,claimedOfferId:appliedOfferId,signupSource:opts.signupSource||null});
   if(adminPhone)linkLeadsToBuilding(adminPhone,id);
   saveRegistry();
+
+  /* ⚠️ مهم: العمارة لازم تتعمل على الخادم كمان.
+     من غير ده كانت بتفضل في ذاكرة المتصفح بس وتختفي. */
+  if(window.createBuildingOnServer && window.CLOUD && window.CLOUD._sb){
+    try{
+      const r=await createBuildingOnServer({
+        name,apartmentsCount,perFloor,
+        groundFloorCount:opts.groundFloorCount,
+        groundShopsCount:opts.groundShopsCount,
+        address:opts.address,locationUrl:opts.locationUrl,city:opts.city,
+        country:opts.country,governorate:opts.governorate,
+        communityType:opts.communityType,
+        adminName:opts.adminName||name,
+        phoneCountry:adminPhoneCountry,phone:adminPhone,
+        trialDays:opts.trialDays||60,
+      });
+      if(r&&r.code){
+        const rec=REG.buildings.find(b=>b.id===id);
+        if(rec){rec.code=r.code;rec.__uuid=r.uuid;}
+        saveRegistry();
+        return{id,code:r.code};
+      }
+    }catch(e){
+      console.error('[عمارتنا] فشل إنشاء العمارة على الخادم:',e);
+      if(window.showMessage)
+        showMessage('العمارة اتعملت محليًا بس ما وصلتش الخادم:\n'+
+          (window.cloudErrorText?cloudErrorText(e):e.message)+
+          '\n\nجرّب تاني أو تواصل مع الدعم.');
+    }
+  }
   return{id,code};
 }
 function migrateBuildingData(){
@@ -9621,6 +9651,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
 <script type="module" src="emartna-numbering.js"></script>
 <script type="module" src="emartna-facade.js"></script>
 <script type="module" src="emartna-pricing.js"></script>
+<script type="module" src="emartna-newbld.js"></script>
 <script type="module" src="emartna-lastlogin.js"></script>
 
 </body>
