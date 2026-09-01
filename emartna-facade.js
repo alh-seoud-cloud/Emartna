@@ -62,6 +62,18 @@
 
   /* ---------- الرسم ---------- */
 
+  /* لو الوحدة سبقت تعريف الدالة، بنستنّاها بدل ما نتخطّى اللفّ */
+  let tries = 0;
+  const waitFn = setInterval(() => {
+    if (++tries > 60) return clearInterval(waitFn);
+    if (typeof window.buildingIllustration === 'function'
+        && !window.buildingIllustration.__facade){
+      clearInterval(waitFn);
+      hookIt();
+    }
+  }, 200);
+
+  function hookIt(){
   const origIll = window.buildingIllustration;
   if (typeof origIll === 'function' && !origIll.__facade){
     const wrapped = function(mode){
@@ -70,6 +82,17 @@
     };
     wrapped.__facade = true;
     window.buildingIllustration = wrapped;
+
+    /* الشاشة بترسم قبل ما الوحدات تتحمّل (الوحدات مؤجّلة)،
+       فلو لوحة التحكم متفتحة بالفعل بنعيد رسمها عشان
+       الأزرار والترقيم الجديد يبانوا. */
+    setTimeout(() => {
+      try{
+        const el = document.getElementById('content');
+        if (el && /bld-wrap|bld-unit/.test(el.innerHTML) && window.renderContent)
+          renderContent();
+      }catch(e){}
+    }, 300);
   }
 
   function classOf(a, mode, month){
@@ -163,6 +186,9 @@
         </div>`).join('')}
     </div>`;
   }
+
+  }
+  hookIt();
 
   /* تنسيق إضافي للأدوار المزدحمة */
   function css(){
