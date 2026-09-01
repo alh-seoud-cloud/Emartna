@@ -2449,8 +2449,11 @@ async function doSignup(){
   const name=document.getElementById('suName').value.trim();
   const trialCap=trialPlan().maxApartments||24;
   const communityType=document.getElementById('suCommunityType').value;
-  const count=communityType==='compound'?0:Math.min(trialCap,Number(document.getElementById('suCount').value||trialCap));
-  const groundCount=Math.max(1,Number(document.getElementById('suGroundCount').value||4));
+  /* ⚠️ كان بيقصّ الوحدات لحد الخطة التجريبية (٢٤)، فعمارة ٧٧ وحدة
+     بتتسجّل ٢٤ بس والباقي يضيع من غير ما العميل ياخد باله. */
+  const count=communityType==='compound'?0:Math.max(1,Number(document.getElementById('suCount').value||trialCap));
+  /* والصفر قيمة صالحة: أرضي جراج أو مدخل من غير وحدات */
+  const groundCount=Math.max(0,Number(document.getElementById('suGroundCount').value||0));
   const groundShops=Math.min(groundCount,Number(document.getElementById('suGroundShops').value||0));
   const address=document.getElementById('suAddress').value.trim();
   const locationUrl=document.getElementById('suLocation').value.trim();
@@ -3334,7 +3337,7 @@ function sysToggleUserActive(buildingId,username){
 /* ---------- التراخيص والاشتراكات ---------- */
 function defaultPlansSeed(){
   return[
-    {key:'trial',name:'تجريبي',icon:'🆓',durationMonths:1,priceBefore:0,discountPercent:0,maxApartments:24,maxTransactions:50,isTrial:true,active:true},
+    {key:'trial',name:'تجريبي',icon:'🆓',durationMonths:1,priceBefore:0,discountPercent:0,maxApartments:null,maxTransactions:null,isTrial:true,active:true},
     {key:'promo_2months',name:'عرض شهرين مجاني - عملاء جدد',icon:'🎉',durationMonths:2,priceBefore:0,discountPercent:0,maxApartments:null,maxTransactions:null,isTrial:false,active:true},
     {key:'monthly',name:'اشتراك شهري',icon:'📅',durationMonths:1,priceBefore:100,discountPercent:0,maxApartments:null,maxTransactions:null,isTrial:false,active:true},
     {key:'quarterly',name:'اشتراك 3 شهور',icon:'🗓️',durationMonths:3,priceBefore:300,discountPercent:10,maxApartments:null,maxTransactions:null,isTrial:false,active:true},
