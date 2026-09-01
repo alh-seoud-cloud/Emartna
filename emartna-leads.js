@@ -332,14 +332,19 @@
         cell:r => r.signed_up ? '<span class="badge g">✅ اشترك</span>'
                               : '<span class="badge y">لسه</span>' },
       { key:'x', label:'', value:null,
-        cell:r => `<a class="btn sm gold" target="_blank"
-          href="https://wa.me/${esc2(r.phone)}?text=${encodeURIComponent(
-            'أهلًا' + (r.name ? ' ' + r.name : '') + ' 👋\nشكرًا إنك جرّبت عمارتنا. محتاج مساعدة في أي حاجة؟')}">💬 كلّمه</a>` },
+        cell:r => `<div class="flexrow" style="gap:5px">
+          <a class="btn sm gold" target="_blank"
+            href="https://wa.me/${esc2(r.phone)}?text=${encodeURIComponent(
+              'أهلًا' + (r.name ? ' ' + r.name : '') + ' 👋\nشكرًا إنك جرّبت عمارتنا. محتاج مساعدة في أي حاجة؟')}">💬 كلّمه</a>
+          <button class="btn sm ghost" title="استبعده من التقارير"
+            onclick="toggleLeadInternal('${esc2(r.phone)}',true)">🧪</button>
+        </div>` },
     ];
 
     return `
       <div class="section-title mtop2"><h3>🎬 اللي جرّبوا البرنامج</h3></div>
-      <p class="small">كل زائر ساب رقمه قبل التجربة — دول أقرب ناس للاشتراك.</p>
+      <p class="small">كل زائر ساب رقمه قبل التجربة — دول أقرب ناس للاشتراك.
+        <a href="javascript:void(0)" onclick="openHiddenLeads()">🧪 المستبعدين</a></p>
       ${rangeBar()}
 
       <div class="grid g3 mtop">
@@ -450,6 +455,50 @@
       </p>`;
   }
 
+
+
+  /* تعليم سجل كداخلي (اختبار) أو رجوعه لعميل حقيقي */
+  window.toggleLeadInternal = async function(phone, on){
+    try{
+      const sb = window.CLOUD && window.CLOUD._sb;
+      if (!sb) return;
+      const { error } = await sb.from('demo_leads')
+        .update({ is_internal: !!on }).eq('phone', phone);
+      if (error) throw error;
+      if (window.toast) toast(on ? 'اتعلّم كاختبار — مش هيظهر في التقارير'
+                                 : 'رجع كعميل حقيقي');
+      await reloadLeadReports();
+    }catch(e){
+      showMessage('تعذّر التعديل: ' + (window.cloudErrorText ? cloudErrorText(e) : e.message));
+    }
+  };
+
+  window.openHiddenLeads = async function(){
+    try{
+      const sb = window.CLOUD && window.CLOUD._sb;
+      const { data } = await sb.from('demo_leads')
+        .select('*').eq('is_internal', true).order('last_try_at', { ascending:false });
+      const rows = data || [];
+      openModal(`
+        <h3>🧪 سجلات مستبعدة من التقارير</h3>
+        <p class="small mtop">دي تجاربك واختباراتك — مستبعدة عشان ماتلخبطش الأرقام.
+        تقدر ترجّع أي واحد لو كان عميل حقيقي بالغلط.</p>
+        ${rows.length ? rows.map(r => `
+          <div class="flexrow" style="padding:8px 0;border-bottom:1px dashed var(--line);
+               justify-content:space-between;gap:8px;flex-wrap:wrap">
+            <div>
+              <b dir="ltr">${esc2(r.phone)}</b>
+              ${r.name ? `<span class="small"> · ${esc2(r.name)}</span>` : ''}
+              <div class="small" style="color:var(--muted)">
+                ${r.tries} محاولة · ${esc2(LB[r.source] || r.source || '')}</div>
+            </div>
+            <button class="btn sm ghost" onclick="toggleLeadInternal('${esc2(r.phone)}',false)">
+              ↩️ رجّعه للتقارير</button>
+          </div>`).join('')
+          : '<p class="small mtop">مفيش سجلات مستبعدة.</p>'}
+        <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`, true);
+    }catch(e){ showMessage('تعذّر التحميل'); }
+  };
 
   /* ============================================================
      كل الجلسات التجريبية — بالرقم ومن غيره
