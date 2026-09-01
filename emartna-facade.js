@@ -138,13 +138,15 @@
         ${a.type === 'shop' ? '<span class="bld-shop-badge">🏪</span>' : ''}${esc2(num)}</div>`;
     };
 
+    const VIEWS = [
+      ['tower','🏢','واجهة'], ['grid','▦','شبكة'],
+      ['list','☰','قائمة'],   ['heat','🔥','خريطة حرارية'], ['compact','⬛','مصغّر'],
+    ];
     const controls = `
       <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap;align-items:center">
         <span style="display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden">
-          <button class="btn sm ${view()==='tower'?'primary':'ghost'}" style="border-radius:0"
-            onclick="setFacadeView('tower')">🏢 واجهة</button>
-          <button class="btn sm ${view()==='grid'?'primary':'ghost'}" style="border-radius:0"
-            onclick="setFacadeView('grid')">▦ شبكة</button>
+          ${VIEWS.map(([k,i,l]) => `<button class="btn sm ${view()===k?'primary':'ghost'}"
+            style="border-radius:0" onclick="setFacadeView('${k}')" title="${l}">${i} ${l}</button>`).join('')}
         </span>
         <span style="display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden">
           <button class="btn sm ${numMode()==='floor'?'primary':'ghost'}" style="border-radius:0"
@@ -167,6 +169,84 @@
               ${f.units.map(unitHTML).join('')}
             </div>
           </div>`).join('')}
+      </div>`;
+    }
+
+    /* ---- شكل القائمة: كل دور سطر مع ملخّصه ---- */
+    if (view() === 'list'){
+      return controls + `
+      <div class="mtop" style="max-height:60vh;overflow:auto">
+        ${floors.map(f => {
+          const owe = isAdmin ? f.units.filter(a => (window.apBalance?apBalance(a.id):0) > 0).length : 0;
+          const pct = f.units.length ? Math.round((f.units.length-owe)/f.units.length*100) : 0;
+          return `
+          <div class="card" style="margin-bottom:8px;padding:10px 12px">
+            <div class="flexrow" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+              <div>
+                <b>${esc2(f.label)}</b>
+                <span class="small" style="color:var(--muted)"> · ${f.units.length} وحدة</span>
+              </div>
+              ${isAdmin ? `<div class="flexrow" style="gap:6px;align-items:center">
+                <span class="badge ${owe?'r':'g'}">${owe ? owe + ' متأخرة' : 'كله مسدّد'}</span>
+                <div style="width:70px;height:7px;background:var(--line);border-radius:5px;overflow:hidden">
+                  <div style="width:${pct}%;height:100%;background:var(--accent)"></div></div>
+                <span class="small">${pct}%</span>
+              </div>` : ''}
+            </div>
+            <div class="flexrow mtop" style="gap:4px;flex-wrap:wrap">
+              ${f.units.map(unitHTML).join('')}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }
+
+    /* ---- خريطة حرارية: اللون حسب حجم المتأخر ---- */
+    if (view() === 'heat'){
+      const bals = aps.map(a => window.apBalance ? apBalance(a.id) : 0);
+      const max = Math.max(1, ...bals);
+      const heatUnit = (a, i) => {
+        const bal = window.apBalance ? apBalance(a.id) : 0;
+        const r = bal > 0 ? Math.min(1, bal / max) : 0;
+        const bg = bal <= 0 ? 'var(--tint-success,#e8f5f2)'
+          : `rgba(200,45,45,${0.18 + r * 0.72})`;
+        const fg = r > 0.55 ? '#fff' : 'var(--text,#1b2b28)';
+        return `<div class="bld-unit" onclick="openApartmentDetail('${a.id}')"
+          style="background:${bg};color:${fg};border-color:transparent"
+          title="${esc2((window.unitLabel?unitLabel(a):'') + (bal>0&&window.money?' — عليه '+money(bal):' — مسدّد'))}">
+          ${esc2(facadeUnitNumber(a, i + 1))}</div>`;
+      };
+      return controls + `
+      <p class="small mtop" style="color:var(--muted)">
+        كل ما اللون أغمق، المتأخر أكبر. الأخضر = مسدّد.</p>
+      <div class="mtop" style="max-height:60vh;overflow:auto">
+        ${floors.map(f => `
+          <div class="bld-floor">
+            <div class="bld-floor-label">${esc2(f.label)}</div>
+            <div class="bld-units" style="display:grid;gap:4px;flex:1;
+                 grid-template-columns:repeat(auto-fill,minmax(46px,1fr))">
+              ${f.units.map(heatUnit).join('')}
+            </div>
+          </div>`).join('')}
+      </div>`;
+    }
+
+    /* ---- مصغّر: كل الوحدات في شبكة واحدة صغيرة ---- */
+    if (view() === 'compact'){
+      return controls + `
+      <p class="small mtop" style="color:var(--muted)">
+        كل الوحدات في نظرة واحدة — مناسب للعمارات الكبيرة.</p>
+      <div class="mtop" style="display:grid;gap:3px;max-height:60vh;overflow:auto;
+           grid-template-columns:repeat(auto-fill,minmax(34px,1fr))">
+        ${aps.map((a, i) => {
+          const cls = classOf(a, mode, month);
+          const bal = (isAdmin && window.apBalance) ? apBalance(a.id) : 0;
+          return `<div class="bld-unit ${cls}" onclick="openApartmentDetail('${a.id}')"
+            style="min-width:32px;font-size:10px;padding:5px 1px"
+            title="${esc2((window.unitLabel?unitLabel(a):'') + ' — ' + (a.floor||'') +
+              (bal>0&&window.money?' — عليه '+money(bal):''))}">
+            ${esc2(facadeUnitNumber(a, 1))}</div>`;
+        }).join('')}
       </div>`;
     }
 
