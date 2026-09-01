@@ -164,8 +164,8 @@
           <div style="margin-bottom:10px">
             <div class="small" style="color:var(--muted);margin-bottom:4px;font-weight:700">
               ${esc2(f.label)} <span style="font-weight:400">(${f.units.length})</span></div>
-            <div style="display:grid;gap:5px;
-                 grid-template-columns:repeat(auto-fill,minmax(52px,1fr))">
+            <div style="display:grid;gap:5px;justify-content:start;
+                 grid-template-columns:repeat(auto-fill,minmax(52px,72px))">
               ${f.units.map(unitHTML).join('')}
             </div>
           </div>`).join('')}
@@ -193,7 +193,7 @@
                 <span class="small">${pct}%</span>
               </div>` : ''}
             </div>
-            <div class="flexrow mtop" style="gap:4px;flex-wrap:wrap">
+            <div class="flexrow mtop" style="gap:4px;flex-wrap:wrap;justify-content:flex-start">
               ${f.units.map(unitHTML).join('')}
             </div>
           </div>`;
@@ -223,8 +223,8 @@
         ${floors.map(f => `
           <div class="bld-floor">
             <div class="bld-floor-label">${esc2(f.label)}</div>
-            <div class="bld-units" style="display:grid;gap:4px;flex:1;
-                 grid-template-columns:repeat(auto-fill,minmax(46px,1fr))">
+            <div class="bld-units" style="display:grid;gap:4px;flex:1;justify-content:start;
+                 grid-template-columns:repeat(auto-fill,minmax(46px,66px))">
               ${f.units.map(heatUnit).join('')}
             </div>
           </div>`).join('')}
@@ -238,7 +238,7 @@
         كل الوحدات في نظرة واحدة — مناسب للعمارات الكبيرة.</p>
       <div class="mtop" style="display:grid;gap:3px;max-height:60vh;overflow:auto;
            grid-template-columns:repeat(auto-fill,minmax(34px,1fr))">
-        ${aps.map((a, i) => {
+        ${''}${aps.map((a, i) => {
           const cls = classOf(a, mode, month);
           const bal = (isAdmin && window.apBalance) ? apBalance(a.id) : 0;
           return `<div class="bld-unit ${cls}" onclick="openApartmentDetail('${a.id}')"
@@ -259,7 +259,8 @@
           <div class="bld-floor-label">${esc2(f.label)}${
             f.units.length > 6 ? `<div style="font-size:10px;opacity:.7">${f.units.length} وحدة</div>` : ''}</div>
           <div class="bld-units"${wide
-            ? ' style="display:grid;gap:4px;grid-template-columns:repeat(auto-fill,minmax(46px,1fr));flex:1"'
+            ? ' style="display:grid;gap:4px;justify-content:start;' +
+              'grid-template-columns:repeat(auto-fill,minmax(46px,66px));flex:1"'
             : ''}>
             ${f.units.map(unitHTML).join('')}
           </div>
@@ -279,6 +280,9 @@
       .bld-wide .bld-unit{ min-width:44px; font-size:12px; padding:6px 2px }
       .bld-wide .bld-floor-label{ min-width:74px; font-size:12px }
       .bld-wrap .bld-unit{ transition:transform .12s }
+      /* الوحدة الواحدة في الدور مكانتش بتتمدّد على عرض الشاشة كله */
+      .bld-unit{ max-width:96px }
+      .bld-units{ justify-content:flex-start }
       .bld-wrap .bld-unit:hover{ transform:scale(1.06); z-index:2 }
       @media (max-width:720px){
         .bld-floor-label{ min-width:62px !important; font-size:11px !important }

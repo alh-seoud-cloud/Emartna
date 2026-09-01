@@ -968,6 +968,16 @@ async function createBuildingRecord(name,apartmentsCount,perFloor,adminUsername,
   if(adminPhone)linkLeadsToBuilding(adminPhone,id);
   saveRegistry();
 
+  // توزيع الأدوار المخصّص اللي اختاره العميل وقت التسجيل
+  if(window.__suPlan&&window.applySignupPlan){
+    try{
+      const prevD=window.D; window.D=data;
+      applySignupPlan();
+      saveBuildingData(id,window.D);
+      window.D=prevD;
+    }catch(e){ console.error('[عمارتنا] توزيع الأدوار:',e); }
+  }
+
   /* ⚠️ مهم: العمارة لازم تتعمل على الخادم كمان.
      من غير ده كانت بتفضل في ذاكرة المتصفح بس وتختفي. */
   if(window.createBuildingOnServer && window.CLOUD && window.CLOUD._sb){
@@ -2284,9 +2294,37 @@ function signupHTML(){
           <option value="compound">كمبوند (أكتر من عمارة/فيلا تحت إدارة واحدة)</option>
         </select></div>
         <div id="suFlatUnitsWrap">
-        <div class="field"><label>عدد الشقق</label><input id="suCount" type="number" value="24"></div>
-        <div class="field"><label>عدد الوحدات في الدور الأرضي <span style="font-weight:400">(ممكن يختلف عن باقي الأدوار)</span></label><input id="suGroundCount" type="number" value="4" min="1"></div>
-        <div class="field"><label>عدد المحلات من ضمنها (إن وجدت) <span style="font-weight:400">(اتركها صفر لو مفيش محلات)</span></label><input id="suGroundShops" type="number" value="0" min="0"></div>
+        <div class="field"><label>عدد الأدوار (غير الأرضي)</label>
+          <input id="suFloors" type="number" value="5" min="0" max="40" oninput="suBuildFloorRows()"></div>
+
+        <div class="field"><label>الدور الأرضي</label>
+          <div class="flexrow" style="gap:6px;align-items:center">
+            <span class="small" style="min-width:34px">شقق</span>
+            <input id="suGroundApts" type="number" value="0" min="0" style="width:70px;text-align:center" oninput="suCalcUnits()">
+            <span class="small" style="min-width:44px">محلات</span>
+            <input id="suGroundShops" type="number" value="4" min="0" style="width:70px;text-align:center" oninput="suCalcUnits()">
+          </div>
+          <p class="small">سيب الاتنين صفر لو الأرضي جراج أو مدخل بس.</p></div>
+
+        <div class="field"><label>باقي الأدوار</label>
+          <div class="flexrow" style="gap:6px;align-items:center">
+            <span class="small" style="min-width:34px">شقق</span>
+            <input id="suPerFloor" type="number" value="4" min="0" style="width:70px;text-align:center" oninput="suBuildFloorRows()">
+            <span class="small">في كل دور</span>
+            <button type="button" class="btn sm ghost" onclick="suToggleDetail()">
+              أدواري مش متشابهة ▾</button>
+          </div></div>
+
+        <div id="suFloorDetail" class="field hidden">
+          <label>عدد الوحدات في كل دور</label>
+          <div id="suFloorRows" style="max-height:34vh;overflow:auto"></div>
+        </div>
+
+        <div class="field"><div class="card" style="padding:8px 12px;text-align:center">
+          <b id="suUnitsOut">الإجمالي: 24 وحدة</b>
+          <input id="suCount" type="hidden" value="24">
+          <input id="suGroundCount" type="hidden" value="4">
+        </div></div>
         </div>
         <div id="suCompoundNote" class="field hidden"><p class="small">هتقدر تضيف كل مبنى وفيلا في الكمبوند بالتفصيل من شاشة "مباني وفلل الكمبوند" بعد إنشاء الحساب مباشرة.</p></div>
         <div class="field"><label>الدولة</label><select id="suNationCountry" onchange="toggleGovernorateField('su');linkCountryToCode('suNationCountry','suCountry')">${nationOptions('مصر')}</select></div>

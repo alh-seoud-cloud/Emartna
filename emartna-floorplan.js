@@ -248,6 +248,98 @@
     if (window.syncBuildingShape) syncBuildingShape(true);
   };
 
+
+  /* ============================================================
+     توزيع الأدوار أثناء التسجيل
+     ============================================================ */
+
+  window.suToggleDetail = function(){
+    const box = document.getElementById('suFloorDetail');
+    if (!box) return;
+    box.classList.toggle('hidden');
+    if (!box.classList.contains('hidden')) suBuildFloorRows();
+    suCalcUnits();
+  };
+
+  window.suBuildFloorRows = function(){
+    const box = document.getElementById('suFloorRows');
+    const n = Math.max(0, Number((document.getElementById('suFloors')||{}).value) || 0);
+    const per = Math.max(0, Number((document.getElementById('suPerFloor')||{}).value) || 0);
+    if (box){
+      const old = {};
+      box.querySelectorAll('.su-frow').forEach(r => {
+        old[r.dataset.i] = {
+          a: r.querySelector('.su-fa').value,
+          s: r.querySelector('.su-fs').value,
+        };
+      });
+      let html = '';
+      for (let i = 1; i <= n; i++){
+        const o = old[i] || {};
+        html += `
+        <div class="su-frow flexrow" data-i="${i}"
+             style="gap:6px;align-items:center;padding:4px 0;border-bottom:1px dashed var(--line)">
+          <span class="small" style="min-width:92px">${esc2(floorName(i))}</span>
+          <span class="small" style="color:var(--muted)">شقق</span>
+          <input type="number" min="0" class="su-fa" value="${o.a !== undefined ? o.a : per}"
+            style="width:60px;text-align:center" oninput="suCalcUnits()">
+          <span class="small" style="color:var(--muted)">محلات</span>
+          <input type="number" min="0" class="su-fs" value="${o.s !== undefined ? o.s : 0}"
+            style="width:60px;text-align:center" oninput="suCalcUnits()">
+        </div>`;
+      }
+      box.innerHTML = html || '<p class="small">مفيش أدوار فوق الأرضي</p>';
+    }
+    suCalcUnits();
+  };
+
+  /* بيحسب الإجمالي وبيخزّن التوزيع للاستخدام وقت الإنشاء */
+  window.suCalcUnits = function(){
+    const g = id => Number((document.getElementById(id)||{}).value) || 0;
+    const detail = document.getElementById('suFloorDetail');
+    const detailed = detail && !detail.classList.contains('hidden');
+
+    const plan = [{ i:0, name: floorName(0), apts: g('suGroundApts'), shops: g('suGroundShops') }];
+
+    if (detailed){
+      document.querySelectorAll('.su-frow').forEach(r => {
+        plan.push({ i:Number(r.dataset.i), name: floorName(Number(r.dataset.i)),
+          apts: Number(r.querySelector('.su-fa').value) || 0,
+          shops: Number(r.querySelector('.su-fs').value) || 0 });
+      });
+    }else{
+      const n = g('suFloors'), per = g('suPerFloor');
+      for (let i = 1; i <= n; i++)
+        plan.push({ i, name: floorName(i), apts: per, shops: 0 });
+    }
+
+    const total = plan.reduce((t,f) => t + f.apts + f.shops, 0);
+    window.__suPlan = plan;
+
+    const out = document.getElementById('suUnitsOut');
+    if (out){
+      const shops = plan.reduce((t,f) => t + f.shops, 0);
+      out.innerHTML = `الإجمالي: <span style="color:var(--accent)">${total}</span> وحدة` +
+        (shops ? ` <span class="small">(${total-shops} شقة · ${shops} محل)</span>` : '');
+    }
+    const cnt = document.getElementById('suCount');
+    if (cnt) cnt.value = total;
+    const gc = document.getElementById('suGroundCount');
+    if (gc) gc.value = plan[0].apts + plan[0].shops;
+    return total;
+  };
+
+  /* بعد إنشاء العمارة، بنطبّق التوزيع لو كان مخصّص */
+  window.applySignupPlan = function(){
+    const plan = window.__suPlan;
+    if (!plan || !window.D) return;
+    const same = plan.every((f,i) => i === 0 || f.shops === 0) &&
+                 new Set(plan.slice(1).map(f => f.apts)).size <= 1;
+    if (same) return;                 // التوزيع العادي — البرنامج عمله صح
+    window.__pendingPlan = plan;
+    try{ applyFloorPlan(); }catch(e){}
+  };
+
   /* زرار في شاشة بيانات العمارة */
   const origPage = window.pageBuilding;
   if (typeof origPage === 'function' && !origPage.__plan){
