@@ -748,9 +748,10 @@ function floorSortIndex(a){
   return idx>=0?idx:999;
 }
 function floorLabel(n,groundCount,perFloor){
-  groundCount=groundCount||4; perFloor=perFloor||4;
+  groundCount=(groundCount===0||groundCount)?Number(groundCount):4;
+  perFloor=perFloor||4;
   if(!n||n<1)return'';
-  if(n<=groundCount)return'الدور الأرضي';
+  if(groundCount>0&&n<=groundCount)return'الدور الأرضي';
   const idx=Math.floor((n-groundCount-1)/perFloor);
   const name=FLOOR_ORDINALS[idx+1]!==undefined?FLOOR_ORDINALS[idx+1]:('رقم '+(idx+1));
   return'الدور '+name;
@@ -892,7 +893,9 @@ function freshAccounts(){return[
 ]}
 async function seedBuildingData(name,apartmentsCount,perFloor,adminUsername,adminPassword,recoveryQ,recoveryA,adminPhoneCountry,adminPhone,adminEmail,usernamePrefix,groundShopsCount,address,locationUrl,city,groundFloorCountIn,country,governorate,communityType){
   usernamePrefix=usernamePrefix||'';
-  const groundCount=groundFloorCountIn||perFloor;
+  // الصفر قيمة صالحة: في عمارات الأرضي كله جراج أو مدخل.
+  // استخدام || كان بيحوّل الصفر لـperFloor ويخترع وحدات مش موجودة.
+  const groundCount=(groundFloorCountIn===0||groundFloorCountIn)?Number(groundFloorCountIn):perFloor;
   groundShopsCount=Math.min(groundShopsCount||0,groundCount);
   const apartments=[],users=[];
   const adminUser={id:uid(),username:adminUsername,password:await hashPassword(adminPassword),role:'admin',name:(window.__signupAdminName||'رئيس اتحاد الملاك'),phoneCountry:adminPhoneCountry||'+20',phone:adminPhone||'',email:adminEmail||'',apartmentId:null,active:true};
@@ -8821,7 +8824,16 @@ function openUserModal(id){
       <p class="small mtop">حدد أي أقسام يقدر هذا المستخدم يدخلها. سيب الكل بدون تحديد لصلاحيات كاملة.</p>
       <div id="uPermsCheckList">${renderPermCheckboxesFor(currentRole,perms)}</div>
     </div>`:''}
-    ${isApartmentUser?`<p class="small mtop">لتعديل بيانات الشقة نفسها (المالك، الاشتراك...) استخدم صفحة "الشقق والملاك".</p>`:''}
+    ${isApartmentUser?`<p class="small mtop">لتعديل بيانات الشقة نفسها (المالك، الاشتراك...) استخدم صفحة "الشقق والملاك".</p>`:`
+      <div class="field2 mtop"><label>وحدته في العمارة (اختياري)</label>
+        <select id="uApartment">
+          <option value="">— مش صاحب وحدة —</option>
+          ${(D.apartments||[]).slice().sort((a,b)=>(a.number||0)-(b.number||0))
+            .map(a=>`<option value="${esc(a.id)}" ${u&&u.apartmentId===a.id?'selected':''}>${
+              esc(unitLabel(a))}${a.ownerName?' — '+esc(a.ownerName):''}</option>`).join('')}
+        </select>
+        <p class="small">معظم أعضاء الإدارة عندهم شقة في نفس العمارة. اربطه بوحدته
+        عشان يشوف حسابه ومستحقاته زي أي ساكن — <b>بحساب واحد مش اتنين</b>.</p></div>`}
     <div class="modal-actions"><button class="btn primary" onclick="saveUser(${u?`'${u.id}'`:'null'})">💾 حفظ</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
 }
 function renderPermCheckboxesFor(role,perms){
@@ -8882,13 +8894,19 @@ async function saveUser(id){
       u.role=newRole;
     }
     u.name=name;u.phoneCountry=phoneCountry;u.phone=phone;u.email=email;u.active=active;
+    const apSel=document.getElementById('uApartment');
+    if(apSel)u.apartmentId=apSel.value||null;      // ربطه بوحدته
     if(permsBox)u.permissions=newPerms;
     if(pass)u.password=await hashPassword(pass);
   }else{
     const username=document.getElementById('uUser').value.trim();
     if(!username)return showMessage('أدخل اسم المستخدم');
     if(isUsernameTaken(username))return showMessage('اسم المستخدم مستخدم بالفعل');
-    D.users.push({id:uid(),username,password:await hashPassword(pass||'Admin@1234'),role:'admin',name,phoneCountry,phone,email,apartmentId:null,active,permissions:newPerms});
+    const apSel=document.getElementById('uApartment');
+    const roleSel=document.getElementById('uRole');
+    D.users.push({id:uid(),username,password:await hashPassword(pass||'Admin@1234'),
+      role:(roleSel&&roleSel.value)||'admin',name,phoneCountry,phone,email,
+      apartmentId:(apSel&&apSel.value)||null,active,permissions:newPerms});
     logActivity('إضافة مستخدم مسؤول',username);
   }
   save();closeModal();toast('تم الحفظ');renderContent();

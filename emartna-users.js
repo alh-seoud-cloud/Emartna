@@ -368,10 +368,24 @@ window.openUserModal = function(id){
       <div class="field2"><label>رقم الموبايل</label>
         <input id="nuPhone" placeholder="01012345678"></div>
       <div class="field2"><label>الصلاحية</label>
-        <select id="nuRole">
-          <option value="admin">${ROLE_LABELS.admin}</option>
-          <option value="owner">${ROLE_LABELS.owner}</option>
+        <select id="nuRole" onchange="onInviteRoleChange()">
+          ${Object.keys(CLOUD_ROLES).map(k =>
+            `<option value="${k}">${CLOUD_ROLES[k].label} — ${CLOUD_ROLES[k].hint}</option>`).join('')}
         </select></div>
+
+      <div class="field2"><label>وحدته في العمارة (اختياري)</label>
+        <select id="nuApartment">
+          <option value="">— مش صاحب وحدة —</option>
+          ${(D.apartments||[]).slice()
+            .sort((a,b)=>(a.number||0)-(b.number||0))
+            .map(a => `<option value="${esc(a.id)}">${esc(unitLabel(a))}${
+              a.ownerName ? ' — ' + esc(a.ownerName) : ''}</option>`).join('')}
+        </select>
+        <p class="small" id="nuApHint">
+          معظم أعضاء الإدارة عندهم شقة في نفس العمارة. اربطه بوحدته هنا
+          عشان يشوف حسابه زي أي ساكن — <b>بحساب واحد مش اتنين</b>.
+        </p></div>
+
       <div class="modal-actions">
         <button class="btn primary" onclick="createAdminInvite()">📨 ولّد الدعوة</button>
         <button class="btn ghost" onclick="closeModal()">إلغاء</button>
@@ -653,6 +667,15 @@ window.openUserModal = function(id){
            ).join('')}
         </select></div>
       <div id="nuPerms">${permCheckboxes('nu', CLOUD_ROLES.admin.perms)}</div>
+      <div class="field2"><label>وحدته في العمارة (اختياري)</label>
+        <select id="nuApartment">
+          <option value="">— مش صاحب وحدة —</option>
+          ${(D.apartments||[]).slice().sort((a,b)=>(a.number||0)-(b.number||0))
+            .map(a => `<option value="${esc(a.id)}">${esc(unitLabel(a))}${
+              a.ownerName ? ' — ' + esc(a.ownerName) : ''}</option>`).join('')}
+        </select>
+        <p class="small">لو عضو الإدارة عنده شقة، اربطه بيها — <b>حساب واحد يشوف الاتنين</b>.</p></div>
+
       <div class="modal-actions">
         <button class="btn primary" onclick="createAdminInvite()">📨 ولّد الدعوة</button>
         <button class="btn ghost" onclick="closeModal()">إلغاء</button>
@@ -781,8 +804,10 @@ window.createAdminInvite = async function(){
   if (!phone) return showMessage('اكتب رقم الموبايل');
 
   try{
+    const apEl = document.getElementById('nuApartment');
     const inv = await window.CLOUD.invites.create(window.activeBuildingId,
-      { phone, phoneCountry:'+20', role, permissions: perms });
+      { phone, phoneCountry:'+20', role, permissions: perms,
+        apartmentId: (apEl && apEl.value) || null, name });
     closeModal();
     await window.refreshUsers();
     openModal(`
