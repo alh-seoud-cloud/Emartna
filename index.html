@@ -973,6 +973,7 @@ async function createBuildingRecord(name,apartmentsCount,perFloor,adminUsername,
     try{
       const prevD=window.D; window.D=data;
       applySignupPlan();
+      if(window.applySignupNumbering)applySignupNumbering();
       saveBuildingData(id,window.D);
       window.D=prevD;
     }catch(e){ console.error('[عمارتنا] توزيع الأدوار:',e); }
@@ -2318,6 +2319,23 @@ function signupHTML(){
         <div id="suFloorDetail" class="field hidden">
           <label>عدد الوحدات في كل دور</label>
           <div id="suFloorRows" style="max-height:34vh;overflow:auto"></div>
+        </div>
+
+        <div class="field"><label>ترقيم الوحدات</label>
+          <select id="suNumStyle" onchange="suNumStyleChanged()">
+            <option value="floor">دور + رقم — ١٠١ · ١٠٢ · ٢٠١</option>
+            <option value="plain">متسلسل بالعربي — ١ · ٢ · ٣</option>
+            <option value="en">متسلسل بالإنجليزي — 1 · 2 · 3</option>
+            <option value="typed">بالنوع — شقة ١ · محل ١</option>
+            <option value="custom">هحددها بنفسي لكل دور</option>
+          </select>
+          <p class="small" id="suNumHint">زي اللي مكتوب على أبواب الشقق.</p></div>
+
+        <div id="suNumCustom" class="field hidden">
+          <label>نمط الترقيم لكل دور</label>
+          <div id="suNumRows" style="max-height:30vh;overflow:auto"></div>
+          <p class="small">مثال: اكتب <b>A</b> في الدور الأول تطلع A1 · A2،
+          أو <b>101</b> تطلع 101 · 102.</p>
         </div>
 
         <div class="field"><div class="card" style="padding:8px 12px;text-align:center">

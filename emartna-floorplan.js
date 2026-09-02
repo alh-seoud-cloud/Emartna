@@ -259,6 +259,7 @@
     box.classList.toggle('hidden');
     if (!box.classList.contains('hidden')) suBuildFloorRows();
     suCalcUnits();
+    if ((document.getElementById('suNumStyle')||{}).value === 'custom') suBuildNumRows();
   };
 
   window.suBuildFloorRows = function(){
@@ -316,6 +317,15 @@
     const total = plan.reduce((t,f) => t + f.apts + f.shops, 0);
     window.__suPlan = plan;
 
+    // نمط الترقيم والمقدّمات
+    window.__suNumStyle = (document.getElementById('suNumStyle')||{}).value || 'floor';
+    const pre = {};
+    document.querySelectorAll('.su-nrow').forEach(r => {
+      pre[Number(r.dataset.i)] = r.querySelector('.su-np').value;
+    });
+    window.__suNumPrefix = pre;
+    setTimeout(() => { try{ suUpdateNumPreview(); }catch(e){} }, 0);
+
     const out = document.getElementById('suUnitsOut');
     if (out){
       const shops = plan.reduce((t,f) => t + f.shops, 0);
@@ -328,6 +338,101 @@
     if (gc) gc.value = plan[0].apts + plan[0].shops;
     return total;
   };
+
+
+  /* ---------- نمط الترقيم أثناء التسجيل ---------- */
+
+  const AR_D = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+  const toAr2 = n => String(n).replace(/\d/g, d => AR_D[+d]);
+
+  /* بيبني رقم الوحدة حسب النمط المختار */
+  function unitNumFor(style, floorIdx, idxInFloor, isShop, prefix){
+    if (style === 'custom'){
+      const p = String(prefix || '').trim();
+      if (!p) return '';
+      // لو المقدّمة رقم (١٠١) بنعدّ منها، ولو حرف بنلزقه بالرقم
+      const n = parseInt(p.replace(/[^\d]/g,''), 10);
+      if (!isNaN(n) && /^\d+$/.test(p.replace(/[^\d]/g,'')) && /\d/.test(p))
+        return String(n + idxInFloor - 1);
+      return p + idxInFloor;
+    }
+    if (style === 'plain')  return toAr2(idxInFloor);
+    if (style === 'en')     return String(idxInFloor);
+    if (style === 'typed')  return (isShop ? 'محل ' : 'شقة ') + toAr2(idxInFloor);
+    // الافتراضي: دور + رقم
+    return floorIdx === 0 ? toAr2(idxInFloor) : toAr2(floorIdx * 100 + idxInFloor);
+  }
+
+  window.suNumStyleChanged = function(){
+    const st = (document.getElementById('suNumStyle')||{}).value;
+    const box = document.getElementById('suNumCustom');
+    const hint = document.getElementById('suNumHint');
+    if (box) box.classList.toggle('hidden', st !== 'custom');
+    if (hint) hint.textContent = st === 'custom'
+      ? 'اكتب بداية الترقيم لكل دور.'
+      : 'زي اللي مكتوب على أبواب الشقق.';
+    if (st === 'custom') suBuildNumRows();
+    suCalcUnits();
+  };
+
+  window.suBuildNumRows = function(){
+    const box = document.getElementById('suNumRows');
+    if (!box) return;
+    const plan = window.__suPlan || [];
+    const old = {};
+    box.querySelectorAll('.su-nrow').forEach(r => { old[r.dataset.i] = r.querySelector('input').value; });
+    box.innerHTML = plan.filter(f => f.apts + f.shops > 0).map(f => `
+      <div class="su-nrow flexrow" data-i="${f.i}"
+           style="gap:6px;align-items:center;padding:4px 0;border-bottom:1px dashed var(--line)">
+        <span class="small" style="min-width:92px">${esc2(f.name)}</span>
+        <input class="su-np" value="${old[f.i] !== undefined ? esc2(old[f.i])
+          : (f.i === 0 ? '' : String(f.i * 100 + 1))}"
+          placeholder="مثال: ${f.i === 0 ? '1' : (f.i * 100 + 1)}"
+          style="flex:1;min-width:80px" oninput="suCalcUnits()">
+        <span class="small" style="color:var(--muted);min-width:74px" data-preview></span>
+      </div>`).join('') || '<p class="small">حدد الأدوار الأول</p>';
+    suUpdateNumPreview();
+  };
+
+  window.suUpdateNumPreview = function(){
+    const st = (document.getElementById('suNumStyle')||{}).value || 'floor';
+    const plan = window.__suPlan || [];
+    document.querySelectorAll('.su-nrow').forEach(r => {
+      const i = Number(r.dataset.i);
+      const f = plan.find(x => x.i === i) || { apts:0, shops:0 };
+      const p = r.querySelector('.su-np').value;
+      const el = r.querySelector('[data-preview]');
+      if (!el) return;
+      const a = unitNumFor(st, i, 1, false, p);
+      const b = unitNumFor(st, i, 2, false, p);
+      el.textContent = (f.apts + f.shops) > 1 ? `${a} · ${b}…` : a;
+    });
+  };
+
+  /* بيطبّق الترقيم على الوحدات بعد إنشاء العمارة */
+  window.applySignupNumbering = function(){
+    const st = window.__suNumStyle || 'floor';
+    if (st === 'floor' && !window.__suNumPrefix) { /* الافتراضي برضه بيتطبّق */ }
+    const D = window.D;
+    if (!D || !D.apartments) return;
+    const perFloor = {};
+    [...D.apartments].sort((a,b) => (a.number||0) - (b.number||0)).forEach(a => {
+      const fk = String(a.floor || '');
+      perFloor[fk] = (perFloor[fk] || 0) + 1;
+      const fi = floorIdxOf(a.floor);
+      const pre = (window.__suNumPrefix || {})[fi];
+      const v = unitNumFor(st, fi === null ? 0 : fi, perFloor[fk], a.type === 'shop', pre);
+      if (v) a.label = v;
+    });
+  };
+
+  function floorIdxOf(label){
+    const t = String(label || '').trim();
+    const byLen = ORD.map((n,i) => ({n,i})).sort((a,b) => b.n.length - a.n.length);
+    for (const o of byLen) if (t.includes(o.n)) return o.i;
+    const m = t.match(/\d+/);
+    return m ? Number(m[0]) : null;
+  }
 
   /* بعد إنشاء العمارة، بنطبّق التوزيع لو كان مخصّص */
   window.applySignupPlan = function(){
