@@ -884,6 +884,7 @@ const CLOUD = {
       durationMonths: p.duration_months,
       maxApartments: p.max_apartments,
       maxTransactions: p.max_transactions,
+      maxStaff: p.max_staff,
       isTrial: !!p.is_trial, active: p.active !== false,
     }));
 
@@ -953,6 +954,7 @@ const CLOUD = {
         facebookUrl: b.facebook_url || '',
         claimedOfferId: b.claimed_offer_id || null,
         referralRewardGiven: !!b.referral_reward_given,
+        maxStaffOverride: b.max_staff_override ?? null,
         lastAdminLoginAt: b.last_admin_login_at || null,
         lastAdminLoginName: b.last_admin_login_name || '',
         // مهم: البرنامج بيقرا الترخيص بأسماء startDate/endDate/plan/status.
@@ -1331,6 +1333,7 @@ async function pushRegistry(){
         duration_months: p.durationMonths || null,
         max_apartments: p.maxApartments || null,
         max_transactions: p.maxTransactions || null,
+        max_staff: p.maxStaff ?? null,
         is_trial: !!p.isTrial,
         active: p.active !== false,
         features: { icon: p.icon || '💳' },

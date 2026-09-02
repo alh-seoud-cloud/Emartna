@@ -66,6 +66,7 @@ const BUILDING_LICENSE_FIELDS = b => ({
   facebook_url:    b.facebookUrl ?? null,
   claimed_offer_id: b.claimedOfferId ?? null,
   referral_reward_given: !!b.referralRewardGiven,
+  max_staff_override:    b.maxStaffOverride ?? null,
   city:            b.city ?? null,
   governorate:     b.governorate ?? null,
   address:         b.address ?? null,

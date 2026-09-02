@@ -3343,11 +3343,11 @@ function sysToggleUserActive(buildingId,username){
 /* ---------- التراخيص والاشتراكات ---------- */
 function defaultPlansSeed(){
   return[
-    {key:'trial',name:'تجريبي',icon:'🆓',durationMonths:1,priceBefore:0,discountPercent:0,maxApartments:100,maxTransactions:null,isTrial:true,active:true},
-    {key:'promo_2months',name:'عرض شهرين مجاني - عملاء جدد',icon:'🎉',durationMonths:2,priceBefore:0,discountPercent:0,maxApartments:100,maxTransactions:null,isTrial:false,active:true},
-    {key:'monthly',name:'اشتراك شهري',icon:'📅',durationMonths:1,priceBefore:100,discountPercent:0,maxApartments:null,maxTransactions:null,isTrial:false,active:true},
-    {key:'quarterly',name:'اشتراك 3 شهور',icon:'🗓️',durationMonths:3,priceBefore:300,discountPercent:10,maxApartments:null,maxTransactions:null,isTrial:false,active:true},
-    {key:'custom',name:'مخصص / غير محدود',icon:'♾️',durationMonths:null,priceBefore:0,discountPercent:0,maxApartments:null,maxTransactions:null,isTrial:false,active:true},
+    {key:'trial',name:'تجريبي',icon:'🆓',durationMonths:1,priceBefore:0,discountPercent:0,maxApartments:100,maxTransactions:null,maxStaff:1,isTrial:true,active:true},
+    {key:'promo_2months',name:'عرض شهرين مجاني - عملاء جدد',icon:'🎉',durationMonths:2,priceBefore:0,discountPercent:0,maxApartments:100,maxTransactions:null,maxStaff:1,isTrial:false,active:true},
+    {key:'monthly',name:'اشتراك شهري',icon:'📅',durationMonths:1,priceBefore:100,discountPercent:0,maxApartments:null,maxTransactions:null,maxStaff:2,isTrial:false,active:true},
+    {key:'quarterly',name:'اشتراك 3 شهور',icon:'🗓️',durationMonths:3,priceBefore:300,discountPercent:10,maxApartments:null,maxTransactions:null,maxStaff:2,isTrial:false,active:true},
+    {key:'custom',name:'مخصص / غير محدود',icon:'♾️',durationMonths:null,priceBefore:0,discountPercent:0,maxApartments:null,maxTransactions:null,maxStaff:null,isTrial:false,active:true},
   ];
 }
 function ensurePlans(){
@@ -5409,6 +5409,7 @@ function pageSysPlans(){
           <div><b>السعر بعد الخصم:</b> ${money(after)}</div>
           <div><b>مدة الاشتراك:</b> ${p.durationMonths?p.durationMonths+' شهر':'بلا انتهاء'}</div>
           <div><b>حد الشقق:</b> ${p.maxApartments||'غير محدود'}</div>
+          <div><b>حد المساعدين:</b> ${p.maxStaff??'بلا حد'}</div>
           <div><b>حد المعاملات:</b> ${p.maxTransactions||'غير محدود'}</div>
           <div><b>عدد العملاء على هذه الخطة:</b> ${usageCount(p.key)}</div>
         </div>
@@ -5441,7 +5442,12 @@ function openPlanModal(key){
       <div class="field2"><label>مدة الاشتراك بالشهور (اتركها فارغة = بلا انتهاء)</label><input id="plDuration" type="number" value="${p&&p.durationMonths?p.durationMonths:''}"></div>
       <div class="field2"><label>حد عدد الشقق (اتركه فارغًا = غير محدود)</label><input id="plMaxAp" type="number" value="${p&&p.maxApartments?p.maxApartments:''}"></div>
     </div>
-    <div class="field2"><label>حد عدد المعاملات (اتركه فارغًا = غير محدود)</label><input id="plMaxTx" type="number" value="${p&&p.maxTransactions?p.maxTransactions:''}"></div>
+    <div class="grid g2">
+      <div class="field2"><label>حد عدد المعاملات (اتركه فارغًا = غير محدود)</label><input id="plMaxTx" type="number" value="${p&&p.maxTransactions?p.maxTransactions:''}"></div>
+      <div class="field2"><label>حد المساعدين (محاسب/إداري)</label>
+        <input id="plMaxStaff" type="number" min="0" value="${p&&p.maxStaff!=null?p.maxStaff:''}">
+        <p class="small">غير رئيس الاتحاد وأصحاب الوحدات. فاضي = بلا حد.</p></div>
+    </div>
     <label class="checkline"><input type="checkbox" id="plIsTrial" ${p&&p.isTrial?'checked':''}> استخدم هذه الخطة تلقائيًا لأي حساب رئيس اتحاد جديد يسجّل بنفسه (خطة تجريبية واحدة فقط في كل مرة)</label>
     <div class="modal-actions"><button class="btn primary" onclick="savePlan(${p?`'${p.key}'`:'null'})">💾 حفظ</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
 }
@@ -5458,14 +5464,16 @@ function savePlan(key){
   const durationMonths=Number(document.getElementById('plDuration').value||0)||null;
   const maxApartments=Number(document.getElementById('plMaxAp').value||0)||null;
   const maxTransactions=Number(document.getElementById('plMaxTx').value||0)||null;
+  const staffRaw=(document.getElementById('plMaxStaff')||{}).value;
+  const maxStaff=String(staffRaw).trim()===''?null:Math.max(0,Number(staffRaw)||0);
   const isTrial=document.getElementById('plIsTrial').checked;
   ensurePlans();
   if(isTrial)REG.plans.forEach(p=>p.isTrial=false);
   if(key){
     const p=findPlan(key);
-    Object.assign(p,{name,icon,priceBefore,discountPercent,durationMonths,maxApartments,maxTransactions,isTrial});
+    Object.assign(p,{name,icon,priceBefore,discountPercent,durationMonths,maxApartments,maxTransactions,maxStaff,isTrial});
   }else{
-    REG.plans.push({key:'plan_'+uid(),name,icon,priceBefore,discountPercent,durationMonths,maxApartments,maxTransactions,isTrial});
+    REG.plans.push({key:'plan_'+uid(),name,icon,priceBefore,discountPercent,durationMonths,maxApartments,maxTransactions,maxStaff,isTrial});
   }
   saveRegistry(); closeModal(); toast('تم حفظ الخطة'); renderSysContent();
 }
@@ -7406,7 +7414,9 @@ function pageApartments(){
   const typeBadge=a=>a.type==='shop'?'<span class="badge y">🏪 محل</span>':'<span class="badge n">🏠 شقة</span>';
   const APARTMENT_COLS=[
     {key:'blockName',label:'المبنى/الفيلا',value:a=>a.blockName,cell:a=>esc(a.blockName||'-'),default:D.building.communityType==='compound'},
-    {key:'number',label:'رقم الوحدة',value:a=>unitTypeIndex(a),cell:a=>`<b>${unitTypeIndex(a)}</b>`},
+    {key:'number',label:'رقم الوحدة',
+      value:a=>(a.label&&String(a.label).trim())||String(unitTypeIndex(a)),
+      cell:a=>`<b>${(a.label&&String(a.label).trim())?esc(String(a.label).trim()):unitTypeIndex(a)}</b>`},
     {key:'type',label:'النوع',value:a=>a.type==='shop'?1:0,cell:typeBadge},
     {key:'usageType',label:'الاستخدام',value:a=>a.usageType,cell:a=>`<span class="small">${esc(a.usageType||'-')}</span>`},
     {key:'floor',label:'الدور',value:a=>a.floor,sortValue:a=>floorSortIndex(a),cell:a=>esc(a.floor||'')},
@@ -9700,6 +9710,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
 <script type="module" src="emartna-pricing.js"></script>
 <script type="module" src="emartna-newbld.js"></script>
 <script type="module" src="emartna-floorplan.js"></script>
+<script type="module" src="emartna-staff.js"></script>
 <script type="module" src="emartna-lastlogin.js"></script>
 
 </body>
