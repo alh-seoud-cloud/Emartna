@@ -128,6 +128,122 @@
     window.landingHTML = wrapped;
   }
 
+
+  /* ============================================================
+     زرار عائم + شريط علوي للحاسبة
+     ------------------------------------------------------------
+     الحاسبة كانت في نص الصفحة — الزائر لازم ينزل عشان يشوفها.
+     دلوقتي فيه مدخل واضح من أول لحظة، وفي شاشة الدخول كمان.
+     ============================================================ */
+
+  window.openPriceCalc = function(){
+    openModal(`
+      <div style="margin:-18px -18px 0;padding:22px 20px 16px;text-align:center;
+           background:linear-gradient(135deg,#159A8C,#0f7a6f);color:#fff;
+           border-radius:16px 16px 0 0">
+        <div style="font-size:34px">💰</div>
+        <h3 style="margin:6px 0 2px;color:#fff">احسب اشتراكك في ثانية</h3>
+        <p style="margin:0;font-size:13px;color:rgba(255,255,255,.9)">
+          السعر للعمارة كلها — مش لكل وحدة</p>
+      </div>
+
+      <div class="field2 mtop2"><label>عدد وحدات عمارتك</label>
+        <input id="calcUnits" type="number" min="1" max="500" placeholder="مثال: 40"
+          oninput="calcPrice()" style="font-size:20px;text-align:center;padding:12px"></div>
+
+      <div id="calcOut" class="mtop">
+        <p class="small" style="color:var(--muted);text-align:center">اكتب عدد الوحدات فوق</p>
+      </div>
+
+      <div class="card mtop2" style="background:var(--tint,#F3F8F7);padding:10px 12px">
+        ${[['حتى ٢٤ وحدة','٣٠ / شهر','٣٠٠ / سنة'],
+           ['أكتر من ٢٤ وحدة','٤٠ / شهر','٤٠٠ / سنة']].map(r => `
+          <div class="flexrow small" style="padding:4px 0">
+            <span style="flex:1">${r[0]}</span>
+            <span style="min-width:70px;text-align:center">${r[1]}</span>
+            <span style="min-width:78px;text-align:center;color:var(--gold);font-weight:700">${r[2]}</span>
+          </div>`).join('')}
+      </div>
+
+      <p class="small mtop" style="text-align:center">
+        🎁 <b>أول شهرين مجانًا بالكامل</b> — من غير بيانات بنكية</p>
+
+      <button class="btn primary mtop" style="width:100%;padding:13px;font-size:15px"
+        onclick="closeModal();setTimeout(()=>openSignup(),150)">ابدأ مجانًا دلوقتي</button>`, true);
+    setTimeout(() => { const el = document.getElementById('calcUnits'); if (el) el.focus(); }, 200);
+  };
+
+  /* زرار عائم — بيظهر للزائر بس */
+  function fab(){
+    try{
+      const onLanding = (typeof __viewMode !== 'undefined' && __viewMode === 'landing');
+      const onLogin   = !!document.getElementById('loginPass');
+      const logged    = !!(window.getSession && getSession());
+      const show = !logged && (onLanding || onLogin);
+
+      let b = document.getElementById('priceFab');
+      if (!show){ if (b) b.remove(); return; }
+      if (b) return;
+
+      b = document.createElement('button');
+      b.id = 'priceFab';
+      b.onclick = () => openPriceCalc();
+      b.innerHTML = '💰 احسب اشتراكك';
+      b.style.cssText = 'position:fixed;bottom:16px;inset-inline-end:16px;z-index:9210;' +
+        'background:#159A8C;color:#fff;border:0;border-radius:26px;padding:11px 18px;' +
+        'font:700 14px system-ui;cursor:pointer;direction:rtl;' +
+        'box-shadow:0 6px 20px rgba(21,154,140,.35)';
+      document.body.appendChild(b);
+    }catch(e){}
+  }
+  setInterval(fab, 1500);
+  setTimeout(fab, 1500);
+
+  /* شريط في أعلى الصفحة الرئيسية */
+  const origLanding2 = window.landingHTML;
+  if (typeof origLanding2 === 'function' && !origLanding2.__calcBar){
+    const wrapped = function(){
+      const html = origLanding2.apply(this, arguments);
+      const bar = `
+        <div onclick="openPriceCalc()" style="cursor:pointer;margin:0 0 14px;
+             background:linear-gradient(135deg,#159A8C,#0f7a6f);color:#fff;
+             border-radius:14px;padding:13px 18px;display:flex;align-items:center;
+             justify-content:center;gap:10px;flex-wrap:wrap;text-align:center;
+             box-shadow:0 4px 16px rgba(21,154,140,.25)">
+          <b style="font-size:15px">💰 عمارتك كام وحدة؟ احسب اشتراكك في ثانية</b>
+          <span style="background:rgba(255,255,255,.22);border-radius:20px;
+                padding:4px 12px;font-size:12.5px;font-weight:700">
+            من ٣٠ جنيه للعمارة كلها</span>
+        </div>`;
+      // بعد أول عنوان مباشرة
+      const i = html.indexOf('</h1>');
+      if (i > -1){
+        const j = html.indexOf('</div>', i);
+        if (j > -1) return html.slice(0, j + 6) + bar + html.slice(j + 6);
+      }
+      return bar + html;
+    };
+    wrapped.__calcBar = true;
+    window.landingHTML = wrapped;
+  }
+
+  /* وفي شاشة الدخول */
+  const origLogin = window.loginHTML;
+  if (typeof origLogin === 'function' && !origLogin.__calc){
+    const wrapped = function(){
+      const html = origLogin.apply(this, arguments);
+      const link = `
+        <p class="small" style="text-align:center;margin-top:14px">
+          <a href="javascript:void(0)" onclick="openPriceCalc()"
+             style="color:var(--accent);font-weight:700">💰 احسب اشتراك عمارتك</a>
+          <span style="color:var(--muted)"> · من ٣٠ جنيه شهريًا</span>
+        </p>`;
+      return html + link;
+    };
+    wrapped.__calc = true;
+    window.loginHTML = wrapped;
+  }
+
   /* ---------- عرض السعر الصحيح في شاشة الاشتراك ---------- */
 
   const origPlanPrice = window.planPrice;
