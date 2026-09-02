@@ -206,6 +206,8 @@ window.cloudLogin = async function(idOrEmail, password){
   if (btn){ btn.disabled = true; btn.textContent = 'ثانية واحدة…'; }
 
   try{
+    if(!window.CLOUD){ if(window.showCloudDeadScreen) return showCloudDeadScreen();
+      throw new Error('البرنامج لسه بيحمّل — استنى ثانية وجرّب تاني'); }
     await window.CLOUD.signIn(id, password);
     await establishSession();
     // نفس السبب: D لسه ماتحمّلتش، فبناخد الدور من العضوية اللي رجعت
@@ -452,6 +454,8 @@ window.doSignup = async function(){
     }catch(e){
       if (!/already|registered|exists/i.test(e.message || '')) throw e;
     }
+    if(!window.CLOUD){ if(window.showCloudDeadScreen) return showCloudDeadScreen();
+      throw new Error('البرنامج لسه بيحمّل — استنى ثانية وجرّب تاني'); }
     await window.CLOUD.signIn(loginId, password, phoneCountry);
 
     // ١-ب) كود دعوة من فريق المبيعات؟ ياخد أولوية في مدة التجربة
