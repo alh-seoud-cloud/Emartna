@@ -212,6 +212,7 @@ const BUILDING_FIELDS = {
   lastChargeReminderMonth:'last_charge_reminder_month',
   lastBackupDate:'last_backup_date',
   aiSettings:'ai_settings',
+  residentAccess:'resident_access',
 };
 
 
