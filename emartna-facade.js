@@ -36,10 +36,17 @@
   /* رقم الدور من اسمه: الأرضي=0 · الأول=1 … */
   const ORD = ['الأرضي','الأول','الثاني','الثالث','الرابع','الخامس','السادس','السابع',
                'الثامن','التاسع','العاشر','الحادي عشر','الثاني عشر','الثالث عشر',
-               'الرابع عشر','الخامس عشر'];
+               'الرابع عشر','الخامس عشر','السادس عشر','السابع عشر','الثامن عشر',
+               'التاسع عشر','العشرون'];
+  /* ⚠️ الترتيب مهم: "الثاني عشر" فيه "الثاني" جواها.
+     البحث بالترتيب العادي كان بيرجّع ٢ بدل ١٢، فالشقة ١٢٠١
+     كانت بتظهر ٢٠١. بندوّر على الأطول الأول. */
+  const ORD_BY_LEN = ORD.map((name, i) => ({ name, i }))
+    .sort((a, b) => b.name.length - a.name.length);
+
   function floorNo(label){
-    const s = String(label || '');
-    for (let i = 0; i < ORD.length; i++) if (s.includes(ORD[i])) return i;
+    const s = String(label || '').trim();
+    for (const o of ORD_BY_LEN) if (s.includes(o.name)) return o.i;
     const m = s.match(/\d+/);
     return m ? Number(m[0]) : null;
   }

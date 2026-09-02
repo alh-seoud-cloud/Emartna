@@ -13,6 +13,26 @@
   const AR = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
   const toAr = n => String(n).replace(/\d/g, d => AR[+d]);
 
+
+  /* رقم الدور من اسمه العربي.
+     ⚠️ الترتيب مهم: "الثاني عشر" فيه "الثاني" جواها، والبحث
+     بالترتيب العادي كان بيرجّع ٢ بدل ١٢. بندوّر على الأطول الأول.
+     والاعتماد على الأرقام وحده مش كافي لأن أسماء الأدوار عربية. */
+  const FLOORS = ['الأرضي','الأول','الثاني','الثالث','الرابع','الخامس','السادس','السابع',
+                  'الثامن','التاسع','العاشر','الحادي عشر','الثاني عشر','الثالث عشر',
+                  'الرابع عشر','الخامس عشر','السادس عشر','السابع عشر','الثامن عشر',
+                  'التاسع عشر','العشرون'];
+  const FLOORS_BY_LEN = FLOORS.map((name, i) => ({ name, i }))
+    .sort((a, b) => b.name.length - a.name.length);
+
+  function floorNumOf(label){
+    const t = String(label || '').trim();
+    if (!t) return null;
+    for (const o of FLOORS_BY_LEN) if (t.includes(o.name)) return o.i;
+    const m = t.match(/\d+/);
+    return m ? Number(m[0]) : null;
+  }
+
   function units(){
     const D = window.D || {};
     return (D.apartments || []).slice().sort((a,b) => (a.number||0) - (b.number||0));
@@ -78,12 +98,18 @@
     const inputs = [...document.querySelectorAll('.unum')];
     const list = units();
     let apN = 0, shN = 0;
+    /* الترقيم جوه الدور بيبدأ من ١ في كل دور — عشان ١٠١ · ١٠٢
+       وبعدين ٢٠١ · ٢٠٢، مش تسلسل متصل على العمارة كلها. */
+    const perFloor = {};
 
     inputs.forEach((inp, i) => {
       const a = list[i]; if (!a) return;
       const isShop = a.type === 'shop';
       if (isShop) shN++; else apN++;
       const idx = isShop ? shN : apN;
+      const fk = String(a.floor || '');
+      perFloor[fk] = (perFloor[fk] || 0) + 1;
+      const idxInFloor = perFloor[fk];
       let v = '';
 
       if (kind === 'clear')       v = '';
@@ -94,8 +120,9 @@
       // وإلا المحل والشقة ياخدوا نفس الرقم.
       else if (kind === 'letter') v = 'A-' + (i + 1);
       else if (kind === 'floor'){
-        const f = parseInt(String(a.floor).replace(/[^\d]/g,''), 10);
-        v = isNaN(f) ? toAr(a.number) : toAr(f * 100 + idx);
+        const f = floorNumOf(a.floor);
+        v = (f === null) ? toAr(a.number)
+          : (f === 0 ? toAr(idxInFloor) : toAr(f * 100 + idxInFloor));
       }
       inp.value = v;
     });
