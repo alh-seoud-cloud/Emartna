@@ -3363,7 +3363,8 @@ function defaultPlansSeed(){
   return[
     {key:'trial',name:'تجريبي',icon:'🆓',durationMonths:1,priceBefore:0,discountPercent:0,maxApartments:100,maxTransactions:null,maxStaff:1,isTrial:true,active:true},
     {key:'promo_2months',name:'عرض شهرين مجاني - عملاء جدد',icon:'🎉',durationMonths:2,priceBefore:0,discountPercent:0,maxApartments:100,maxTransactions:null,maxStaff:1,isTrial:false,active:true},
-    {key:'monthly',name:'اشتراك شهري',icon:'📅',durationMonths:1,priceBefore:100,discountPercent:0,maxApartments:null,maxTransactions:null,maxStaff:2,isTrial:false,active:true},
+    {key:'monthly',name:'اشتراك شهري',icon:'📅',durationMonths:1,priceBefore:30,discountPercent:0,maxApartments:null,maxTransactions:null,maxStaff:2,isTrial:false,active:true,features:{tiers:[{upTo:24,price:30},{upTo:null,price:40}]}},
+    {key:'yearly',name:'اشتراك سنوي',icon:'🗓️',durationMonths:12,priceBefore:360,discountPercent:17,maxApartments:null,maxTransactions:null,maxStaff:4,isTrial:false,active:true,features:{tiers:[{upTo:24,price:300},{upTo:null,price:400}]}},
     {key:'quarterly',name:'اشتراك 3 شهور',icon:'🗓️',durationMonths:3,priceBefore:300,discountPercent:10,maxApartments:null,maxTransactions:null,maxStaff:2,isTrial:false,active:true},
     {key:'custom',name:'مخصص / غير محدود',icon:'♾️',durationMonths:null,priceBefore:0,discountPercent:0,maxApartments:null,maxTransactions:null,maxStaff:null,isTrial:false,active:true},
   ];

@@ -12,9 +12,55 @@
 
   const esc2 = s => (window.esc ? esc(s) : String(s == null ? '' : s));
 
-  const TIERS = {
-    monthly: [{ upTo:24, price:30 }, { upTo:null, price:40 }],
+  /* ⚠️ الأسعار كانت مكتوبة في الكود، فأي تعديل من شاشة الخطط
+     ما كانش بيبان في الحاسبة ولا الصفحة الرئيسية.
+     دلوقتي بتتقرا من الباقات المسجّلة. */
+  const FALLBACK = {
+    monthly: [{ upTo:24, price:30 },  { upTo:null, price:40 }],
     yearly:  [{ upTo:24, price:300 }, { upTo:null, price:400 }],
+  };
+
+  function planOf(key){
+    try{
+      const list = (window.ensurePlans ? ensurePlans() : (window.REG && REG.plans)) || [];
+      return list.find(p => p.key === key && p.active !== false) || null;
+    }catch(e){ return null; }
+  }
+
+  /* شرائح الخطة: من features.tiers لو متسجّلة، وإلا سعر الخطة نفسه */
+  function tiersOf(key){
+    const p = planOf(key);
+    if (p){
+      const t = p.features && p.features.tiers;
+      if (Array.isArray(t) && t.length)
+        return t.map(x => ({ upTo: x.upTo ?? null, price: Number(x.price) || 0 }));
+      const price = Number(p.priceBefore ?? p.price) || 0;
+      if (price) return [{ upTo:null, price }];      // سعر موحّد
+    }
+    return FALLBACK[key] || [];
+  }
+  window.planTiers = tiersOf;
+
+  const TIERS = new Proxy({}, { get: (_, k) => tiersOf(String(k)) });
+
+
+  /* صفوف جدول الأسعار — من الباقات مباشرة */
+  function priceRows(){
+    const m = tiersOf('monthly'), y = tiersOf('yearly');
+    return m.map((t, i) => {
+      const label = t.upTo === null
+        ? (m.length === 1 ? 'أي عدد وحدات' : `أكتر من ${m[i-1] ? m[i-1].upTo : 0} وحدة`)
+        : `حتى ${t.upTo} وحدة`;
+      const yr = (y[i] && y[i].price) || (y[y.length-1] && y[y.length-1].price) || '';
+      return [label, t.price, yr];
+    });
+  }
+  window.priceRows = priceRows;
+
+  /* أقل سعر شهري — للشرائط الدعائية */
+  window.lowestPrice = function(){
+    const m = tiersOf('monthly').map(t => t.price).filter(Boolean);
+    return m.length ? Math.min(...m) : 30;
   };
 
   /* سعر الخطة حسب عدد الوحدات */
@@ -102,13 +148,12 @@
     <div class="card mtop2" style="max-width:460px;margin:14px auto 0;background:var(--tint,#F3F8F7)">
       <b class="small">الأسعار بالتفصيل</b>
       <div class="mtop">
-        ${[['حتى ٢٤ وحدة','٣٠ جنيه','٣٠٠ جنيه'],
-           ['أكتر من ٢٤ وحدة','٤٠ جنيه','٤٠٠ جنيه']].map(r => `
+        ${priceRows().map(r => `
           <div class="flexrow small" style="padding:5px 0;border-bottom:1px dashed var(--line)">
             <span style="flex:1">${r[0]}</span>
-            <span style="min-width:78px;text-align:center">${r[1]} / شهر</span>
+            <span style="min-width:78px;text-align:center">${r[1]} جنيه / شهر</span>
             <span style="min-width:78px;text-align:center;color:var(--gold);font-weight:700">
-              ${r[2]} / سنة</span>
+              ${r[2]} جنيه / سنة</span>
           </div>`).join('')}
       </div>
     </div>`;
@@ -156,12 +201,11 @@
       </div>
 
       <div class="card mtop2" style="background:var(--tint,#F3F8F7);padding:10px 12px">
-        ${[['حتى ٢٤ وحدة','٣٠ / شهر','٣٠٠ / سنة'],
-           ['أكتر من ٢٤ وحدة','٤٠ / شهر','٤٠٠ / سنة']].map(r => `
+        ${priceRows().map(r => `
           <div class="flexrow small" style="padding:4px 0">
             <span style="flex:1">${r[0]}</span>
-            <span style="min-width:70px;text-align:center">${r[1]}</span>
-            <span style="min-width:78px;text-align:center;color:var(--gold);font-weight:700">${r[2]}</span>
+            <span style="min-width:70px;text-align:center">${r[1]} / شهر</span>
+            <span style="min-width:78px;text-align:center;color:var(--gold);font-weight:700">${r[2]} / سنة</span>
           </div>`).join('')}
       </div>
 
@@ -213,7 +257,7 @@
           <b style="font-size:15px">💰 عمارتك كام وحدة؟ احسب اشتراكك في ثانية</b>
           <span style="background:rgba(255,255,255,.22);border-radius:20px;
                 padding:4px 12px;font-size:12.5px;font-weight:700">
-            من ٣٠ جنيه للعمارة كلها</span>
+            من ${lowestPrice()} جنيه للعمارة كلها</span>
         </div>`;
       // بعد أول عنوان مباشرة
       const i = html.indexOf('</h1>');
@@ -236,7 +280,7 @@
         <p class="small" style="text-align:center;margin-top:14px">
           <a href="javascript:void(0)" onclick="openPriceCalc()"
              style="color:var(--accent);font-weight:700">💰 احسب اشتراك عمارتك</a>
-          <span style="color:var(--muted)"> · من ٣٠ جنيه شهريًا</span>
+          <span style="color:var(--muted)"> · من ${lowestPrice()} جنيه شهريًا</span>
         </p>`;
       return html + link;
     };
