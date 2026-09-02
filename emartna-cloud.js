@@ -13,7 +13,11 @@
      <script type="module" src="emartna-cloud.js"></script>
    ============================================================ */
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+/* ⚠️ كان بيستورد من موقع خارجي (esm.sh). لو الموقع بطيء أو محجوب،
+   الاستيراد بيفشل وwindow.CLOUD متتعرّفش — والدخول يتقفل تمامًا
+   برسالة "Cannot read properties of undefined (reading 'signIn')".
+   دلوقتي المكتبة جوه المستودع، فالبرنامج مستقل. */
+import { createClient } from './vendor-supabase.js';
 
 const SUPABASE_URL = 'https://kavltjqpilzrevahiern.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_vEq5yC2-wB1_q2uQdTP5iw_JYMFhiOM';
