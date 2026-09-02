@@ -9547,7 +9547,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.06';
+const APP_BUILD='1.08';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -9623,6 +9623,22 @@ function setupPWA(){
 
           if(!SHELL_RE.test(url.pathname))return;
 
+          /* ⚠️ ملفات البرنامج (emartna-*.js و vendor-*.js): الشبكة الأول.
+             القراءة من الكاش كانت بتخلّي نسخة قديمة تفضل شغّالة حتى بعد
+             النشر — ولو النسخة القديمة فيها عطل، العميل يفضل واقف عليه. */
+          if(/\/(emartna-|vendor-)[^\/]*\.js$/i.test(url.pathname)){
+            e.respondWith(
+              fetch(e.request).then(res=>{
+                if(res && res.status===200){
+                  const clone=res.clone();
+                  caches.open(CACHE_NAME).then(c=>c.put(e.request,clone));
+                }
+                return res;
+              }).catch(()=>caches.match(e.request))   // من غير نت: الكاش
+            );
+            return;
+          }
+
           // باقي الملفات: من الكاش فورًا وتحديث هادي في الخلفية
           e.respondWith(
             caches.match(e.request).then(hit=>{
@@ -9644,6 +9660,45 @@ function setupPWA(){
     }
   }catch(e){}
 }
+/* ⚠️ شبكة أمان: لو طبقة البيانات ما اتحمّلتش خالص (غالبًا نسخة قديمة
+   عالقة في كاش المتصفح)، بنقول للمستخدم بوضوح ونديله زرار يصلّحها
+   بنفسه — بدل رسالة تقنية مبهمة أو شاشة معلّقة. */
+window.fixStuckCache = async function(){
+  try{
+    if (navigator.serviceWorker){
+      const rs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(rs.map(r => r.unregister()));
+    }
+    if (window.caches){
+      const ks = await caches.keys();
+      await Promise.all(ks.map(k => caches.delete(k)));
+    }
+  }catch(e){}
+  location.reload(true);
+};
+
+window.showCloudDeadScreen = function(){
+  if (document.getElementById('cloudDead')) return;
+  const d = document.createElement('div');
+  d.id = 'cloudDead';
+  d.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#F8FAF9;'+
+    'display:flex;align-items:center;justify-content:center;padding:20px;'+
+    'direction:rtl;font-family:system-ui,Tahoma,sans-serif';
+  d.innerHTML =
+    '<div style="max-width:430px;text-align:center;background:#fff;border-radius:16px;'+
+    'padding:28px 22px;box-shadow:0 8px 30px rgba(0,0,0,.08)">'+
+    '<div style="font-size:46px">🔄</div>'+
+    '<h3 style="margin:12px 0 6px;color:#159A8C">محتاج تحديث سريع</h3>'+
+    '<p style="color:#5b6b67;line-height:1.9;font-size:14px;margin:0">'+
+    'متصفحك لسه شايف نسخة قديمة من البرنامج. اضغط الزرار وهيتظبط في ثانية.</p>'+
+    '<button onclick="fixStuckCache()" style="margin-top:16px;width:100%;padding:13px;'+
+    'border:0;border-radius:10px;background:#159A8C;color:#fff;font-size:15px;'+
+    'font-weight:700;cursor:pointer">حدّث البرنامج</button>'+
+    '<p style="color:#8b9a96;font-size:12px;margin-top:10px">'+
+    'بياناتك محفوظة على الخادم ومش هتتأثر.</p></div>';
+  document.body.appendChild(d);
+};
+
 function showBootSplash(){
   if(document.getElementById('bootSplash'))return;
   const d=document.createElement('div');
@@ -9659,8 +9714,9 @@ function showBootSplash(){
   document.body.appendChild(d);
   // لو حصل تعطيل، منسيبوش الشاشة مقفولة للأبد
   setTimeout(()=>{const x=document.getElementById('bootStep');
-    if(x)x.textContent='لسه بيحمّل… لو طوّل، حدّث الصفحة';},7000);
-  setTimeout(hideBootSplash,20000);
+    if(x)x.innerHTML='لسه بيحمّل… لو طوّل، '+
+      '<a href="javascript:location.reload()" style="color:#159A8C">حدّث الصفحة</a>';},7000);
+  setTimeout(hideBootSplash,18000);
 }
 function hideBootSplash(){
   const d=document.getElementById('bootSplash');
@@ -9673,8 +9729,26 @@ window.showBootSplash=showBootSplash; window.hideBootSplash=hideBootSplash;
 document.addEventListener('DOMContentLoaded',async()=>{
   /* شاشة انتظار خفيفة بدل الشاشة البيضا */
   showBootSplash();
-  if(window.cloudAuthBoot){ await window.cloudAuthBoot(); }
-  await loadRegistry();
+
+  /* ⚠️ أي خطوة هنا لو علّقت كانت بتسيب المستخدم على شاشة التحميل
+     للأبد. دلوقتي كل خطوة ليها مهلة، والبرنامج بيكمّل بالمتاح. */
+  const step=(p,ms,name)=>Promise.race([
+    Promise.resolve(p).catch(e=>{console.error('[عمارتنا] '+name+':',e);}),
+    new Promise(r=>setTimeout(()=>{console.warn('[عمارتنا] '+name+' طوّلت');r();},ms))
+  ]);
+
+  const el=document.getElementById('bootStep');
+  if(el)el.textContent='بيتأكد من حسابك…';
+  if(window.cloudAuthBoot){ await step(window.cloudAuthBoot(),12000,'التحقق من الحساب'); }
+
+  /* ملاحظة: مش بنوقف التحميل هنا لو طبقة البيانات غايبة —
+     البرنامج بيكمّل بالمتاح، وشاشة الإصلاح بتظهر وقت أول عملية
+     محتاجة الخادم فعلًا (زي تسجيل الدخول). التوقف هنا كان
+     بيمنع البرنامج من الاشتغال حتى لو الوحدة لسه بتنزل. */
+
+  if(el)el.textContent='بيحمّل بياناتك…';
+  await step(loadRegistry(),15000,'تحميل البيانات');
+
   hideBootSplash();
   captureCampaignSource();
   setupPWA();
