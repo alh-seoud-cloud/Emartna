@@ -104,15 +104,8 @@
       return el ? el.value : '';
     });
 
-    /* البطاقة فوق شاشة المستخدمين */
-    const orig = window.pageUsers;
-    if (typeof orig === 'function' && !orig.__staffCard){
-      const wrapped = function(){
-        return (window.staffUsageCard ? staffUsageCard() : '') + orig.apply(this, arguments);
-      };
-      wrapped.__staffCard = true;
-      window.pageUsers = wrapped;
-    }
+    /* البطاقة نفسها بقت جوه بطاقة الصلاحيات الموحّدة
+       في emartna-resaccess.js — عشان ما تتكررش. */
   }
   hook();
   [900, 2500, 5000].forEach(ms => setTimeout(hook, ms));

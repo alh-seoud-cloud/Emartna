@@ -169,33 +169,65 @@
     renderContent();
   };
 
-  /* بطاقة في شاشة المستخدمين */
-  function card(){
-    const p = policy();
-    const offOwn = SCREENS.filter(s => p.owner[s.key] === false).length;
-    const offTen = SCREENS.filter(s => p.tenant[s.key] === false).length;
+  /* ============================================================
+     بطاقة واحدة لكل الأدوار — بدل بطاقتين منفصلتين كانوا
+     بيتكرروا مع كل رسم لأن كل وحدة بتلفّ التانية.
+     ============================================================ */
+
+  function roleRow(icon, title, desc, action){
     return `
-      <div class="card" style="border:1px solid var(--line)">
-        <div class="flexrow" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
-          <div>
-            <b>🔐 صلاحيات السكان</b>
-            <div class="small" style="color:var(--muted);margin-top:3px">
-              ${offOwn ? `صاحب الشقة: ${SCREENS.length - offOwn} من ${SCREENS.length} شاشة`
-                       : 'صاحب الشقة: كل الشاشات'} ·
-              ${offTen ? `المستأجر: ${SCREENS.length - offTen} من ${SCREENS.length}`
-                       : 'المستأجر: كل الشاشات'}
-            </div>
-          </div>
-          <button class="btn sm ghost" onclick="openResidentAccess()">تعديل</button>
+      <div class="flexrow" style="justify-content:space-between;align-items:center;
+           gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px dashed var(--line)">
+        <div style="flex:1;min-width:190px">
+          <b class="small">${icon} ${esc2(title)}</b>
+          <div class="small" style="color:var(--muted);margin-top:2px">${desc}</div>
         </div>
+        ${action}
       </div>`;
   }
 
+  function card(){
+    const p = policy();
+    const onOwn = SCREENS.filter(s => p.owner[s.key]  !== false).length;
+    const onTen = SCREENS.filter(s => p.tenant[s.key] !== false).length;
+    const lim = window.staffLimit ? staffLimit() : null;
+    const now = window.staffCount ? staffCount() : 0;
+
+    return `
+      <div class="card" style="border:1px solid var(--line)">
+        <b>🔐 الصلاحيات في عمارتك</b>
+        <div class="mtop">
+          ${roleRow('⭐','رئيس اتحاد العمارة','كل الشاشات — مفيش قيود',
+            '<span class="badge g">كامل</span>')}
+
+          ${roleRow('💰','المحاسب والإداري (مساعد)',
+            lim === null ? `${now} مساعد · بلا حد`
+              : `${now} من ${lim} · الصلاحيات بتتحدد لكل واحد على حدة`,
+            `<button class="btn sm ghost" onclick="openUserModal()">+ مساعد</button>`)}
+
+          ${roleRow('🏠','أصحاب الشقق والمحلات',
+            `${onOwn} من ${SCREENS.length} شاشة`,
+            `<button class="btn sm ghost" onclick="openResidentAccess()">تعديل</button>`)}
+
+          ${roleRow('🔑','المستأجرون',
+            `${onTen} من ${SCREENS.length} شاشة`,
+            `<button class="btn sm ghost" onclick="openResidentAccess()">تعديل</button>`)}
+        </div>
+        <p class="small mtop" style="color:var(--muted)">
+          حساب أي ساكن ومستحقاته وبياناته الشخصية مفتوحة دايمًا — دي حقه.
+        </p>
+      </div>`;
+  }
+
+  /* ⚠️ اللفّ مرة واحدة بس. الاعتماد على خاصية على الدالة كان بيفشل
+     لأن وحدة تانية بتلفّها بعدنا فتختفي العلامة، فنلفّها من جديد
+     كل مرة والبطاقة تتكرر. العلامة دلوقتي على مستوى الصفحة. */
   function hook(){
+    if (window.__resCardHooked) return;
     const orig = window.pageUsers;
-    if (typeof orig !== 'function' || orig.__resCard) return;
+    if (typeof orig !== 'function') return;
+    window.__resCardHooked = true;
     const wrapped = function(){ return card() + orig.apply(this, arguments); };
-    wrapped.__resCard = true;
     window.pageUsers = wrapped;
   }
   hook();
