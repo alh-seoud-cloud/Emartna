@@ -76,8 +76,26 @@
           if (!isUnitCol) return c;
           return Object.assign({}, c, {
             __unitNo: true,
-            value: r => { const a = r && r.apartments ? r : (r.ap || r);
-              return unitDisplayNo(a) || ''; },
+            /* ⚠️ الترتيب كان بالنص، فـ"١٠١" بييجي قبل "٢٠١" وبعد "١".
+               دلوقتي بنرتّب بالدور الأول وبعدين برقم الوحدة —
+               فالأدوار بتفضل تحت بعضها بالترتيب الطبيعي. */
+            value: r => { const a = (r && r.ap !== undefined) ? r.ap : r;
+              if (!a) return -1;
+              const f = floorNumOf(a.floor);
+              const disp = String(unitDisplayNo(a) || '');
+              // الأرقام العربية بتترجع لإنجليزي عشان المقارنة
+              const en = disp.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+              const n = parseInt(en.replace(/[^\d]/g, ''), 10);
+              const within = isNaN(n) ? (a.number || 0) : n;
+              return (f === null ? 99 : f) * 100000 + (within % 100000); },
+            sortValue: r => { const a = (r && r.ap !== undefined) ? r.ap : r;
+              if (!a) return -1;
+              const f = floorNumOf(a.floor);
+              const disp = String(unitDisplayNo(a) || '');
+              const en = disp.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+              const n = parseInt(en.replace(/[^\d]/g, ''), 10);
+              const within = isNaN(n) ? (a.number || 0) : n;
+              return (f === null ? 99 : f) * 100000 + (within % 100000); },
             cell:  r => { const a = r && r.ap !== undefined ? r.ap : r;
               if (!a) return '—';
               const n = unitDisplayNo(a);
