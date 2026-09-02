@@ -38,6 +38,62 @@
     return (D.apartments || []).slice().sort((a,b) => (a.number||0) - (b.number||0));
   }
 
+
+  /* ============================================================
+     الرقم المعروض لأي وحدة — مصدر واحد لكل الشاشات
+     ------------------------------------------------------------
+     الترتيب: الرقم المخصّص → دور+رقم → التسلسل.
+     قبل كده كل شاشة كانت بتحسبه لوحدها، والتسلسل كان بيتكرر
+     (محل ١ وشقة ١ الاتنين بيبانوا "١").
+     ============================================================ */
+
+  window.unitDisplayNo = function(a){
+    if (!a) return '';
+    if (a.label && String(a.label).trim()) return String(a.label).trim();
+
+    const f = floorNumOf(a.floor);
+    if (f !== null){
+      // ترتيب الوحدة جوه دورها
+      const same = ((window.D && D.apartments) || [])
+        .filter(x => String(x.floor || '') === String(a.floor || ''))
+        .sort((x, y) => (x.number || 0) - (y.number || 0));
+      const idx = same.findIndex(x => x.id === a.id) + 1;
+      if (idx > 0) return f === 0 ? toAr(idx) : toAr(f * 100 + idx);
+    }
+    return window.unitTypeIndex ? String(unitTypeIndex(a)) : String(a.number || '');
+  };
+
+  /* بنستبدل عمود رقم الوحدة في كل الجداول */
+  function patchCols(){
+    const orig = window.sortableTable;
+    if (typeof orig !== 'function' || orig.__unitNo) return;
+    const wrapped = function(id, rows, cols, groupBy, opts){
+      if (Array.isArray(cols)){
+        cols = cols.map(c => {
+          if (!c || (c.key !== 'number' && c.key !== 'unit')) return c;
+          if (c.__unitNo) return c;
+          const isUnitCol = c.label === 'رقم الوحدة' || c.label === 'الشقة' || c.label === 'الوحدة';
+          if (!isUnitCol) return c;
+          return Object.assign({}, c, {
+            __unitNo: true,
+            value: r => { const a = r && r.apartments ? r : (r.ap || r);
+              return unitDisplayNo(a) || ''; },
+            cell:  r => { const a = r && r.ap !== undefined ? r.ap : r;
+              if (!a) return '—';
+              const n = unitDisplayNo(a);
+              const nm = window.unitTypeName ? unitTypeName(a) : '';
+              return `<b>${esc2(n)}</b>${nm ? ` <span class="small" style="color:var(--muted)">${esc2(nm)}</span>` : ''}`; },
+          });
+        });
+      }
+      return orig.call(this, id, rows, cols, groupBy, opts);
+    };
+    wrapped.__unitNo = true;
+    window.sortableTable = wrapped;
+  }
+  patchCols();
+  [900, 2500, 5000].forEach(ms => setTimeout(patchCols, ms));
+
   /* ---------- الشاشة ---------- */
 
   window.openUnitNumbering = function(){
