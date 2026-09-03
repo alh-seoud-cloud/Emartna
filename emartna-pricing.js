@@ -164,6 +164,7 @@
   if (typeof origLanding === 'function' && !origLanding.__calc){
     const wrapped = function(){
       const html = origLanding.apply(this, arguments);
+      if (window.landingUIOn && !landingUIOn('calcSection')) return html;
       const mark = '<div class="section-title" style="text-align:center"><h3>مميزات البرنامج</h3>';
       const i = html.indexOf(mark);
       const sec = calcSection();
@@ -217,37 +218,15 @@
     setTimeout(() => { const el = document.getElementById('calcUnits'); if (el) el.focus(); }, 200);
   };
 
-  /* زرار عائم — بيظهر للزائر بس */
-  function fab(){
-    try{
-      const onLanding = (typeof __viewMode !== 'undefined' && __viewMode === 'landing');
-      const onLogin   = !!document.getElementById('loginPass');
-      const logged    = !!(window.getSession && getSession());
-      const show = !logged && (onLanding || onLogin);
-
-      let b = document.getElementById('priceFab');
-      if (!show){ if (b) b.remove(); return; }
-      if (b) return;
-
-      b = document.createElement('button');
-      b.id = 'priceFab';
-      b.onclick = () => openPriceCalc();
-      b.innerHTML = '💰 احسب اشتراكك';
-      b.style.cssText = 'position:fixed;bottom:16px;inset-inline-end:16px;z-index:9210;' +
-        'background:#159A8C;color:#fff;border:0;border-radius:26px;padding:11px 18px;' +
-        'font:700 14px system-ui;cursor:pointer;direction:rtl;' +
-        'box-shadow:0 6px 20px rgba(21,154,140,.35)';
-      document.body.appendChild(b);
-    }catch(e){}
-  }
-  setInterval(fab, 1500);
-  setTimeout(fab, 1500);
+  /* الزرار العائم بقى واحد في emartna-welcome.js وبيفتح
+     الحاسبة والتجربة مع بعض — عشان ما يتكدّسوش على الموبايل. */
 
   /* شريط في أعلى الصفحة الرئيسية */
   const origLanding2 = window.landingHTML;
   if (typeof origLanding2 === 'function' && !origLanding2.__calcBar){
     const wrapped = function(){
       const html = origLanding2.apply(this, arguments);
+      if (window.landingUIOn && !landingUIOn('calcBar')) return html;
       const bar = `
         <div onclick="openPriceCalc()" style="cursor:pointer;margin:0 0 14px;
              background:linear-gradient(135deg,#159A8C,#0f7a6f);color:#fff;
@@ -276,6 +255,7 @@
   if (typeof origLogin === 'function' && !origLogin.__calc){
     const wrapped = function(){
       const html = origLogin.apply(this, arguments);
+      if (window.landingUIOn && !landingUIOn('loginCalc')) return html;
       const link = `
         <p class="small" style="text-align:center;margin-top:14px">
           <a href="javascript:void(0)" onclick="openPriceCalc()"
