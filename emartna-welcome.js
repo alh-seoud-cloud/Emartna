@@ -107,6 +107,9 @@
     const c = cfg();
     if (!c) return;
     if (!manual && (!c.enabled || seen())) return;
+    /* الحارس هنا مش في maybeShow بس — عشان أي نداء تلقائي
+       من أي مكان يحترم إعداد صاحب البرنامج. */
+    if (!manual && window.landingUIOn && !landingUIOn('welcomePopup')) return;
     if (!manual && window.getSession && getSession()) return;   // مسجّل دخول بالفعل
     markSeen(false);
 
@@ -202,24 +205,72 @@
 
   /* زرار عائم يرجّع النافذة في أي وقت */
   function floatBtn(){
+    /* ⚠️ كان فيه زرارين عائمين (التجربة والحاسبة) بيغطّوا أزرار
+       الصفحة نفسها على الموبايل. بقوا زرار واحد بيفتح الاتنين. */
     try{
-      const on = (typeof __viewMode !== 'undefined' && __viewMode === 'landing')
+      const allowed = !window.landingUIOn || landingUIOn('startFab');
+      const on = allowed
+                 && (typeof __viewMode !== 'undefined' && __viewMode === 'landing')
                  && !(window.getSession && getSession());
       let b = document.getElementById('welcomeFab');
-      if (!on){ if (b) b.remove(); return; }
+      if (!on){
+        if (b) b.remove();
+        const sp = document.getElementById('fabSpacer');
+        if (sp) sp.remove();
+        return;
+      }
       if (b) return;
       b = document.createElement('button');
       b.id = 'welcomeFab';
-      b.title = 'العرض والتجربة المجانية';
-      b.textContent = '🎁 جرّب مجانًا';
-      b.style.cssText = 'position:fixed;bottom:16px;inset-inline-start:16px;z-index:9200;' +
+      b.title = 'ابدأ مجانًا';
+      b.textContent = '🎁 ابدأ مجانًا';
+      b.style.cssText = 'position:fixed;bottom:14px;inset-inline-start:50%;' +
+        'transform:translateX(50%);z-index:9200;' +
         'background:var(--gold,#D8A33B);color:#fff;border:0;border-radius:26px;' +
-        'padding:11px 18px;font:700 14px system-ui;cursor:pointer;direction:rtl;' +
-        'box-shadow:0 6px 20px rgba(0,0,0,.22)';
-      b.onclick = () => openWelcomePopup(true);
+        'padding:12px 22px;font:700 14.5px system-ui;cursor:pointer;direction:rtl;' +
+        'box-shadow:0 6px 20px rgba(0,0,0,.24);white-space:nowrap;max-width:92vw';
+      b.onclick = () => openStartMenu();
       document.body.appendChild(b);
+
+      /* مساحة تحت المحتوى عشان الزرار ما يغطّيش آخر عنصر */
+      if (!document.getElementById('fabSpacer')){
+        const sp = document.createElement('div');
+        sp.id = 'fabSpacer';
+        sp.style.cssText = 'height:76px;pointer-events:none';
+        const host = document.getElementById('content') || document.body;
+        host.appendChild(sp);
+      }
     }catch(e){}
   }
+
+  /* قائمة مختصرة بدل زرارين */
+  window.openStartMenu = function(){
+    openModal(`
+      <div style="text-align:center">
+        <div style="font-size:34px">🏢</div>
+        <h3 style="margin:6px 0 2px">ابدأ مع عمارتنا</h3>
+        <p class="small" style="color:var(--muted);margin:0">اختار اللي يناسبك</p>
+      </div>
+
+      <button class="btn primary mtop2" style="width:100%;padding:13px;font-size:15px"
+        onclick="closeModal();setTimeout(()=>openWelcomePopup(true),150)">
+        🎁 جرّب البرنامج مجانًا
+        <div class="small" style="font-weight:400;opacity:.9;margin-top:2px">
+          من غير تسجيل — عمارة جاهزة بالبيانات</div>
+      </button>
+
+      <button class="btn ghost mtop" style="width:100%;padding:13px;font-size:15px"
+        onclick="closeModal();setTimeout(()=>openPriceCalc(),150)">
+        💰 احسب اشتراك عمارتك
+        <div class="small" style="font-weight:400;opacity:.85;margin-top:2px">
+          اكتب عدد وحداتك وشوف سعرك فورًا</div>
+      </button>
+
+      <button class="btn gold mtop" style="width:100%;padding:12px"
+        onclick="closeModal();setTimeout(()=>openSignup(),150)">
+        ✅ سجّل واحصل على شهرين مجانًا</button>`, true);
+  };
+
   setInterval(floatBtn, 1500);
   setTimeout(floatBtn, 2000);
 
@@ -230,6 +281,7 @@
       if (typeof __viewMode !== 'undefined' && __viewMode !== 'landing') return;
       const c = cfg();
       if (!c || !c.enabled || seen()) return;
+      if (window.landingUIOn && !landingUIOn('welcomePopup')) return;
       openWelcomePopup(false);
     }catch(e){}
   }
