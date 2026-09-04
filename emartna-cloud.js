@@ -165,7 +165,7 @@ const MAPS = {
     table: 'payment_requests',
     fields: {
       id:'legacy_id', paymentFor:'payment_for', projectName:'project_name',
-      amount:'amount', note:'note', status:'status',
+      amount:'amount', note:'note', status:'status', method:'method',
       requestedAt:'created_at', reviewNote:'review_note',
       imageDataUrl:'proof_url', username:'legacy_username',
     },

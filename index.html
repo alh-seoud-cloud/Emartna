@@ -5950,9 +5950,11 @@ var ADMIN_NAV_GROUPS=[
   {key:'settings',icon:'⚙️',label:'الإعدادات والأدوات',items:[['settings','⚙️','الإعدادات'],['aireports','🤖','تقارير الذكاء الاصطناعي'],['license','🪪','الرخصة والاشتراك'],['referral','🎁','برنامج الإحالة'],['activity','📜','سجل النشاط'],['myproposals','💡','مقترحاتي لصاحب البرنامج'],['support','🎫','الدعم الفني'],['whatsnew','🆕','ما الجديد']]},
 ];
 var OWNER_NAV_GROUPS=[
-  {key:'home',icon:'🏠',label:'الرئيسية',items:[['home','🏠','حسابي وشقتي']]},
+  /* تسجيل الدفعة أول حاجة — ده السبب الأساسي اللي بيخلّي
+     الساكن يفتح البرنامج أصلًا. */
+  {key:'home',icon:'🏠',label:'الرئيسية',items:[['home','🏠','حسابي وشقتي'],['paymentRequests','💸','تسجيل دفعة']]},
   {key:'engage',icon:'💬',label:'التواصل مع العمارة',items:[['chat','💬','محادثة السكان'],['expenses','💳','مصروفات العمارة'],['polls','🗳️','استطلاعات الرأي'],['announcements','📢','الإعلانات'],['suggestions','💡','المقترحات'],['meetings','🗓️','الاجتماعات'],['maintenance','🔧','بلاغات الصيانة']]},
-  {key:'profile',icon:'👤',label:'حسابي',items:[['profile','👤','بياناتي'],['paymentRequests','💸','تسجيل دفعة'],['myproposals','💡','مقترحاتي لصاحب البرنامج']]},
+  {key:'profile',icon:'👤',label:'حسابي',items:[['profile','👤','بياناتي'],['myproposals','💡','مقترحاتي لصاحب البرنامج']]},
 ];
 var SYS_NAV_GROUPS=[
   {key:'overview',icon:'🏙️',label:'نظرة عامة',items:[['sysdash','🏙️','كل العمارات'],['sysusers','👥','كل المستخدمين'],['sysdailysummary','📊','الملخص اليومي'],['sysreports','📈','تقارير الفترات'],['sysactivitylog','📜','سجل نشاطي']]},
@@ -5988,7 +5990,12 @@ const ADMIN_PERMISSION_GROUPS=[{key:'building',label:'العمارة والمل�
 const OWNER_PERMISSION_GROUPS=[{key:'engage',label:'التواصل مع العمارة'},{key:'profile',label:'حسابي (تسجيل دفعة ومقترحات)'}];
 const PERMISSION_ROLE_TEMPLATES=[
   {key:'union_head',label:'⭐ رئيس اتحاد العمارة (صلاحيات كاملة)',role:'admin',groups:null},
+  /* النائب بيشتغل بدور الأدمن عشان كل الشاشات تتعامل معاه كإدارة،
+     والفرق في الصلاحيات: كل حاجة ما عدا إعدادات العمارة والاشتراك. */
+  {key:'deputy',label:'🤝 نائب رئيس الاتحاد (كل حاجة ما عدا الإعدادات)',role:'admin',
+   groups:['building','finance','engage']},
   {key:'accountant',label:'💰 محاسب العمارة (ماليات فقط)',role:'admin',groups:['finance']},
+  {key:'manager',label:'📋 إداري العمارة (بدون ماليات)',role:'admin',groups:['building','engage']},
   {key:'owner',label:'🏠 صاحب الشقة والمحل (صلاحيات كاملة على حسابه)',role:'owner',groups:null},
   {key:'tenant',label:'🔑 المستأجر (بدون تسجيل دفعات أو مقترحات)',role:'tenant',groups:['engage']},
 ];
@@ -8730,6 +8737,8 @@ function pagePaymentRequests(u){
     const cols=[
       {key:'who',label:'مقدّم الطلب',value:r=>{const ap=D.apartments.find(a=>a.id===r.apartmentId);return ap?unitLabel(ap)+' - '+(ap.ownerName||''):r.username;},cell:r=>{const ap=D.apartments.find(a=>a.id===r.apartmentId);return esc(ap?unitLabel(ap)+' - '+(ap.ownerName||''):r.username);}},
       {key:'for',label:'نوع الدفعة',value:r=>paymentForLabel(r),cell:r=>esc(paymentForLabel(r))},
+      {key:'method',label:'طريقة السداد',value:r=>r.method||'',
+       cell:r=>r.method?`<span class="badge b">${esc(r.method)}</span>`:'<span class="small">—</span>'},
       {key:'amount',label:'المبلغ',value:r=>r.amount,cell:r=>money(r.amount)},
       {key:'date',label:'تاريخ الطلب',value:r=>r.requestedAt,cell:r=>esc(new Date(r.requestedAt).toLocaleString('ar-EG'))},
       {key:'status',label:'الحالة',value:r=>r.status,cell:r=>r.status==='pending'?'<span class="badge y">بانتظار المراجعة</span>':r.status==='approved'?'<span class="badge g">تم القبول</span>':'<span class="badge r">مرفوض</span>'},
@@ -8792,6 +8801,17 @@ function openSubmitPaymentModal(){
     </select></div>
     <div class="field2 hidden" id="prProjectWrap"><label>اسم المشروع</label><input id="prProjectName" placeholder="مثال: تجديد المصعد"></div>
     <div class="field2"><label>المبلغ</label><input id="prAmount" type="number" min="0" value="${bal>0?bal:''}"></div>
+    <div class="field2"><label>طريقة السداد</label>
+      <select id="prMethod">
+        ${(function(){
+          const list=(D.building.paymentMethods||[]).filter(m=>m&&m.type);
+          const opts=list.map(m=>`<option value="${esc(m.type+(m.details?' - '+m.details:''))}">${
+            esc(m.type)}${m.details?' — '+esc(m.details):''}</option>`);
+          // طرق عامة لو الاتحاد ما سجّلش طرق
+          if(!opts.length) return PAYMENT_METHOD_TYPES.map(t=>`<option>${esc(t)}</option>`).join('');
+          return opts.join('')+'<option value="أخرى">أخرى</option>';
+        })()}
+      </select></div>
     <div class="field2"><label>صورة إثبات التحويل</label><input id="prImage" type="file" accept="image/*"></div>
     <div id="prImagePreview" class="mtop"></div>
     <div class="field2"><label>ملاحظة (اختياري)</label><input id="prNote" placeholder="مثال: حوّلت المبلغ فودافون كاش"></div>
@@ -8811,6 +8831,8 @@ async function submitPaymentRequest(){
   const paymentFor=document.getElementById('prFor').value;
   const projectName=paymentFor==='project'?document.getElementById('prProjectName').value.trim():'';
   const amount=Number(document.getElementById('prAmount').value||0);
+  const methodEl=document.getElementById('prMethod');
+  const method=methodEl?methodEl.value:'';
   const note=document.getElementById('prNote').value.trim();
   if(!amount||amount<=0)return showMessage('أدخل المبلغ');
   if(paymentFor==='project'&&!projectName)return showMessage('أدخل اسم المشروع');
@@ -8830,7 +8852,7 @@ async function submitPaymentRequest(){
     }
   }
 
-  D.paymentRequests.push({id:uid(),apartmentId:ap.id,username:u.username,paymentFor,projectName,amount,imageDataUrl:proof,note,status:'pending',requestedAt:new Date().toISOString()});
+  D.paymentRequests.push({id:uid(),apartmentId:ap.id,username:u.username,paymentFor,projectName,amount,imageDataUrl:proof,method,note,status:'pending',requestedAt:new Date().toISOString()});
   window.__prImageData=null;
   save();closeModal();toast('تم إرسال الدفعة للمراجعة');
   pushNotification({type:'payment',title:'طلب دفعة جديد',message:`${unitLabel(ap)} - ${money(amount)} - ${paymentForLabel({paymentFor,projectName})}`,audience:'admins',link:'paymentRequests'});

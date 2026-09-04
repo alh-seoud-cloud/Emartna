@@ -77,6 +77,16 @@
     };
     wrapped.__resAccess = true;
     window.visibleNavGroups = wrapped;
+
+    /* ⚠️ القائمة الجانبية بترسم عند الدخول — قبل ما الوحدة دي
+       تتحمّل. فالشاشات المقفولة كانت تفضل ظاهرة لحد ما الساكن
+       يضغط عليها ويتقال له "مقفولة". بنعيد رسمها هنا. */
+    setTimeout(() => {
+      try{
+        const u = window.currentUser && currentUser();
+        if (u && (u.role === 'owner' || u.role === 'tenant') && window.renderRoot) renderRoot();
+      }catch(e){}
+    }, 250);
   }
 
   /* وبنمنع الدخول المباشر للشاشة حتى لو حد كتب اسمها */
