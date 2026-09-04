@@ -8799,7 +8799,18 @@ function openSubmitPaymentModal(){
       <option value="general">دفعة عامة / دفع مقدم</option>
       <option value="project">دفعة لمشروع محدد</option>
     </select></div>
-    <div class="field2 hidden" id="prProjectWrap"><label>اسم المشروع</label><input id="prProjectName" placeholder="مثال: تجديد المصعد"></div>
+    <div class="field2 hidden" id="prProjectWrap"><label>المشروع</label>
+      ${(function(){
+        const ps=(D.projects||[]).filter(p=>p&&p.name&&p.status!=='closed');
+        if(!ps.length) return '<p class="small" style="color:var(--muted)">'+
+          'مفيش مشاريع مفتوحة دلوقتي — اختار "سداد الرصيد" أو "دفعة عامة".</p>'+
+          '<input id="prProjectName" type="hidden" value="">';
+        // قائمة بمشاريع العمارة بس — الكتابة الحرة كانت بتخلق أسماء
+        // متضاربة ورئيس الاتحاد ما يعرفش الدفعة تخص أنهي مشروع
+        return '<select id="prProjectName">'+
+          ps.map(p=>`<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('')+
+          '</select>';
+      })()}</div>
     <div class="field2"><label>المبلغ</label><input id="prAmount" type="number" min="0" value="${bal>0?bal:''}"></div>
     <div class="field2"><label>طريقة السداد</label>
       <select id="prMethod">
@@ -9848,6 +9859,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
 <script type="module" src="emartna-staff.js"></script>
 <script type="module" src="emartna-resaccess.js"></script>
 <script type="module" src="emartna-uitoggles.js"></script>
+<script type="module" src="emartna-cities.js"></script>
 <script type="module" src="emartna-lastlogin.js"></script>
 
 </body>
