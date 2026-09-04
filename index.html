@@ -9508,6 +9508,26 @@ function pageOwnerHome(u){
     <div class="kpi"><div class="ic">🚪</div><div class="lbl">${a.type==='shop'?'محلي':'شقتي'}</div><div class="val">${unitLabel(a)} - ${esc(a.floor||'')}</div></div>
     <div class="kpi ${paidThisMonth===false?'owe':'ok'}"><div class="ic">📅</div><div class="lbl">حالة شهر ${monthLabel(month)}</div><div class="val" style="font-size:15px">${paidThisMonth===null?'لم يُحصّل بعد':(paidThisMonth?'مسدد ✅':'غير مسدد ⚠️')}</div></div>
   </div>
+
+  <!-- تسجيل الدفعة أول حاجة بعد الرصيد — ده اللي الساكن داخل عشانه -->
+  <div class="card mtop2" style="border:1.5px solid var(--accent);
+       background:linear-gradient(135deg,rgba(21,154,140,.08),transparent)">
+    <div class="flexrow" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <div>
+        <b style="font-size:15px">💸 دفعت الشهر؟ سجّل دفعتك</b>
+        <div class="small" style="color:var(--muted);margin-top:3px">
+          ${bal>0?`عليك <b>${money(bal)}</b> — حوّل وارفع صورة التحويل وهيتراجع`
+                 :'ارفع صورة التحويل وهيراجعها رئيس الاتحاد'}</div>
+      </div>
+      <button class="btn primary" style="padding:11px 20px"
+        onclick="openSubmitPaymentModal()">💸 تسجيل دفعة جديدة</button>
+    </div>
+    ${(D.paymentRequests||[]).filter(r=>r.apartmentId===a.id&&r.status==='pending').length
+      ? `<p class="small mtop" style="color:var(--gold)">⏳ عندك ${
+          (D.paymentRequests||[]).filter(r=>r.apartmentId===a.id&&r.status==='pending').length
+        } دفعة تحت المراجعة</p>` : ''}
+  </div>
+
   <div class="grid g2 mtop2">
     <div class="card"><h3>بيانات الشقة</h3><div class="mtop small" style="line-height:2.1">
       <div><b>المالك:</b> ${esc(a.ownerName)}</div><div><b>المستأجر:</b> ${esc(a.tenantName||'-')}</div>
