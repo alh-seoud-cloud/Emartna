@@ -12,7 +12,7 @@
   'use strict';
 
   const esc2 = s => (window.esc ? esc(s) : String(s == null ? '' : s));
-  const LIMITED = ['accountant','manager'];
+  const LIMITED = ['accountant','manager','deputy'];
 
   /* عدد المساعدين النشطين دلوقتي */
   window.staffCount = function(){
