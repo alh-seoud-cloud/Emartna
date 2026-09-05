@@ -468,13 +468,18 @@ window.saveUser = async function(id){
 window.createAdminInvite = async function(){
   const name  = (document.getElementById('nuName').value || '').trim();
   const phone = (document.getElementById('nuPhone').value || '').trim();
-  const role  = document.getElementById('nuRole').value;
+  let role  = document.getElementById('nuRole').value;
   if (!name)  return showMessage('اكتب الاسم');
   if (!phone) return showMessage('اكتب رقم الموبايل');
 
+  /* النائب بيتخزّن كأدمن بصلاحيات محددة */
+  const meta0 = CLOUD_ROLES[role] || {};
+  const perms0 = meta0.storeAs ? meta0.perms : undefined;
+  if (meta0.storeAs) role = meta0.storeAs;
+
   try{
     const inv = await window.CLOUD.invites.create(window.activeBuildingId,
-      { phone, phoneCountry:'+20', role });
+      { phone, phoneCountry:'+20', role, permissions: perms0 });
     closeModal();
     await window.refreshUsers();
     openModal(`
@@ -632,6 +637,11 @@ const PERM_GROUPS = [
 
 const CLOUD_ROLES = {
   admin:      { label:'⭐ رئيس اتحاد العمارة', hint:'كل الصلاحيات', perms:null },
+  /* النائب بيتخزّن بدور الأدمن عشان كل الشاشات تتعامل معاه كإدارة،
+     والفرق في الصلاحيات: كل حاجة ما عدا إعدادات العمارة والاشتراك. */
+  deputy:     { label:'🤝 نائب رئيس الاتحاد', hint:'كل حاجة ما عدا الإعدادات',
+                storeAs:'admin',
+                perms:{ home:true, building:true, finance:true, engage:true, settings:false } },
   accountant: { label:'💰 محاسب العمارة', hint:'الماليات بس',
                 perms:{ building:false, finance:true,  engage:false, settings:false } },
   manager:    { label:'📋 إداري العمارة', hint:'كل حاجة ما عدا الماليات',
@@ -662,7 +672,7 @@ window.openUserModal = function(id){
         <input id="nuPhone" placeholder="01012345678"></div>
       <div class="field2"><label>الصلاحية</label>
         <select id="nuRole" onchange="applyRoleTemplate('nu')">
-          ${['admin','accountant','manager'].map(k =>
+          ${['admin','deputy','accountant','manager'].map(k =>
             `<option value="${k}">${CLOUD_ROLES[k].label} — ${CLOUD_ROLES[k].hint}</option>`
            ).join('')}
         </select></div>
@@ -751,6 +761,7 @@ window.applyRoleTemplate = function(prefix){
 function readPerms(prefix){
   const role = document.getElementById(prefix + 'Role').value;
   if (role === 'admin') return null;              // كل الصلاحيات
+  if ((CLOUD_ROLES[role] || {}).storeAs) return (CLOUD_ROLES[role] || {}).perms || null;
   if (role === 'owner' || role === 'tenant')
     return (CLOUD_ROLES[role] || {}).perms || null;
   const out = { home:true };
@@ -798,10 +809,14 @@ window.saveUser = async function(id){
 window.createAdminInvite = async function(){
   const name  = (document.getElementById('nuName').value || '').trim();
   const phone = (document.getElementById('nuPhone').value || '').trim();
-  const role  = document.getElementById('nuRole').value;
-  const perms = readPerms('nu');
+  let role  = document.getElementById('nuRole').value;
+  let perms = readPerms('nu');
   if (!name)  return showMessage('اكتب الاسم');
   if (!phone) return showMessage('اكتب رقم الموبايل');
+
+  /* الأدوار اللي بتتخزّن بدور تاني (زي النائب = أدمن بصلاحيات محددة) */
+  const meta = CLOUD_ROLES[role] || {};
+  if (meta.storeAs){ perms = perms || meta.perms; role = meta.storeAs; }
 
   try{
     const apEl = document.getElementById('nuApartment');
@@ -840,7 +855,7 @@ window.roleBadge = function(role){
            owner · tenant               → قائمة الساكن
    ------------------------------------------------------------ */
 
-const STAFF_ROLES = ['admin', 'accountant', 'manager'];
+const STAFF_ROLES = ['admin', 'deputy', 'accountant', 'manager'];
 
 window.visibleNavGroups = function(u){
   if (!u) return [];
