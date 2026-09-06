@@ -791,11 +791,11 @@ window.saveUser = async function(id){
   try{
     if (u.__membershipId){
       const r = await window.CLOUD._sb.from('memberships')
-        .update({ role, active, permissions: perms }).eq('id', u.__membershipId);
+        .update({ role, active, permissions: perms, screen_perms: u.screenPerms || null }).eq('id', u.__membershipId);
       if (r.error) throw r.error;
     } else if (u.__inviteId){
       const r = await window.CLOUD._sb.from('invitations')
-        .update({ role, permissions: perms }).eq('id', u.__inviteId);
+        .update({ role, permissions: perms, screen_perms: u.screenPerms || null }).eq('id', u.__inviteId);
       if (r.error) throw r.error;
     }
     if (u.role !== role)
