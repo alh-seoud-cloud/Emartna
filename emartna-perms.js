@@ -48,9 +48,17 @@
   window.permActionsFor = actionsFor;
 
   /* كل شاشات رئيس الاتحاد مقسّمة بمجموعاتها */
-  function screens(){
+  /* صاحب الشقة والمستأجر ليهم شاشاتهم الخاصة — فالجدول التفصيلي
+     لازم يتبنى من مجموعة الشاشات الصح حسب الدور. */
+  function isResidentRole(r){ return r === 'owner' || r === 'tenant'; }
+  window.permIsResidentRole = isResidentRole;
+
+  function screens(role){
     try{
-      return (window.ADMIN_NAV_GROUPS || []).map(g => ({
+      const src = isResidentRole(role)
+        ? (window.OWNER_NAV_GROUPS || [])
+        : (window.ADMIN_NAV_GROUPS || []);
+      return src.map(g => ({
         key: g.key, icon: g.icon, label: g.label,
         items: (g.items || []).map(it => ({ key: it[0], icon: it[1], label: it[2] })),
       }));
@@ -132,7 +140,8 @@
     }
     const u = (D.users || []).find(x => x.id === userId);
     if (!u) return;
-    const gs = screens();
+    window.__spUser = u;
+    const gs = screens(u.role);
     const sp = u.screenPerms || {};
 
     const row = (s, grpKey) => {
@@ -191,7 +200,7 @@
   /* جدول تفصيلي لمستخدم لسه ماتعملش — بيتعبّى من افتراضي الدور،
      ورئيس الاتحاد يعدّل عليه قبل ما يبعت الدعوة. */
   window.permInviteGrid = function(role){
-    const gs = screens();
+    const gs = screens(role);
     const row = (s, grpKey) => {
       const cur = defaultsFor(role, grpKey);
       const ok  = actionsFor(s.key).map(a => a.key);
@@ -240,7 +249,8 @@
 
   /* تبديل كل شاشات مجموعة مرة واحدة */
   window.spGroup = function(groupKey, btn){
-    const g = screens().find(x => x.key === groupKey);
+    const u0 = window.__spUser;
+    const g = screens(u0 ? u0.role : 'admin').find(x => x.key === groupKey);
     if (!g) return;
     const keys = g.items.map(i => i.key);
     const boxes = [...document.querySelectorAll('.sp-chk')]
@@ -330,7 +340,9 @@
   function card(){
     if (!isUnionHead()) return '';
     const staff = (D.users || []).filter(u =>
-      u.active !== false && u.role !== 'owner' && u.role !== 'tenant');
+      u.active !== false && !isResidentRole(u.role));
+    const residents = (D.users || []).filter(u =>
+      u.active !== false && isResidentRole(u.role));
     const deps = deputyCount();
     return `
       <div class="card">
@@ -358,6 +370,23 @@
                 🔐 صلاحياته</button>
             </div>`).join('') || '<p class="small">مفيش مستخدمين إداريين</p>'}
         </div>
+        ${residents.length ? `
+        <details class="mtop">
+          <summary style="cursor:pointer"><b>🏠 الملاك والمستأجرين (${residents.length})</b>
+            <span class="small" style="color:var(--muted)"> — صلاحيات تفصيلية على شاشاتهم</span></summary>
+          <div class="mtop">
+            ${residents.map(u => `
+              <div class="flexrow" style="padding:6px 0;border-bottom:1px dashed var(--line);
+                   justify-content:space-between;gap:8px;flex-wrap:wrap">
+                <div><b class="small">${esc2(u.name || u.username)}</b>
+                  <span class="small" style="color:var(--muted)"> · ${userRoleName(u)}</span>
+                  ${u.screenPerms ? '<span class="badge b" style="margin-inline-start:6px">مخصّصة</span>' : ''}
+                </div>
+                <button class="btn sm ghost" onclick="openScreenPerms('${esc2(u.id)}')">
+                  🔐 صلاحياته</button>
+              </div>`).join('')}
+          </div>
+        </details>` : ''}
       </div>`;
   }
 

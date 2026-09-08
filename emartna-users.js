@@ -79,9 +79,10 @@ window.pageUsers = function(){
       value:r => r.u ? r.u.role : 'zz',
       cell: r => {
         const role = r.u ? r.u.role : (r.ap ? 'owner' : '');
-        return role==='admin'  ? '<span class="badge b">رئيس اتحاد - كل الصلاحيات</span>'
-             : role==='tenant' ? '<span class="badge y">مستأجر</span>'
-             : role==='owner'  ? '<span class="badge n">مالك شقة</span>' : '-';
+        if (!role) return '-';
+        /* الأدوار الجديدة (نائب/أمين صندوق/عضو مجلس) كانت بتظهر "-"
+           لأن الشرط كان بيغطي ٣ أدوار بس. */
+        return window.roleBadge ? roleBadge(role) : esc(role);
       }},
 
     { key:'phone', label:'الهاتف',
@@ -727,7 +728,8 @@ function permCheckboxes(prefix, perms){
       ${PERM_GROUPS.map(g => {
         const on = !perms || perms[g.key] !== false;
         return `<label class="checkline mtop">
-          <input type="checkbox" id="${prefix}P_${g.key}" ${on?'checked':''}>
+          <input type="checkbox" id="${prefix}P_${g.key}" ${on?'checked':''}
+                 onchange="syncGroupToDetail('${g.key}',this.checked)">
           ${g.icon} ${g.label}
           <span class="small" style="color:var(--muted)"> — ${g.note}</span>
         </label>`;
@@ -788,6 +790,22 @@ window.saveUser = async function(id){
     await window.refreshUsers();
     toast('تم الحفظ');
   }catch(e){ showMessage(e.message); }
+};
+
+/* المختصر (الأقسام) والتفصيلي (الشاشات) كانوا منفصلين تمامًا:
+   تقفل قسم في المختصر ويفضل مفتوح في التفصيلي، والتفصيلي هو اللي بيتحفظ.
+   دلوقتي أي تغيير في المختصر بينزل على كل شاشات القسم في التفصيلي. */
+window.syncGroupToDetail = function(groupKey, on){
+  const grid = document.getElementById('nuDetailGrid');
+  if (!grid || !window.permScreens) return;
+  const g = (window.permScreens(
+    (document.getElementById('nuRole') || {}).value || 'admin') || [])
+    .find(x => x.key === groupKey);
+  if (!g) return;
+  const keys = g.items.map(i => i.key);
+  grid.querySelectorAll('.inv-chk').forEach(el => {
+    if (keys.includes(el.dataset.s)) el.checked = on;
+  });
 };
 
 window.buildInviteDetailGrid = function(){
