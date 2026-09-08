@@ -454,6 +454,10 @@ window.saveUser = async function(id){
   const screenPerms = window.readScreenPerms ? readScreenPerms() : null;
   const permissions = readPerms('u');
 
+  /* من غير عضوية ولا دعوة مفيش مكان نحفظ فيه — كان بيقول "تم الحفظ" وخلاص */
+  if (!u.__membershipId && !u.__inviteId)
+    return showMessage('المستخدم ده لسه مش متزامن مع السحابة — مش قادر أحفظ صلاحياته.');
+
   try{
     if (u.__membershipId){
       const r = await window.CLOUD._sb.from('memberships')

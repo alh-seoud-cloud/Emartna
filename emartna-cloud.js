@@ -420,7 +420,10 @@ async function fetchBuilding(buildingUuid, legacyId){
   const [cats, mem, inv] = await Promise.all([
     sb.from('expense_categories').select('name')
       .eq('building_id', buildingUuid).order('sort_order'),
-    sb.from('memberships').select('id,user_id,apartment_id,role,active')
+    /* permissions و screen_perms و role_template ماكانوش مطلوبين في الاستعلام،
+       فالصلاحيات كانت بتتحفظ في القاعدة صح وترجع فاضية عند التحميل. */
+    sb.from('memberships')
+      .select('id,user_id,apartment_id,role,active,permissions,screen_perms,role_template')
       .eq('building_id', buildingUuid),
     sb.from('invitations').select('*')
       .eq('building_id', buildingUuid).eq('status','pending'),
