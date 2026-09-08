@@ -1752,7 +1752,7 @@ function clearAllTableFilters(tableId){
   window[tableId+'_filters']={};
   refreshSortable(tableId);
 }
-function exportSortableTableToExcel(tableId){
+function exportSortableTableToExcel(tableId){if(!guardAction(curPage,'export'))return;
   if(typeof XLSX==='undefined')return showMessage('تعذر تحميل مكتبة إكسيل - تأكد من اتصالك بالإنترنت وحاول تاني.');
   const{filtered,columns,opts}=getFilteredSortedRows(tableId); if(!filtered)return;
   const visible=orderedVisibleCols(tableId+'_order',tableId+'_vis',columns);
@@ -1764,7 +1764,7 @@ function exportSortableTableToExcel(tableId){
   XLSX.utils.book_append_sheet(wb,ws,'بيانات');
   XLSX.writeFile(wb,(opts.exportName||tableId)+' - '+todayISO()+'.xlsx');
 }
-function printSortableTable(tableId){
+function printSortableTable(tableId){if(!guardAction(curPage,'print'))return;
   const{filtered,columns,opts}=getFilteredSortedRows(tableId); if(!filtered)return;
   const visible=orderedVisibleCols(tableId+'_order',tableId+'_vis',columns);
   const printCols=visible.filter(c=>c.value);
@@ -2782,9 +2782,19 @@ function markAllSysNotifsRead(){
   (REG.sysNotifications||[]).forEach(n=>n.read=true);
   saveRegistry(); toggleSysNotifPanel(); renderSysContent();
 }
+/* المعرّف الفريد للعمارة في قاعدة البيانات — وهو نفسه مفتاح العزل:
+   كل صف في كل جدول مربوط بيه، وسياسات الحماية بتقارن بيه. */
+function buildingUuidOf(legacyId){
+  try{ return (window.CLOUD&&CLOUD._cache&&CLOUD._cache.buildingUuid&&
+               CLOUD._cache.buildingUuid[legacyId])||''; }catch(e){ return ''; }
+}
+function copyText(t){
+  try{ navigator.clipboard.writeText(t); if(window.toast)toast('اتنسخ'); }catch(e){}
+}
 const SYS_BUILDING_COLS=[
   {key:'name',label:'اسم العمارة',default:true},
   {key:'code',label:'الكود',default:true},
+  {key:'uuid',label:'المعرّف الفريد (قاعدة البيانات)',default:false},
   {key:'apCount',label:'إجمالي الوحدات',default:true},
   {key:'apOnlyCount',label:'عدد الشقق',default:true},
   {key:'adminUser',label:'حساب الأدمن',default:true},
@@ -2964,6 +2974,12 @@ function pageSysDashboard(){
     apCount:{label:'إجمالي الوحدات',value:b=>b.apCount,cell:b=>b.apCount},
     apOnlyCount:{label:'عدد الشقق',value:b=>b.apOnlyCount,cell:b=>b.apOnlyCount},
     adminUser:{label:'حساب الأدمن',value:b=>b.adminUser,cell:b=>`<code>${esc(b.adminUser)}</code>`},
+    uuid:{label:'المعرّف الفريد (قاعدة البيانات)',
+      value:b=>buildingUuidOf(b.id)||'',
+      cell:b=>{const v=buildingUuidOf(b.id);
+        return v?`<span style="font-family:monospace;font-size:11px;cursor:pointer"
+          title="دوس للنسخ" onclick="copyText('${v}')">${esc(v)}</span>`
+        :'<span class="small" style="color:var(--muted)">مش متزامنة</span>';}},
     adminPhone:{label:'هاتف الأدمن',value:b=>b.adminPhone,cell:b=>esc(b.adminPhone)},
     lastContact:{label:'آخر تواصل',
       value:b=>(window.lastContactOf&&lastContactOf(b.id)&&lastContactOf(b.id).last_at)||'',
@@ -3302,7 +3318,7 @@ function removeSysPaymentMethod(id){
   saveRegistry();
   document.getElementById('sysPayMethodsList').innerHTML=paymentMethodsListHTML(REG.sysOwner.paymentMethods,true);
 }
-function saveVendorContact(){
+function saveVendorContact(){if(!guardAction('vendors','edit'))return;
   REG.sysOwner.contactPhoneCountry=document.getElementById('soCountry').value;
   REG.sysOwner.contactPhone=document.getElementById('soPhone').value.trim();
   REG.sysOwner.contactEmail=document.getElementById('soEmail').value.trim();
@@ -6474,7 +6490,7 @@ function printLedgerEntry(id){if(!guardAction('collections','print'))return;
     ['التاريخ',l.date||''],['الحساب',acc?acc.name:'-'],['البيان',l.note||'-']
   ]);
 }
-function printReceipt(title,rows){
+function printReceipt(title,rows){if(!guardAction(curPage,'print'))return;
   const w=window.open('','_blank','width=420,height=600');
   if(!w)return showMessage('يرجى السماح بالنوافذ المنبثقة للطباعة');
   w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>${esc(title)}</title>
@@ -6646,7 +6662,7 @@ function filterApDetailLedger(id){
   window.__apStmtTo=document.getElementById('apStmtTo').value;
   renderApDetailLedger(id);
 }
-function printApartmentStatement(apId){
+function printApartmentStatement(apId){if(!guardAction(curPage,'print'))return;
   const a=D.apartments.find(x=>x.id===apId); if(!a)return;
   const fromDate=window.__apStmtFrom||'2000-01-01';
   const toDate=window.__apStmtTo||todayISO();
@@ -6758,7 +6774,7 @@ function openVendorDetailModal(id){
     <div style="max-height:250px;overflow-y:auto">${reports.length?reports.map(r=>`<div class="card mtop" style="cursor:pointer" onclick="closeModal();openMaintenanceDetailModal('${r.id}')"><div class="flexrow"><b style="flex:1">${esc(r.title)}</b>${MAINT_STATUS_LABELS[r.status]||''}</div><p class="small" style="color:var(--muted)">${esc(new Date(r.createdAt).toLocaleDateString('ar-EG'))}</p></div>`).join(''):'<p class="small">لسه معندوش أي بلاغات صيانة مسندة له</p>'}</div>
     <div class="modal-actions"><button class="btn primary" onclick="printVendorProfile('${v.id}')">🖨️ طباعة</button><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`);
 }
-function printVendorProfile(id){
+function printVendorProfile(id){if(!guardAction('vendors','print'))return;
   const v=(D.vendors||[]).find(x=>x.id===id); if(!v)return;
   const reports=(D.maintenanceReports||[]).filter(r=>r.vendorId===id).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
   const w=window.open('','_blank','width=420,height=600');
@@ -6781,7 +6797,7 @@ function printVendorProfile(id){
   w.document.close();
   setTimeout(()=>{w.print();},300);
 }
-function openVendorModal(id){
+function openVendorModal(id){if(!guardAction('vendors','edit'))return;
   const v=id?D.vendors.find(x=>x.id===id):null;
   openModal(`<h3>${v?'تعديل':'إضافة'} مقاول / مورد</h3>
     <div class="field2"><label>الاسم / اسم الشركة</label><input id="vName" value="${v?esc(v.name):''}"></div>
@@ -6797,14 +6813,14 @@ function openVendorModal(id){
     <div class="field2"><label>ملاحظات</label><textarea id="vNotes">${v?esc(v.notes||''):''}</textarea></div>
     <div class="modal-actions"><button class="btn primary" onclick="saveVendor(${v?`'${v.id}'`:'null'})">💾 حفظ</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
 }
-function saveVendor(id){
+function saveVendor(id){if(!guardAction('vendors','edit'))return;
   const name=document.getElementById('vName').value.trim(); if(!name)return showMessage('أدخل الاسم');
   const data={name,category:document.getElementById('vCategory').value,phoneCountry:document.getElementById('vPhoneCountry').value,phone:document.getElementById('vPhone').value.trim(),email:document.getElementById('vEmail').value.trim(),contractStart:document.getElementById('vContractStart').value,contractEnd:document.getElementById('vContractEnd').value,notes:document.getElementById('vNotes').value.trim()};
   if(id){Object.assign(D.vendors.find(x=>x.id===id),data);logActivity('تعديل مقاول/مورد',name);}
   else{D.vendors.push({id:uid(),...data});logActivity('إضافة مقاول/مورد',name);}
   save();closeModal();toast('تم الحفظ');renderContent();
 }
-function deleteVendorPrompt(id){
+function deleteVendorPrompt(id){if(!guardAction('vendors','delete'))return;
   const v=D.vendors.find(x=>x.id===id); if(!v)return;
   const inUse=(D.maintenanceReports||[]).some(r=>r.vendorId===id);
   confirmDelete(`حذف "${v.name}"؟${inUse?' فيه بلاغات صيانة مرتبطة به هتفضل موجودة بس من غير ربط بمقاول.':''}`,()=>{
@@ -7117,7 +7133,7 @@ function openMaintenanceDetailModal(id){
     <div style="max-height:250px;overflow-y:auto">${history.length?history.map(h=>`<div class="card mtop"><p class="small"><b>${esc(h.action)}</b></p><p class="small" style="color:var(--muted)">${esc(h.by||'')} - ${esc(new Date(h.date).toLocaleString('ar-EG'))}</p></div>`).join(''):'<p class="small">لا توجد حركة مسجّلة</p>'}</div>
     <div class="modal-actions"><button class="btn primary" onclick="printMaintenanceReport('${r.id}')">🖨️ طباعة</button><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`);
 }
-function printMaintenanceReport(id){
+function printMaintenanceReport(id){if(!guardAction('maintenance','print'))return;
   const r=(D.maintenanceReports||[]).find(x=>x.id===id); if(!r)return;
   const ap=r.apartmentId?D.apartments.find(a=>a.id===r.apartmentId):null;
   const vendor=r.vendorId?(D.vendors||[]).find(v=>v.id===r.vendorId):null;
@@ -7143,7 +7159,7 @@ function printMaintenanceReport(id){
   w.document.close();
   setTimeout(()=>{w.print();},300);
 }
-function openMaintenanceModal(){
+function openMaintenanceModal(){if(!guardAction('maintenance','add'))return;
   const ap=myApartment();
   openModal(`<h3>بلاغ صيانة جديد</h3>
     <div class="field2"><label>عنوان البلاغ</label><input id="mrTitle" placeholder="مثال: تسريب مياه بالسلم"></div>
@@ -7187,7 +7203,7 @@ function finishMaintenanceStatusUpdate(r,status,note){
   if(r.reportedByUsername)pushNotification({type:'maintenance',title:'تحديث بلاغ الصيانة: '+r.title,message:status==='resolved'?'تم حل البلاغ':'البلاغ قيد المعالجة الآن',audience:r.reportedByUsername,link:'maintenance'});
   renderContent();
 }
-function openAssignVendorModal(id){
+function openAssignVendorModal(id){if(!guardAction('vendors','edit'))return;
   const vendors=D.vendors||[];
   if(!vendors.length){showMessage('لسه معملتش أي مقاول أو مورد. أضفه أولًا من صفحة "مقاولون وموردون"');return;}
   const r=(D.maintenanceReports||[]).find(x=>x.id===id); if(!r)return;
@@ -7208,7 +7224,7 @@ function assignVendorToReport(id){
   if(r.status==='open')r.status='in_progress';
   save();closeModal();toast('تم التعيين');renderContent();
 }
-function deleteMaintenanceReport(id){
+function deleteMaintenanceReport(id){if(!guardAction('maintenance','delete'))return;
   confirmDelete('حذف هذا البلاغ نهائيًا؟',()=>{
     D.maintenanceReports=(D.maintenanceReports||[]).filter(x=>x.id!==id);
     save();toast('تم الحذف');renderContent();
@@ -7253,7 +7269,7 @@ function filterApartmentsByBlock(blockName){
   window.__apBlockFilter=blockName==='(بدون مبنى محدد)'?'':blockName;
   go('apartments');
 }
-function openAddBlockModal(){
+function openAddBlockModal(){if(!guardAction('blocks','add'))return;
   openModal(`<h3>إضافة مبنى / فيلا جديدة</h3>
     <div class="field2"><label>اسم أو رقم المبنى/الفيلا (رقمها الفعلي في الكمبوند)</label><input id="blkName" placeholder="مثال: عمارة 5 أو فيلا 20"></div>
     <div class="field2"><label>نوع الوحدات فيه</label><select id="blkType" onchange="toggleBlockTypeFields()">
@@ -7792,7 +7808,7 @@ function pageDistributionWeights(){
     <button class="btn primary mtop2" onclick="saveDistributionWeights()">💾 حفظ النسب</button>
   </div>`;
 }
-function saveDistributionWeights(){
+function saveDistributionWeights(){if(!guardAction('distweights','edit'))return;
   const weights=ensureDistributionWeights();
   const signatures=new Set(D.apartments.map(a=>unitDistributionSignature(a)));
   signatures.forEach(sig=>{
@@ -8075,14 +8091,14 @@ function pageProjectDetail(id){
       <button class="btn sm red" onclick="deleteProjectAttachment('${p.id}','${att.id}')">حذف</button>
     </div>`).join(''):'<p class="small">لا توجد مرفقات بعد</p>'}</div>`;
 }
-function openProjectModal(id){
+function openProjectModal(id){if(!guardAction('projects','edit'))return;
   const p=id?D.projects.find(x=>x.id===id):null;
   openModal(`<h3>${p?'تعديل مشروع':'مشروع جديد'}</h3>
     <div class="field2"><label>اسم المشروع</label><input id="prjName" placeholder="مثال: تجديد المصعد" value="${p?esc(p.name):''}"></div>
     <div class="field2"><label>وصف (اختياري)</label><textarea id="prjDesc">${p?esc(p.description||''):''}</textarea></div>
     <div class="modal-actions"><button class="btn primary" onclick="saveProject(${p?`'${p.id}'`:'null'})">${p?'حفظ':'إنشاء المشروع'}</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
 }
-function saveProject(id){
+function saveProject(id){if(!guardAction('projects','edit'))return;
   const name=document.getElementById('prjName').value.trim();
   if(!name)return showMessage('أدخل اسم المشروع');
   const description=document.getElementById('prjDesc').value.trim();
@@ -8099,7 +8115,7 @@ function saveProject(id){
   }
 }
 function setProjectStatus(id,status){const p=D.projects.find(x=>x.id===id);if(!p)return;p.status=status;save();toast('تم التحديث');renderContent()}
-function deleteProject(id){
+function deleteProject(id){if(!guardAction('projects','delete'))return;
   confirmDelete('حذف هذا المشروع؟ الحركات المالية المرتبطة به هتفضل موجودة في السجل، بس هتفقد ربطها بالمشروع.',()=>{
     D.ledger.forEach(l=>{if(l.projectId===id)delete l.projectId});
     D.projects=D.projects.filter(x=>x.id!==id);
@@ -8107,12 +8123,12 @@ function deleteProject(id){
     save();toast('تم الحذف');renderContent();
   });
 }
-function openGenerateChargeModalForProject(projectId){
+function openGenerateChargeModalForProject(projectId){if(!guardAction('projects','add'))return;
   const p=D.projects.find(x=>x.id===projectId); if(!p)return;
   openGenerateChargeModal(p.name);
   window.__chargeProjectId=projectId;
 }
-function addProjectAttachment(projectId){
+function addProjectAttachment(projectId){if(!guardAction('projects','att_add'))return;
   const fileInput=document.getElementById('prjFile');
   const file=fileInput.files[0]; if(!file)return showMessage('اختر صورة أولًا');
   if(file.size>8*1024*1024)return showMessage('حجم الصورة كبير جدًا (أكبر من 8 ميجا)');
@@ -8147,7 +8163,7 @@ function viewProjectAttachment(projectId,attId){
   const p=D.projects.find(x=>x.id===projectId); const att=p&&p.attachments.find(a=>a.id===attId); if(!att)return;
   openModal(`<h3>${esc(att.name)}</h3><img src="${att.dataUrl}" style="width:100%;border-radius:8px;margin-top:10px"><div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`,true);
 }
-function deleteProjectAttachment(projectId,attId){
+function deleteProjectAttachment(projectId,attId){if(!guardAction('projects','att_delete'))return;
   const p=D.projects.find(x=>x.id===projectId); if(!p)return;
   p.attachments=p.attachments.filter(a=>a.id!==attId);
   save();toast('تم الحذف');renderContent();
@@ -8460,7 +8476,7 @@ function pollCardHTML(p,u,isAdmin){
       <button class="btn sm primary" onclick="addPollComment('${p.id}')">إرسال</button></div>
   </div>`;
 }
-function openPollModal(prefillTitle,prefillDesc,fromSuggestionId,editId){
+function openPollModal(prefillTitle,prefillDesc,fromSuggestionId,editId){if(!guardAction('polls','add'))return;
   const p=editId?D.polls.find(x=>x.id===editId):null;
   openModal(`
     <h3>${p?'تعديل استطلاع رأي':'إنشاء استطلاع رأي'}</h3>
@@ -8479,7 +8495,7 @@ function openPollModal(prefillTitle,prefillDesc,fromSuggestionId,editId){
     <div class="modal-actions"><button class="btn primary" onclick="savePoll()">✅ ${p?'حفظ التعديلات':'نشر الاستطلاع'}</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
 }
 function addPollOption(){const d=document.getElementById('poOptions');const i=document.createElement('input');i.className='poOpt mtop';i.placeholder='خيار جديد';d.appendChild(i)}
-function savePoll(){
+function savePoll(){if(!guardAction('polls','edit'))return;
   const title=document.getElementById('poTitle').value.trim();
   const options=[...document.querySelectorAll('.poOpt')].map(i=>i.value.trim()).filter(Boolean);
   if(!title||options.length<2)return showMessage('أدخل عنوانًا وخيارين على الأقل');
@@ -8514,7 +8530,7 @@ function votePoll(pollId,optIdx){
   },'تأكيد التصويت');
 }
 function togglePollStatus(id){const p=D.polls.find(x=>x.id===id);p.status=p.status==='open'?'closed':'open';save();renderContent()}
-function deletePoll(id){confirmDelete('حذف هذا الاستطلاع وكل الأصوات والتعليقات عليه نهائيًا؟',()=>{D.polls=D.polls.filter(p=>p.id!==id);save();toast('تم الحذف');renderContent();})}
+function deletePoll(id){if(!guardAction('polls','delete'))return;confirmDelete('حذف هذا الاستطلاع وكل الأصوات والتعليقات عليه نهائيًا؟',()=>{D.polls=D.polls.filter(p=>p.id!==id);save();toast('تم الحذف');renderContent();})}
 function addPollComment(pollId){
   const u=currentUser(); const p=D.polls.find(x=>x.id===pollId);
   const input=document.getElementById('pc_'+pollId); const text=input.value.trim(); if(!text)return;
@@ -8525,7 +8541,7 @@ function addPollComment(pollId){
   p.comments=p.comments||[]; p.comments.push({id:uid(),username:u.username,text,visibility,authorLabel,date:todayISO()});
   save();toast('تم إضافة التعليق');renderContent();
 }
-function deletePollComment(pollId,cId){const p=D.polls.find(x=>x.id===pollId);p.comments=p.comments.filter(c=>c.id!==cId);save();renderContent()}
+function deletePollComment(pollId,cId){if(!guardAction('polls','delete'))return;const p=D.polls.find(x=>x.id===pollId);p.comments=p.comments.filter(c=>c.id!==cId);save();renderContent()}
 
 /* ---------- الإعلانات (مع تعليقات عامة) ---------- */
 function pageAnnouncements(u){
@@ -8648,7 +8664,7 @@ function suggestionCardHTML(s,u,isAdmin){
     </div>`:''}
   </div>`;
 }
-function openSuggestionModal(){
+function openSuggestionModal(){if(!guardAction('suggestions','add'))return;
   openModal(`
     <h3>إضافة مقترح جديد</h3>
     <div class="field2"><label>عنوان المقترح</label><input id="sgTitle" placeholder="مثال: تخصيص مكان لانتظار الدراجات"></div>
@@ -8667,13 +8683,13 @@ function submitSuggestion(){
   pushNotification({type:'suggestion',title:'مقترح جديد بانتظار المراجعة',message:title,audience:'admins',link:'suggestions'});
   renderContent();
 }
-function approveSuggestion(id){
+function approveSuggestion(id){if(!guardAction('suggestions','approve'))return;
   const s=D.suggestions.find(x=>x.id===id); if(!s)return;
   s.status='approved'; logActivity('اعتماد مقترح',s.title); save(); toast('تم اعتماد المقترح ونشره');
   pushNotification({type:'suggestion',title:'تمت الموافقة على مقترحك',message:s.title,audience:s.username,link:'suggestions'});
   renderContent();
 }
-function rejectSuggestion(id){
+function rejectSuggestion(id){if(!guardAction('suggestions','unapprove'))return;
   const s=D.suggestions.find(x=>x.id===id); if(!s)return;
   promptModal('سبب الرفض','اختياري','',(note)=>{
     s.status='rejected'; s.adminNote=note||''; logActivity('رفض مقترح',s.title); save(); toast('تم رفض المقترح');
@@ -8714,7 +8730,7 @@ function meetingCardHTML(m,u,isAdmin){
       <button class="btn sm primary" onclick="addMeetingComment('${m.id}')">إرسال</button></div>
   </div>`;
 }
-function openMeetingModal(id){
+function openMeetingModal(id){if(!guardAction('meetings','add'))return;
   const m=id?D.meetings.find(x=>x.id===id):null;
   openModal(`
     <h3>${m?'تعديل اجتماع':'تحديد اجتماع جديد'}</h3>
@@ -8727,7 +8743,7 @@ function openMeetingModal(id){
     <div class="field2"><label>تفاصيل إضافية عن جدول الأعمال (اختياري)</label><textarea id="mtAgenda">${m?esc(m.agenda||''):''}</textarea></div>
     <div class="modal-actions"><button class="btn primary" onclick="saveMeeting(${m?`'${m.id}'`:'null'})">✅ ${m?'حفظ التعديلات':'نشر الاجتماع'}</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
 }
-function saveMeeting(id){
+function saveMeeting(id){if(!guardAction('meetings','edit'))return;
   const title=document.getElementById('mtTitle').value.trim();
   const date=document.getElementById('mtDate').value;
   const time=document.getElementById('mtTime').value;
@@ -8751,7 +8767,7 @@ function saveMeeting(id){
   }
   renderContent();
 }
-function openMeetingOutcomeModal(id){
+function openMeetingOutcomeModal(id){if(!guardAction('meetings','approve'))return;
   const m=D.meetings.find(x=>x.id===id); if(!m)return;
   openModal(`
     <h3>تسجيل ما تم الاتفاق عليه</h3>
@@ -8759,7 +8775,7 @@ function openMeetingOutcomeModal(id){
     <div class="field2 mtop"><label>ملخص ما تم مناقشته والاتفاق عليه</label><textarea id="mtOutcomes" style="min-height:120px">${esc(m.outcomes||'')}</textarea></div>
     <div class="modal-actions"><button class="btn primary" onclick="saveMeetingOutcome('${m.id}')">✅ حفظ ونشر للسكان</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
 }
-function saveMeetingOutcome(id){
+function saveMeetingOutcome(id){if(!guardAction('meetings','approve'))return;
   const m=D.meetings.find(x=>x.id===id); if(!m)return;
   const outcomes=document.getElementById('mtOutcomes').value.trim();
   if(!outcomes)return showMessage('اكتب ملخص ما تم الاتفاق عليه');
@@ -8789,7 +8805,7 @@ function addMeetingComment(meetingId){
   save();inp.value='';renderContent();
   if(!isStaffRole(u.role))pushNotification({type:'meeting',title:'تعليق جديد على اجتماع',message:m.title,audience:'admins',link:'meetings'});
 }
-function deleteMeetingComment(meetingId,cId){const m=D.meetings.find(x=>x.id===meetingId);m.comments=m.comments.filter(c=>c.id!==cId);save();renderContent()}
+function deleteMeetingComment(meetingId,cId){if(!guardAction('meetings','delete'))return;const m=D.meetings.find(x=>x.id===meetingId);m.comments=m.comments.filter(c=>c.id!==cId);save();renderContent()}
 /* ---------- طلبات دفع من أصحاب الشقق (بإثبات صورة) ---------- */
 function pagePaymentRequests(u){
   const isAdmin=isStaffRole(u.role);
@@ -9252,7 +9268,7 @@ function renameCategory(index){
     save();toast('تم التعديل');renderContent();
   },'حفظ');
 }
-function removeCategoryPrompt(i){
+function removeCategoryPrompt(i){if(!guardAction('expenseCategories','delete'))return;
   const name=D.expenseCategories[i];
   const usageCount=D.expenses.filter(e=>e.category===name).length;
   confirmDelete(`حذف بند "${name}"؟${usageCount?` تحذير: ${usageCount} مصروف مسجّل بهذا البند حاليًا، هيفضل زي ما هو بس البند لن يظهر كخيار جديد بعد الحذف.`:''}`,()=>{
@@ -9577,7 +9593,7 @@ function activePaymentMethods(){
   return (D.building.paymentMethods||[]).filter(m=>
     m&&m.type&&m.active!==false&&m.accountId&&(D.accounts||[]).some(a=>a.id===m.accountId));
 }
-function savePaymentContact(){
+function savePaymentContact(){if(!guardAction('settings','edit'))return;
   D.building.contactPhoneCountry=document.getElementById('payCountry').value;
   D.building.contactPhone=document.getElementById('payPhone').value.trim();
   save();closeModal();toast('تم الحفظ');
@@ -9595,8 +9611,8 @@ async function changeAdminPass(){
   if(!changed)return toast('لم يتم تغيير أي بيانات');
   save();closeModal();toast('تم الحفظ');renderContent();
 }
-function addCategory(){const v=document.getElementById('newCat').value.trim();if(!v)return;if(D.expenseCategories.includes(v))return showMessage('البند ده موجود بالفعل');D.expenseCategories.push(v);save();renderContent();}
-function exportBackup(){
+function addCategory(){if(!guardAction('expenseCategories','add'))return;const v=document.getElementById('newCat').value.trim();if(!v)return;if(D.expenseCategories.includes(v))return showMessage('البند ده موجود بالفعل');D.expenseCategories.push(v);save();renderContent();}
+function exportBackup(){if(!guardAction(curPage,'export'))return;
   const blob=new Blob([JSON.stringify(D,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='omaretna_'+(D.building.name||'building')+'_'+todayISO()+'.json';a.click();
   D.lastBackupDate=todayISO();save();
