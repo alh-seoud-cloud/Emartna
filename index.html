@@ -2789,6 +2789,7 @@ const SYS_BUILDING_COLS=[
   {key:'apOnlyCount',label:'عدد الشقق',default:true},
   {key:'adminUser',label:'حساب الأدمن',default:true},
   {key:'adminPhone',label:'هاتف الأدمن',default:true},
+  {key:'lastContact',label:'آخر تواصل',default:true},
   {key:'adminEmail',label:'بريد الأدمن',default:false},
   {key:'plan',label:'الخطة',default:true},
   {key:'status',label:'الحالة',default:true},
@@ -2964,6 +2965,9 @@ function pageSysDashboard(){
     apOnlyCount:{label:'عدد الشقق',value:b=>b.apOnlyCount,cell:b=>b.apOnlyCount},
     adminUser:{label:'حساب الأدمن',value:b=>b.adminUser,cell:b=>`<code>${esc(b.adminUser)}</code>`},
     adminPhone:{label:'هاتف الأدمن',value:b=>b.adminPhone,cell:b=>esc(b.adminPhone)},
+    lastContact:{label:'آخر تواصل',
+      value:b=>(window.lastContactOf&&lastContactOf(b.id)&&lastContactOf(b.id).last_at)||'',
+      cell:b=>window.lastContactCell?lastContactCell(b):'—'},
     adminEmail:{label:'بريد الأدمن',value:b=>b.adminEmail,cell:b=>esc(b.adminEmail)},
     plan:{label:'الخطة',value:b=>b.plan,cell:b=>planLabel(b.plan)},
     status:{label:'الحالة',value:b=>licenseState({status:b.status,endDate:b.endDate}).label,cell:b=>licenseBadge({status:b.status,endDate:b.endDate})},
@@ -2983,6 +2987,14 @@ function pageSysDashboard(){
     <button class="btn sm primary" onclick="impersonateBuilding('${b.id}')">فتح</button>
     <button class="btn sm" onclick="openLicenseManage('${b.id}')">الاشتراك</button>
     ${b.adminPhoneRaw?`<a class="btn sm gold" href="${renewalWhatsAppLink(b)}" target="_blank">💬 تذكير تجديد</a>`:''}
+    ${b.adminPhoneRaw?`<button class="btn sm" title="واتساب مع تسجيل"
+      onclick="contactHead('${b.id}','whatsapp')">📱</button>
+    <button class="btn sm" title="مكالمة مع تسجيل"
+      onclick="contactHead('${b.id}','call')">📞</button>
+    <button class="btn sm" title="رسالة نصية مع تسجيل"
+      onclick="contactHead('${b.id}','sms')">✉️</button>`:''}
+    <button class="btn sm ghost" title="سجل التواصل"
+      onclick="openContactHistory('${b.id}')">📇</button>
     <button class="btn sm ghost" onclick="renameBuildingPrompt('${b.id}')">الاسم</button>
     <button class="btn sm gold" onclick="resetBuildingAdminPasswordPrompt('${b.id}')">🔑</button>
     <button class="btn sm red" onclick="deleteBuildingPrompt('${b.id}')">حذف</button>
@@ -9858,6 +9870,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
 <script type="module" src="emartna-auth.js"></script>
 <script type="module" src="emartna-users.js"></script>
 <script type="module" src="emartna-platform.js"></script>
+<script type="module" src="emartna-contactlog.js"></script>
 <script type="module" src="emartna-recycle.js"></script>
 <script type="module" src="emartna-floors.js"></script>
 <script type="module" src="emartna-modal-size.js"></script>
