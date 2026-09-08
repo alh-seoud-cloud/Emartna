@@ -163,6 +163,15 @@ const MAPS = {
     refs: { apartmentId:['apartment_id','apartments'] },
   },
 
+  ledgerAllocations: {
+    table: 'ledger_allocations',
+    fields: { id:'legacy_id', amount:'amount' },
+    refs: {
+      paymentId:['payment_id','ledger'],
+      chargeId :['charge_id','ledger'],
+    },
+  },
+
   paymentRequests: {
     table: 'payment_requests',
     fields: {
@@ -347,7 +356,7 @@ async function fetchBuilding(buildingUuid, legacyId){
      بيتجاب ويترسم، والباقي بيكمّل في الخلفية — بدل ما المستخدم
      يستنى ١٦ جدول قبل ما يشوف أي حاجة. */
   const CORE = ['accounts','apartments','projects','vendors','expenses',
-                'transfers','ledger'];
+                'transfers','ledger','ledgerAllocations'];
   const REST = ['maintenanceReports','meetings','polls','announcements',
                 'suggestions','paymentRequests','notifications',
                 'buildingChat','activityLog'];
@@ -574,7 +583,8 @@ async function pushBuilding(legacyId){
   }
 
   const order = ['accounts','apartments','projects','vendors','expenses',
-                 'transfers','ledger','maintenanceReports','meetings','polls',
+                 'transfers','ledger','ledgerAllocations',
+                 'maintenanceReports','meetings','polls',
                  'announcements','suggestions','paymentRequests','notifications',
                  'buildingChat','activityLog'];
 

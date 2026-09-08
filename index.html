@@ -5841,6 +5841,12 @@ function pageActivity(){
     {key:'detail',label:'التفاصيل',value:r=>r.detail,cell:r=>`<span class="small">${esc(r.detail)}</span>`}
   ];
   return `<p class="small">سجل بكل عمليات الحذف والتعديل والعكس والترقية في هذه العمارة، مين عملها وإمتى.</p>
+  <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
+    <button class="btn sm" onclick="openFinanceAudit()">🧾 سجل التدقيق المالي</button>
+    <button class="btn sm" onclick="openPeriodLocks()">🔒 إقفال الفترات المحاسبية</button>
+  </div>
+  <p class="small" style="color:var(--muted)">سجل التدقيق المالي بيسجّل قيمة كل حقل قبل وبعد
+    التعديل، ومايتمسحش. سجل النشاط تحت أبسط منه وبيتحفظ محليًا.</p>
   ${sortableTable('activityTable',rows,cols,null,{defaultKey:'date',emptyText:'لا يوجد نشاط مسجّل بعد',exportName:'سجل النشاط'})}`;
 }
 
@@ -6422,6 +6428,8 @@ function openLedgerDetail(id,readOnly){
       <div><b>البيان:</b> ${esc(l.note||'-')}</div>
       <div><b>تاريخ الإدخال:</b> ${esc(l.createdAt?new Date(l.createdAt).toLocaleString('ar-EG'):'-')}</div>
       ${l.reversalOf?'<div style="color:var(--gold-dark)"><b>ملاحظة:</b> هذه حركة عكسية لحركة أخرى</div>':''}
+      ${l.type==='دفعة'&&window.allocStatus?`<div class="mtop">${allocStatus(l)}
+        <button class="btn sm ghost" onclick="closeModal();openAllocate('${l.id}')">🔗 تخصيص على المستحقات</button></div>`:''}
     </div>
     <div class="modal-actions">
       ${readOnly?'':`<button class="btn" onclick="openLedgerEdit('${l.id}')">✏️ تعديل</button>`}
@@ -9960,6 +9968,8 @@ document.addEventListener('DOMContentLoaded',async()=>{
 <script type="module" src="emartna-users.js"></script>
 <script type="module" src="emartna-platform.js"></script>
 <script type="module" src="emartna-contactlog.js"></script>
+<script type="module" src="emartna-permreport.js"></script>
+<script type="module" src="emartna-finops.js"></script>
 <script type="module" src="emartna-recycle.js"></script>
 <script type="module" src="emartna-floors.js"></script>
 <script type="module" src="emartna-modal-size.js"></script>
