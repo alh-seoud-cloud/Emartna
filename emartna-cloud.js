@@ -72,6 +72,7 @@ const MAPS = {
       apartmentId:['apartment_id','apartments'],
       accountId:['account_id','accounts'],
       projectId:['project_id','projects'],
+      reversalOf:['reversal_of','ledger'],
     },
   },
 
@@ -79,9 +80,10 @@ const MAPS = {
     table: 'expenses',
     fields: {
       id:'legacy_id', date:'date', category:'category', amount:'amount',
-      description:'description', reversalOf:'reversal_of',
+      description:'description',
     },
     refs: {
+      reversalOf:['reversal_of','expenses'],
       accountId:['account_id','accounts'],
       projectId:['project_id','projects'],
       vendorId:['vendor_id','vendors'],

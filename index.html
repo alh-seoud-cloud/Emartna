@@ -6013,12 +6013,34 @@ function hasGroupPermission(u,groupKey){
   if(!u.permissions)return true; // مفيش قيود = صلاحيات كاملة (الأدمن الأساسي)
   return u.permissions[groupKey]!==false;
 }
+/* رؤية شاشة بعينها = صلاحية المجموعة (النظام القديم) + صلاحية الشاشة (التفصيلي).
+   لو المستخدم مالوش صلاحيات تفصيلية، السلوك بيفضل زي ما هو بالظبط —
+   عشان تفعيل النظام التفصيلي ما يقفلش شاشات على حد بالغلط. */
+/* بوابة الإجراء داخل الشاشة (إضافة/تعديل/حذف/طباعة).
+   نفس مبدأ screenVisible: من غير صلاحيات تفصيلية السلوك ما يتغيّرش. */
+function guardAction(page,action){
+  const u=window.currentUser?currentUser():null;
+  if(!u||!u.screenPerms)return true;
+  if(window.requirePerm)return requirePerm(page,action);
+  return true;
+}
+function screenVisible(u,page){
+  if(!u)return false;
+  const grp=pageGroupKey(page,u.role!=='admin');
+  if(grp&&!hasGroupPermission(u,grp))return false;
+  if(!u.screenPerms)return true;
+  return window.userCan?userCan(u,page,'view'):true;
+}
 function visibleNavGroups(u){
-  if(u.role!=='admin'){
-    return OWNER_NAV_GROUPS.filter(g=>hasGroupPermission(u,g.key));
-  }
   const isCompound=D&&D.building&&D.building.communityType==='compound';
-  return ADMIN_NAV_GROUPS.filter(g=>hasGroupPermission(u,g.key)).map(g=>({...g,items:g.items.filter(it=>it[0]!=='blocks'||isCompound)}));
+  const base=u.role!=='admin'?OWNER_NAV_GROUPS:ADMIN_NAV_GROUPS;
+  return base
+    .filter(g=>hasGroupPermission(u,g.key))
+    .map(g=>({...g,items:g.items.filter(it=>
+      (it[0]!=='blocks'||isCompound) && screenVisible(u,it[0])
+    )}))
+    // مجموعة كل شاشاتها مقفولة ما تظهرش أصلاً بدل ما تفضل عنوان فاضي
+    .filter(g=>g.items.length);
 }
 function pageGroupKey(page,isOwnerCtx){
   const groups=isOwnerCtx?OWNER_NAV_GROUPS:ADMIN_NAV_GROUPS;
@@ -6075,7 +6097,12 @@ function renderContent(){
   const u=currentUser(); if(!u)return renderRoot();
   const pg=pageGroupKey(curPage,u.role!=='admin');
   const defaultPage=u.role==='admin'?'dashboard':'home';
-  if(pg&&!hasGroupPermission(u,pg)){curPage=defaultPage;toast('ليس لديك صلاحية الوصول لهذه الشاشة');}
+  if(!screenVisible(u,curPage)){
+    curPage=defaultPage;
+    if(window.showMessage)showMessage(
+      'ليس لديك صلاحية للوصول إلى هذه الصفحة.\n\n'+
+      'يرجى التواصل مع رئيس اتحاد الملاك أو مسؤول النظام للحصول على الصلاحية المناسبة.');
+  }
   window.__navExpandedGroup=findGroupKeyForPage(visibleNavGroups(u),curPage)||window.__navExpandedGroup;
   const nc=document.getElementById('navContainer'); if(nc)nc.innerHTML=renderNavGroups(visibleNavGroups(u));
   const titleMap={dashboard:'لوحة التحكم',building:'بيانات العمارة',blocks:'مباني وفلل الكمبوند',apartments:'الشقق والملاك',collections:'التحصيل والدفعات',paymentRequests:'طلبات الدفع',projects:'المشاريع',treasury:'الخزينة والحسابات',expenses:'المصروفات',expenseCategories:'بنود الصرف',distweights:'نسب توزيع المصروفات',polls:'استطلاعات الرأي',announcements:'الإعلانات',suggestions:'المقترحات',meetings:'الاجتماعات',chat:'محادثة السكان',users:'المستخدمون',vendors:'مقاولون وموردون',maintenance:'بلاغات الصيانة',floors:'تقرير الأدوار',analytics:'التحليلات والاتجاهات',settings:'الإعدادات',aireports:'تقارير الذكاء الاصطناعي',license:'الرخصة والاشتراك',referral:'برنامج الإحالة',activity:'سجل النشاط',myproposals:'مقترحاتي لصاحب البرنامج',support:'الدعم الفني',whatsnew:'ما الجديد',home:'حسابي وشقتي',profile:'بياناتي'};
@@ -6360,7 +6387,7 @@ function openLedgerEdit(id){
     <div class="field2"><label>البيان</label><input id="leNote" value="${esc(l.note||'')}"></div>
     <div class="modal-actions"><button class="btn primary" onclick="saveLedgerEdit('${l.id}')">💾 حفظ التعديل</button><button class="btn ghost" onclick="openLedgerDetail('${l.id}')">رجوع</button></div>`);
 }
-function saveLedgerEdit(id){
+function saveLedgerEdit(id){if(!guardAction('collections','edit'))return;
   const l=D.ledger.find(x=>x.id===id); if(!l)return;
   const amount=Number(document.getElementById('leAmount').value||0);
   if(!amount||amount<=0)return showMessage('أدخل مبلغًا صحيحًا');
@@ -6370,13 +6397,15 @@ function saveLedgerEdit(id){
   logActivity('تعديل حركة مالية',`${l.type} - ${money(l.amount)}`);
   save();toast('تم حفظ التعديل');closeModal();renderContent();
 }
-function reverseLedgerEntry(id){
+function reverseLedgerEntry(id){if(!guardAction('collections','edit'))return;
   const l=D.ledger.find(x=>x.id===id); if(!l)return;
-  const reverseType={'شهري':'تسوية','مشروع':'تسوية','دفعة':'صرف','صرف':'دفعة','تسوية':'تسوية'}[l.type];
-  if(!reverseType)return;
+  if(l.reversalOf)return showMessage('دي حركة عكسية أصلاً — مينفعش تتعكس');
+  if(D.ledger.some(x=>x.reversalOf===l.id))return showMessage('الحركة دي اتعكست قبل كده');
+  if(l.type==='دفعة'&&(D.ledgerAllocations||[]).some(a=>a.paymentId===l.id))
+    return showMessage('الدفعة دي متخصصة على مستحقات — الغِ التخصيص الأول');
   openModal(`
     <h3>عكس الحركة</h3>
-    <p class="small">هيتم إنشاء حركة جديدة تُلغي أثر هذه الحركة (${ledgerBadge(l.type)} بقيمة ${money(l.amount)})، بدون حذف الحركة الأصلية - للحفاظ على سجل مراجعة كامل.</p>
+    <p class="small">هيتم إنشاء حركة عكسية من <b>نفس النوع</b> (${ledgerBadge(l.type)}) بقيمة <b>${money(-l.amount)}</b> تُلغي أثر الحركة الأصلية، بدون حذفها - للحفاظ على سجل مراجعة كامل.</p>
     <div class="field2 mtop"><label>تاريخ الحركة العكسية</label>
       <select id="rvDateMode" onchange="document.getElementById('rvCustomDateWrap').classList.toggle('hidden',this.value!=='custom')">
         <option value="same">نفس تاريخ الحركة الأصلية (${esc(l.date||'')})</option>
@@ -6389,18 +6418,16 @@ function reverseLedgerEntry(id){
 }
 function doReverseLedger(id){
   const l=D.ledger.find(x=>x.id===id); if(!l)return;
-  let amount=l.amount, type=l.type;
-  if(type==='شهري'||type==='مشروع')type='تسوية',amount=-Math.abs(l.amount);
-  else if(type==='دفعة')type='صرف';
-  else if(type==='صرف')type='دفعة';
-  else if(type==='تسوية')amount=-l.amount;
+  // القيد العكسي = نفس النوع بقيمة معكوسة. ده اللي بيخلي الحركة
+  // وعكسها ظاهرين على نفس السطر في التقارير بدل ما العكس يتنكّر في نوع تاني.
+  const type=l.type, amount=-Number(l.amount);
   const dateMode=document.getElementById('rvDateMode').value;
   const date=dateMode==='same'?(l.date||todayISO()):dateMode==='custom'?document.getElementById('rvCustomDate').value:todayISO();
   D.ledger.push({id:uid(),apartmentId:l.apartmentId,type,amount,accountId:l.accountId,month:l.month,note:'عكس حركة: '+(l.note||l.type),date,reversalOf:l.id,createdAt:new Date().toISOString()});
   logActivity('عكس حركة مالية',`${l.type} - ${money(l.amount)}`);
   save();toast('تم إنشاء حركة عكسية');closeModal();renderContent();
 }
-function printLedgerEntry(id){
+function printLedgerEntry(id){if(!guardAction('collections','print'))return;
   const l=D.ledger.find(x=>x.id===id); if(!l)return;
   const ap=D.apartments.find(a=>a.id===l.apartmentId);
   const acc=l.accountId?D.accounts.find(a=>a.id===l.accountId):null;
@@ -7550,7 +7577,7 @@ function removeTenantAccount(userId){
     openApartmentModal(apId);
   });
 }
-function openApartmentModal(id){
+function openApartmentModal(id){if(!guardAction('apartments','edit'))return;
   const a=id?D.apartments.find(x=>x.id===id):null;
   const nextNum=Math.max(0,...D.apartments.map(x=>x.number))+1;
   const perFloor=D.building.apartmentsPerFloor||4;
@@ -7635,7 +7662,7 @@ async function saveApartment(id){
   }
   save();closeModal();toast('تم الحفظ');renderContent();
 }
-function deleteApartment(id){
+function deleteApartment(id){if(!guardAction('apartments','delete'))return;
   const a=D.apartments.find(x=>x.id===id);
   closeModal();
   confirmDelete(`سيتم حذف ${a?unitLabel(a):''} وبيانات تسجيل الدخول وكل الحركات المالية الخاصة بها نهائيًا.`,()=>{
@@ -7873,7 +7900,7 @@ function generateCharges(){
   }
   renderContent();
 }
-function openPaymentModal(apId){
+function openPaymentModal(apId){if(!guardAction('collections','add'))return;
   const aps=[...D.apartments].sort((a,b)=>a.number-b.number);
   openModal(`
     <h3>تسجيل دفعة</h3>
@@ -7893,7 +7920,7 @@ function refreshPaymentProjectOptions(){
   const owedProjects=(D.projects||[]).filter(pr=>projectBalance(pr.id,apId)>0);
   sel.innerHTML='<option value="">لا (دفعة عامة)</option>'+owedProjects.map(pr=>`<option value="${pr.id}">${esc(pr.name)} (المتبقي: ${money(projectBalance(pr.id,apId))})</option>`).join('');
 }
-function savePayment(){
+function savePayment(){if(!guardAction('collections','add'))return;
   const apId=document.getElementById('pAp').value;
   const amount=Number(document.getElementById('pAmount').value||0);
   if(!amount||amount<=0)return showMessage('أدخل مبلغًا صحيحًا');
@@ -7905,7 +7932,7 @@ function savePayment(){
   logActivity('تسجيل دفعة',(ap?unitLabel(ap):'')+' - '+money(amount));
   save();closeModal();toast('تم تسجيل الدفعة');renderContent();
 }
-function deleteLedgerEntry(id){confirmDelete('حذف هذه الحركة المالية نهائيًا؟ يفضّل استخدام "عكس الحركة" بدلًا من الحذف للحفاظ على سجل مراجعة كامل.',()=>{logActivity('حذف حركة مالية',id);D.ledger=D.ledger.filter(l=>l.id!==id);save();toast('تم الحذف');renderContent();})}
+function deleteLedgerEntry(id){if(!guardAction('collections','delete'))return;confirmDelete('حذف هذه الحركة المالية نهائيًا؟ يفضّل استخدام "عكس الحركة" بدلًا من الحذف للحفاظ على سجل مراجعة كامل.',()=>{logActivity('حذف حركة مالية',id);D.ledger=D.ledger.filter(l=>l.id!==id);save();toast('تم الحذف');renderContent();})}
 
 /* ---------- المشاريع ---------- */
 function projectCharges(pId,apId){return D.ledger.filter(l=>l.type==='مشروع'&&l.projectId===pId&&(!apId||l.apartmentId===apId)).reduce((s,l)=>s+Number(l.amount),0)}
@@ -8139,7 +8166,7 @@ function pageTreasury(){
   ],null,
   {emptyText:'لا توجد حركات بعد',exportName:'حركة الخزينة'})}`;
 }
-function openAccountModal(id){
+function openAccountModal(id){if(!guardAction('treasury','edit'))return;
   const a=id?D.accounts.find(x=>x.id===id):null;
   openModal(`
     <h3>${a?'تعديل حساب':'إضافة حساب جديد'}</h3>
@@ -8154,20 +8181,20 @@ function openAccountModal(id){
       ${a&&D.accounts.length>1?`<button class="btn red" onclick="deleteAccount('${a.id}')" style="margin-right:auto">حذف الحساب</button>`:''}
     </div>`);
 }
-function saveAccount(id){
+function saveAccount(id){if(!guardAction('treasury','edit'))return;
   const name=document.getElementById('acName').value.trim(); if(!name)return showMessage('أدخل اسم الحساب');
   const data={name,type:document.getElementById('acType').value,opening:Number(document.getElementById('acOpening').value||0),bankName:document.getElementById('acBank').value.trim(),accountNo:document.getElementById('acNo').value.trim()};
   if(id){Object.assign(D.accounts.find(a=>a.id===id),data);}else{D.accounts.push({id:'acc_'+uid(),...data});}
   save();closeModal();toast('تم الحفظ');renderContent();
 }
-function deleteAccount(id){
+function deleteAccount(id){if(!guardAction('treasury','delete'))return;
   if(D.accounts.length<=1)return showMessage('لا يمكن حذف آخر حساب');
   closeModal();
   confirmDelete('حذف هذا الحساب؟ الحركات المرتبطة به هتفضل مسجلة لكن الحساب مش هيظهر في القوائم.',()=>{
     D.accounts=D.accounts.filter(a=>a.id!==id);save();toast('تم الحذف');renderContent();
   });
 }
-function openTransferModal(){
+function openTransferModal(){if(!guardAction('treasury','add'))return;
   openModal(`
     <h3>تحويل بين الحسابات</h3>
     <div class="field2"><label>من حساب</label><select id="tFrom">${D.accounts.map(a=>`<option value="${a.id}">${esc(a.name)} (${money(accountBalance(a.id))})</option>`).join('')}</select></div>
@@ -8177,7 +8204,7 @@ function openTransferModal(){
     <div class="field2"><label>ملاحظة</label><input id="tNote" placeholder="اختياري"></div>
     <div class="modal-actions"><button class="btn primary" onclick="saveTransfer()">💾 حفظ التحويل</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
 }
-function saveTransfer(){
+function saveTransfer(){if(!guardAction('treasury','add'))return;
   const from=document.getElementById('tFrom').value, to=document.getElementById('tTo').value;
   const amount=Number(document.getElementById('tAmount').value||0);
   if(from===to)return showMessage('اختر حسابين مختلفين');
@@ -8233,7 +8260,7 @@ function pageExpenses(u){
   <div class="section-title"><h3>سجل المصروفات ${isAdmin?'(اضغط على أي مصروف لعرض التفاصيل)':'(للاطلاع فقط - شفافية إنفاق أموال الاتحاد)'}</h3></div>
   ${sortableTable('expTable',rows,cols,null,{defaultKey:'date',emptyText:'لا توجد مصروفات مسجلة بعد',exportName:'المصروفات',rowClick:e=>`openExpenseDetail('${e.id}',${isAdmin?'false':'true'})`})}`;
 }
-function openExpenseModal(prefillProjectId){
+function openExpenseModal(prefillProjectId){if(!guardAction('expenses','add'))return;
   window.__expImageData=null;
   openModal(`
     <h3>إضافة مصروف جديد</h3>
@@ -8249,7 +8276,7 @@ function openExpenseModal(prefillProjectId){
     <div class="modal-actions"><button class="btn primary" onclick="saveExpense()">💾 حفظ</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
   wireImageUpload('eFile','eFilePreview','__expImageData');
 }
-function saveExpense(){
+function saveExpense(){if(!guardAction('expenses','add'))return;
   const amount=Number(document.getElementById('eAmount').value||0); if(!amount)return showMessage('أدخل قيمة المصروف');
   if(!enforceLicenseOrAlert('transaction'))return;
   const category=document.getElementById('eCat').value;
@@ -8265,7 +8292,7 @@ function saveExpense(){
   if(projectId){curPage='projects';window.__viewingProjectId=projectId;}
   renderContent();
 }
-function deleteExpense(id){confirmDelete('حذف هذا المصروف نهائيًا؟ يفضّل استخدام "عكس الحركة" بدلًا من الحذف.',()=>{logActivity('حذف مصروف',id);D.expenses=D.expenses.filter(e=>e.id!==id);save();toast('تم الحذف');renderContent();})}
+function deleteExpense(id){if(!guardAction('expenses','delete'))return;confirmDelete('حذف هذا المصروف نهائيًا؟ يفضّل استخدام "عكس الحركة" بدلًا من الحذف.',()=>{logActivity('حذف مصروف',id);D.expenses=D.expenses.filter(e=>e.id!==id);save();toast('تم الحذف');renderContent();})}
 
 /* ---------- تفاصيل المصروف (عرض/تعديل/طباعة/عكس/حذف) ---------- */
 function openExpenseDetail(id,readOnly){
@@ -8309,7 +8336,7 @@ function openExpenseEdit(id){
     <div class="field2"><label>الوصف</label><textarea id="eeDesc">${esc(e.description||'')}</textarea></div>
     <div class="modal-actions"><button class="btn primary" onclick="saveExpenseEdit('${e.id}')">💾 حفظ</button><button class="btn ghost" onclick="openExpenseDetail('${e.id}')">رجوع</button></div>`);
 }
-function saveExpenseEdit(id){
+function saveExpenseEdit(id){if(!guardAction('expenses','edit'))return;
   const e=D.expenses.find(x=>x.id===id); if(!e)return;
   const amount=Number(document.getElementById('eeAmount').value||0); if(!amount)return showMessage('أدخل مبلغًا صحيحًا');
   e.category=document.getElementById('eeCat').value; e.amount=amount; e.date=document.getElementById('eeDate').value||e.date;
@@ -8318,7 +8345,7 @@ function saveExpenseEdit(id){
   logActivity('تعديل مصروف',`${e.category} - ${money(e.amount)}`);
   save();toast('تم حفظ التعديل');closeModal();renderContent();
 }
-function reverseExpense(id){
+function reverseExpense(id){if(!guardAction('expenses','edit'))return;
   const e=D.expenses.find(x=>x.id===id); if(!e)return;
   openModal(`
     <h3>عكس المصروف</h3>
@@ -8335,13 +8362,15 @@ function reverseExpense(id){
 }
 function doReverseExpense(id){
   const e=D.expenses.find(x=>x.id===id); if(!e)return;
+  if(e.reversalOf)return showMessage('ده مصروف عكسي أصلاً — مينفعش يتعكس');
+  if(D.expenses.some(x=>x.reversalOf===e.id))return showMessage('المصروف ده اتعكس قبل كده');
   const dateMode=document.getElementById('rvExpDateMode').value;
   const date=dateMode==='same'?(e.date||todayISO()):dateMode==='custom'?document.getElementById('rvExpCustomDate').value:todayISO();
   D.expenses.push({id:uid(),date,category:e.category,amount:-Math.abs(e.amount),accountId:e.accountId,description:'عكس مصروف: '+(e.description||e.category),reversalOf:e.id});
   logActivity('عكس مصروف',`${e.category} - ${money(e.amount)}`);
   save();toast('تم إنشاء مصروف عكسي');closeModal();renderContent();
 }
-function printExpenseEntry(id){
+function printExpenseEntry(id){if(!guardAction('expenses','print'))return;
   const e=D.expenses.find(x=>x.id===id); if(!e)return;
   const acc=e.accountId?D.accounts.find(a=>a.id===e.accountId):null;
   printReceipt('إيصال مصروف - '+(D.building.name||''),[
@@ -8869,7 +8898,7 @@ async function submitPaymentRequest(){
   pushNotification({type:'payment',title:'طلب دفعة جديد',message:`${unitLabel(ap)} - ${money(amount)} - ${paymentForLabel({paymentFor,projectName})}`,audience:'admins',link:'paymentRequests'});
   renderContent();
 }
-function approvePaymentRequest(id){
+function approvePaymentRequest(id){if(!guardAction('paymentRequests','edit'))return;
   const r=(D.paymentRequests||[]).find(x=>x.id===id); if(!r)return;
   if(!enforceLicenseOrAlert('transaction'))return;
   const ap=D.apartments.find(a=>a.id===r.apartmentId);
@@ -8889,7 +8918,7 @@ function doApprovePaymentRequest(id){
   pushNotification({type:'payment',title:'تم قبول دفعتك',message:money(r.amount)+' - '+paymentForLabel(r),audience:r.username,link:'paymentRequests'});
   renderContent();
 }
-function rejectPaymentRequest(id){
+function rejectPaymentRequest(id){if(!guardAction('paymentRequests','edit'))return;
   const r=(D.paymentRequests||[]).find(x=>x.id===id); if(!r)return;
   promptModal('سبب الرفض','هيظهر لصاحب الشقة','',(note)=>{
     r.status='rejected'; r.reviewNote=note||''; r.reviewedAt=new Date().toISOString();
@@ -8930,7 +8959,7 @@ function pageUsers(){
   <div class="flexrow mtop"><button class="btn primary" onclick="openUserModal()">+ إضافة مستخدم مسؤول إضافي (محاسب/لجنة)</button></div>
   <div class="mtop">${sortableTable('usersTable',rows,cols,null,{defaultKey:'role',exportName:'المستخدمون'})}</div>`;
 }
-function openUserModal(id){
+function openUserModal(id){if(!guardAction('users','edit'))return;
   const u=id?D.users.find(x=>x.id===id):null;
   const isApartmentUser=u&&u.apartmentId;
   const isSelf=u&&currentUser()&&u.id===currentUser().id;
@@ -9050,7 +9079,7 @@ async function saveUser(id){
   }
   save();closeModal();toast('تم الحفظ');renderContent();
 }
-function deleteUser(id){
+function deleteUser(id){if(!guardAction('users','delete'))return;
   const admins=D.users.filter(u=>u.role==='admin');
   const u=D.users.find(x=>x.id===id);
   if(u.role==='admin'&&admins.length<=1)return showMessage('لا يمكن حذف آخر حساب رئيس اتحاد');
