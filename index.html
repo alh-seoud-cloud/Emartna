@@ -6865,9 +6865,13 @@ function pushChatEvent(eventType,icon,title,message,link){
   if(D.buildingChat.length>500)D.buildingChat=D.buildingChat.slice(-500);
 }
 function pageBuildingChat(u){
+  const __pc = `<div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
+    <button class="btn" onclick="openPrivateChats()">🔒 المحادثات الخاصة</button>
+    <span class="small" style="color:var(--muted)">غرف مقفولة على أعضاء محدّدين —
+      مختلفة عن المحادثة العامة اللي تحت</span></div>`;
   markChatRead();
   const items=[...(D.buildingChat||[])].sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
-  return `
+  return `${__pc}
   <div class="card content-narrow" style="padding:0;overflow:hidden">
     <div id="chatFeed" style="max-height:60vh;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px">
       ${items.length?items.map(m=>chatItemHTML(m,u)).join(''):'<p class="small" style="text-align:center">لسه مفيش أي رسائل أو أحداث. ابدأ المحادثة!</p>'}
@@ -9977,6 +9981,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
 <script type="module" src="emartna-contactlog.js"></script>
 <script type="module" src="emartna-permreport.js"></script>
 <script type="module" src="emartna-finops.js"></script>
+<script type="module" src="emartna-chatrooms.js"></script>
 <script type="module" src="emartna-recycle.js"></script>
 <script type="module" src="emartna-floors.js"></script>
 <script type="module" src="emartna-modal-size.js"></script>
