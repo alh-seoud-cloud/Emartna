@@ -14,14 +14,38 @@
 
   const esc2 = s => (window.esc ? esc(s) : String(s == null ? '' : s));
 
+  /* الصلاحيات الأساسية بتظهر لكل الشاشات. والمتقدمة (اعتماد/مرفقات)
+     بتظهر للشاشات اللي محتاجاها بس — عشان الجدول يفضل قابل للقراءة
+     بدل ١١ خانة × ٢٩ شاشة لكل مستخدم. */
   const ACTIONS = [
-    { key:'view',   icon:'👁️', label:'عرض' },
-    { key:'print',  icon:'🖨️', label:'طباعة' },
-    { key:'add',    icon:'➕', label:'إضافة' },
-    { key:'edit',   icon:'✏️', label:'تعديل' },
-    { key:'delete', icon:'🗑️', label:'حذف' },
+    { key:'view',    icon:'👁️', label:'عرض' },
+    { key:'print',   icon:'🖨️', label:'طباعة' },
+    { key:'export',  icon:'📤', label:'تصدير' },
+    { key:'add',     icon:'➕', label:'إضافة' },
+    { key:'edit',    icon:'✏️', label:'تعديل' },
+    { key:'delete',  icon:'🗑️', label:'حذف' },
+    { key:'approve',    icon:'✅', label:'اعتماد',       adv:true },
+    { key:'unapprove',  icon:'↩️', label:'إلغاء اعتماد', adv:true },
+    { key:'att_view',   icon:'📎', label:'عرض مرفقات',   adv:true },
+    { key:'att_add',    icon:'📥', label:'إضافة مرفقات', adv:true },
+    { key:'att_delete', icon:'🗑', label:'حذف مرفقات',   adv:true },
   ];
   window.PERM_ACTIONS = ACTIONS;
+
+  /* الشاشات اللي فيها دورة اعتماد */
+  const APPROVE_SCREENS = ['paymentRequests','expenses','collections','maintenance',
+                           'vendors','meetings','polls','suggestions','projects'];
+  /* الشاشات اللي بتتعامل مع مرفقات */
+  const ATTACH_SCREENS  = ['expenses','collections','maintenance','vendors','projects',
+                           'meetings','announcements','documents','building','apartments'];
+
+  function actionsFor(screenKey){
+    return ACTIONS.filter(a =>
+      !a.adv ? true
+      : (a.key === 'approve' || a.key === 'unapprove') ? APPROVE_SCREENS.includes(screenKey)
+      : ATTACH_SCREENS.includes(screenKey));
+  }
+  window.permActionsFor = actionsFor;
 
   /* كل شاشات رئيس الاتحاد مقسّمة بمجموعاتها */
   function screens(){
@@ -39,17 +63,27 @@
     admin:      () => 'all',
     deputy:     g => g === 'settings' ? 'view' : 'all',
     accountant: g => g === 'finance' || g === 'reports' ? 'all' : 'none',
+    treasurer:  g => g === 'finance' || g === 'reports' ? 'all' : 'none',
+    board:      () => 'view',            // اطّلاع وطباعة على كل حاجة
     manager:    g => g === 'finance' ? 'none' : 'all',
   };
 
-  const FULL = { view:true, print:true, add:true, edit:true, delete:true };
-  const VIEW = { view:true, print:true, add:false, edit:false, delete:false };
-  const NONE = { view:false, print:false, add:false, edit:false, delete:false };
+  /* بتتبني من ACTIONS مباشرة، فأي صلاحية جديدة تتضاف تتغطّى تلقائيًا */
+  const modeMap = {
+    all:  () => true,
+    none: () => false,
+    view: a => a === 'view' || a === 'print' || a === 'export' || a === 'att_view',
+  };
+  function buildSet(mode){
+    const out = {};
+    ACTIONS.forEach(a => { out[a.key] = modeMap[mode](a.key); });
+    return out;
+  }
 
   function defaultsFor(role, groupKey){
     const f = ROLE_DEFAULTS[role];
     const mode = f ? f(groupKey) : 'all';
-    return mode === 'all' ? { ...FULL } : mode === 'view' ? { ...VIEW } : { ...NONE };
+    return buildSet(modeMap[mode] ? mode : 'all');
   }
   window.permDefaultsFor = defaultsFor;
 
@@ -90,6 +124,12 @@
   /* ---------- شاشة تحديد الصلاحيات ---------- */
 
   window.openScreenPerms = function(userId){
+    if (!isUnionHead()){
+      if (window.showMessage) showMessage(
+        'ليس لديك صلاحية للوصول إلى هذه الصفحة.\n\n' +
+        'إدارة الصلاحيات متاحة لرئيس اتحاد الملاك فقط.');
+      return;
+    }
     const u = (D.users || []).find(x => x.id === userId);
     if (!u) return;
     const gs = screens();
@@ -97,10 +137,14 @@
 
     const row = (s, grpKey) => {
       const cur = sp[s.key] || defaultsFor(u.role, grpKey);
+      const ok  = actionsFor(s.key).map(a => a.key);
       return `
       <tr data-screen="${esc2(s.key)}">
         <td style="padding:6px 4px;font-size:13px">${s.icon} ${esc2(s.label)}</td>
-        ${ACTIONS.map(a => `<td style="text-align:center">
+        ${ACTIONS.map(a => !ok.includes(a.key)
+          ? `<td style="text-align:center;color:var(--muted);opacity:.35"
+                 title="مش متاحة في الشاشة دي">—</td>`
+          : `<td style="text-align:center">
           <input type="checkbox" class="sp-chk" data-s="${esc2(s.key)}" data-a="${a.key}"
             ${cur[a.key] ? 'checked' : ''}></td>`).join('')}
       </tr>`;
@@ -144,13 +188,49 @@
       </div>`, true);
   };
 
+  /* جدول تفصيلي لمستخدم لسه ماتعملش — بيتعبّى من افتراضي الدور،
+     ورئيس الاتحاد يعدّل عليه قبل ما يبعت الدعوة. */
+  window.permInviteGrid = function(role){
+    const gs = screens();
+    const row = (s, grpKey) => {
+      const cur = defaultsFor(role, grpKey);
+      const ok  = actionsFor(s.key).map(a => a.key);
+      return `<tr>
+        <td style="padding:5px 4px;font-size:12.5px">${s.icon} ${esc2(s.label)}</td>
+        ${ACTIONS.map(a => !ok.includes(a.key)
+          ? `<td style="text-align:center;opacity:.3">—</td>`
+          : `<td style="text-align:center"><input type="checkbox" class="inv-chk"
+               data-s="${esc2(s.key)}" data-a="${a.key}" ${cur[a.key] ? 'checked' : ''}></td>`
+        ).join('')}
+      </tr>`;
+    };
+    return `
+      <div class="table-wrap" style="max-height:44vh;overflow:auto">
+        <table style="width:100%;font-size:12px">
+          <thead><tr>
+            <th style="text-align:start;min-width:140px">الشاشة</th>
+            ${ACTIONS.map(a => `<th style="min-width:46px" title="${a.label}">${a.icon}<br>
+              <span style="font-weight:400;font-size:10.5px">${a.label}</span></th>`).join('')}
+          </tr></thead>
+          <tbody>
+            ${gs.map(g => `
+              <tr style="background:var(--tint,#F3F8F7)">
+                <td colspan="${ACTIONS.length + 1}" style="padding:5px 4px">
+                  <b>${g.icon} ${esc2(g.label)}</b></td>
+              </tr>
+              ${g.items.map(x => row(x, g.key)).join('')}`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  };
+
   window.spPreset = function(kind){
     const u = window.__spUser;
     document.querySelectorAll('.sp-chk').forEach(el => {
       const a = el.dataset.a;
       if (kind === 'all')       el.checked = true;
       else if (kind === 'none') el.checked = false;
-      else if (kind === 'view') el.checked = (a === 'view' || a === 'print');
+      else if (kind === 'view') el.checked = modeMap.view(a);
       else if (kind === 'reset'){
         const grp = window.pageGroupKey ? pageGroupKey(el.dataset.s, false) : null;
         el.checked = !!defaultsFor(u ? u.role : 'admin', grp)[a];
@@ -235,13 +315,20 @@
   /* ---------- الحقن في شاشة المستخدمين ---------- */
 
   function deputyCount(){
-    return (D.users || []).filter(u => u.role === 'admin' && u.permissions &&
-      u.permissions.settings === false && u.permissions.finance && u.permissions.building &&
-      u.active !== false).length;
+    return (D.users || []).filter(u => u.role === 'deputy' && u.active !== false).length;
   }
   window.deputyCount = deputyCount;
 
+  /* رئيس الاتحاد الأساسي فقط — مش أي دور إداري.
+     نائب أو محاسب ما يشوفش صلاحيات حد، ولا صلاحياته هو. */
+  function isUnionHead(){
+    const me = (window.currentUser ? currentUser() : null);
+    return !!(me && me.role === 'admin' && !me.permissions && !me.screenPerms);
+  }
+  window.isUnionHead = isUnionHead;
+
   function card(){
+    if (!isUnionHead()) return '';
     const staff = (D.users || []).filter(u =>
       u.active !== false && u.role !== 'owner' && u.role !== 'tenant');
     const deps = deputyCount();

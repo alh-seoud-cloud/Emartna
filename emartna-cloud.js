@@ -1030,7 +1030,8 @@ const CLOUD = {
 
     /* دعوة واحدة لشقة */
     async create(legacyBuildingId, { apartmentId, phone, phoneCountry='+20',
-                                     email, role='owner', permissions=null }){
+                                     email, role='owner', permissions=null,
+                                     screenPerms=null, roleTemplate=null }){
       const bUuid = cache.buildingUuid[legacyBuildingId];
       if (!bUuid) throw new Error('العمارة مش محمّلة');
       if (!phone && !email) throw new Error('لازم رقم موبايل أو إيميل');
@@ -1048,6 +1049,8 @@ const CLOUD = {
         email: email || null,
         role,
         permissions,
+        screen_perms: screenPerms,
+        role_template: roleTemplate,
       }).select().single();
       if (error) throw error;
       return data;

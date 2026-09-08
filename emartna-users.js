@@ -465,34 +465,7 @@ window.saveUser = async function(id){
   }catch(e){ showMessage(e.message); }
 };
 
-window.createAdminInvite = async function(){
-  const name  = (document.getElementById('nuName').value || '').trim();
-  const phone = (document.getElementById('nuPhone').value || '').trim();
-  let role  = document.getElementById('nuRole').value;
-  if (!name)  return showMessage('اكتب الاسم');
-  if (!phone) return showMessage('اكتب رقم الموبايل');
-
-  /* كل دور بيتخزّن باسمه، وبياخد صلاحيات المجموعات الافتراضية بتاعته */
-  const perms0 = (CLOUD_ROLES[role] || {}).perms || undefined;
-
-  try{
-    const inv = await window.CLOUD.invites.create(window.activeBuildingId,
-      { phone, phoneCountry:'+20', role, permissions: perms0 });
-    closeModal();
-    await window.refreshUsers();
-    openModal(`
-      <h3>📨 دعوة ${esc(name)}</h3>
-      <div class="card mtop" style="background:var(--tint-success);text-align:center">
-        <p class="small">الكود</p>
-        <h2 style="letter-spacing:6px;font-family:monospace">${esc(inv.invite_code)}</h2>
-      </div>
-      <p class="small mtop">ابعتله الكود ورابط الانضمام، وهو يسجّل بنفسه.</p>
-      <div class="modal-actions">
-        <button class="btn primary" onclick="closeModal()">تمام</button>
-      </div>`);
-  }catch(e){ showMessage(e.message); }
-};
-
+/* (اتشالت نسخة قديمة مكرّرة من createAdminInvite — كانت مُلغاة بالتعريف الأحدث تحت) */
 window.deleteUser = function(id){
   const D = window.D;
   const u = (D.users||[]).find(x => x.id === id);
@@ -679,6 +652,12 @@ window.openUserModal = function(id){
            ).join('')}
         </select></div>
       <div id="nuPerms">${permCheckboxes('nu', CLOUD_ROLES.admin.perms)}</div>
+      <details class="card mtop" id="nuDetailBox" ontoggle="if(this.open)buildInviteDetailGrid()">
+        <summary style="cursor:pointer"><b>🔐 ضبط تفصيلي لكل شاشة</b>
+          <span class="small" style="color:var(--muted)"> — اختياري: حدد عرض/طباعة/تصدير/إضافة/تعديل/حذف
+          لكل شاشة على حدة</span></summary>
+        <div id="nuDetailGrid" class="mtop"></div>
+      </details>
       <div class="field2"><label>وحدته في العمارة (اختياري)</label>
         <select id="nuApartment">
           <option value="">— مش صاحب وحدة —</option>
@@ -758,6 +737,8 @@ window.applyRoleTemplate = function(prefix){
   const role = document.getElementById(prefix + 'Role').value;
   const box  = document.getElementById(prefix + 'Perms');
   if (box) box.innerHTML = permCheckboxes(prefix, (CLOUD_ROLES[role]||{}).perms);
+  const det = document.getElementById('nuDetailBox');
+  if (prefix === 'nu' && det && det.open) buildInviteDetailGrid();
 };
 
 function readPerms(prefix){
@@ -807,6 +788,24 @@ window.saveUser = async function(id){
   }catch(e){ showMessage(e.message); }
 };
 
+window.buildInviteDetailGrid = function(){
+  const box = document.getElementById('nuDetailGrid');
+  if (!box || !window.permInviteGrid) return;
+  box.innerHTML = window.permInviteGrid(
+    (document.getElementById('nuRole') || {}).value || 'admin');
+};
+/* null = ما فتحش التفصيلي، فيمشي على افتراضي الدور */
+window.readInviteScreenPerms = function(){
+  const boxes = [...document.querySelectorAll('.inv-chk')];
+  if (!boxes.length) return null;
+  const out = {};
+  boxes.forEach(el => {
+    const s = el.dataset.s, a = el.dataset.a;
+    out[s] = out[s] || {}; out[s][a] = el.checked;
+  });
+  return out;
+};
+
 window.createAdminInvite = async function(){
   const name  = (document.getElementById('nuName').value || '').trim();
   const phone = (document.getElementById('nuPhone').value || '').trim();
@@ -820,6 +819,7 @@ window.createAdminInvite = async function(){
     const apEl = document.getElementById('nuApartment');
     const inv = await window.CLOUD.invites.create(window.activeBuildingId,
       { phone, phoneCountry:'+20', role, permissions: perms,
+        screenPerms: readInviteScreenPerms(), roleTemplate: role,
         apartmentId: (apEl && apEl.value) || null, name });
     closeModal();
     await window.refreshUsers();
