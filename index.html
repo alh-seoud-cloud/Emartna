@@ -707,7 +707,7 @@ async function loginWithBiometric(){
       window.__cameFromSysOwner=false;
       activeBuildingId=matched.buildingId; D=data; migrateBuildingData();
       setSession({type:'building',buildingId:matched.buildingId,username:u.username});
-      curPage=u.role==='admin'?'dashboard':'home';
+      curPage=isStaffRole(u.role)?'dashboard':'home';
       renderRoot(); resetHistoryBase();
     }
   }catch(e){
@@ -1134,7 +1134,7 @@ function buildChangeSummary(oldObj,newObj,fieldLabels){
   return changes;
 }
 function notificationRelevant(n,u){
-  return n.audience==='all'||(n.audience==='admins'&&u.role==='admin')||n.audience===u.username;
+  return n.audience==='all'||(n.audience==='admins'&&isStaffRole(u.role))||n.audience===u.username;
 }
 function unreadNotifications(u){
   return (D.notifications||[]).filter(n=>notificationRelevant(n,u)&&!(n.readBy||[]).includes(u.username));
@@ -1211,7 +1211,7 @@ async function loginBuilding(buildingId,username,password){
   window.__cameFromSysOwner=false;
   activeBuildingId=buildingId; D=data; migrateBuildingData();
   setSession({type:'building',buildingId,username:u.username});
-  curPage=u.role==='admin'?'dashboard':'home';
+  curPage=isStaffRole(u.role)?'dashboard':'home';
   renderRoot(); resetHistoryBase(); resetIdleTimer();
 }
 async function loginSysOwner(username,password){
@@ -3921,7 +3921,7 @@ function deleteTask(id){
 }
 function pendingTicketsCount(){return ensureSupportTickets().filter(t=>t.status!=='resolved').length}
 function myOpenTicketsCount(){
-  const u=currentUser(); if(!u||u.role!=='admin')return 0;
+  const u=currentUser(); if(!u||!isStaffRole(u.role))return 0;
   return ensureSupportTickets().filter(t=>t.buildingId===activeBuildingId&&t.status!=='resolved').length;
 }
 function openTicketModal(){
@@ -4193,7 +4193,7 @@ function submitCustomerProposal(){
   const u=currentUser();
   const fileInput=document.getElementById('cpImage');
   const finish=(imageDataUrl)=>{
-    const roleLabel=u.role==='admin'?'رئيس الاتحاد':(u.role==='tenant'?'مستأجر':'مالك شقة');
+    const roleLabel=isStaffRole(u.role)?'رئيس الاتحاد':(u.role==='tenant'?'مستأجر':'مالك شقة');
     ensureCustomerProposals().push({id:uid(),buildingId:activeBuildingId,buildingName:D.building.name,submittedByUsername:u.username,submittedByName:u.name,submittedByRole:roleLabel,title,description:desc,imageDataUrl:imageDataUrl||null,status:'pending',adminResponse:'',createdAt:new Date().toISOString(),respondedAt:null});
     saveRegistry();closeModal();toast('تم إرسال المقترح لصاحب البرنامج');
   };
@@ -5986,16 +5986,26 @@ function renderNavGroups(groups,navFn){
     </div>`;
   }).join('');
 }
+/* الأدوار الإدارية: كلها بتشوف واجهة الإدارة، والفرق بينها في الصلاحيات.
+   ملاحظة: 'admin' لوحدها معناها "رئيس الاتحاد" — الفحوصات اللي بتحمي
+   آخر رئيس اتحاد أو بتحدد مين يعدّل مين لازم تفضل على 'admin' بالظبط. */
+const STAFF_ROLES=['admin','deputy','accountant','treasurer','board','manager'];
+function isStaffRole(r){return STAFF_ROLES.includes(r);}
+const ROLE_LABELS_AR={admin:'رئيس الاتحاد',deputy:'نائب رئيس الاتحاد',
+  accountant:'محاسب العمارة',treasurer:'أمين الصندوق',board:'عضو مجلس الإدارة',
+  manager:'إداري العمارة',owner:'مالك وحدة',tenant:'مستأجر'};
+function roleLabelAr(r){return ROLE_LABELS_AR[r]||r||'';}
 const ADMIN_PERMISSION_GROUPS=[{key:'building',label:'العمارة والملاك'},{key:'finance',label:'الماليات'},{key:'engage',label:'التواصل مع الملاك'},{key:'settings',label:'الإعدادات والأدوات'}];
 const OWNER_PERMISSION_GROUPS=[{key:'engage',label:'التواصل مع العمارة'},{key:'profile',label:'حسابي (تسجيل دفعة ومقترحات)'}];
 const PERMISSION_ROLE_TEMPLATES=[
-  {key:'union_head',label:'⭐ رئيس اتحاد العمارة (صلاحيات كاملة)',role:'admin',groups:null},
-  /* النائب بيشتغل بدور الأدمن عشان كل الشاشات تتعامل معاه كإدارة،
-     والفرق في الصلاحيات: كل حاجة ما عدا إعدادات العمارة والاشتراك. */
-  {key:'deputy',label:'🤝 نائب رئيس الاتحاد (كل حاجة ما عدا الإعدادات)',role:'admin',
+  {key:'union_head',label:'⭐ رئيس اتحاد الملاك (صلاحيات كاملة)',role:'admin',groups:null},
+  {key:'deputy',label:'🤝 نائب رئيس الاتحاد (كل حاجة ما عدا الإعدادات)',role:'deputy',
    groups:['building','finance','engage']},
-  {key:'accountant',label:'💰 محاسب العمارة (ماليات فقط)',role:'admin',groups:['finance']},
-  {key:'manager',label:'📋 إداري العمارة (بدون ماليات)',role:'admin',groups:['building','engage']},
+  {key:'accountant',label:'💰 محاسب العمارة (ماليات فقط)',role:'accountant',groups:['finance']},
+  {key:'treasurer',label:'🏦 أمين الصندوق (ماليات فقط)',role:'treasurer',groups:['finance']},
+  {key:'board',label:'🪑 عضو مجلس الإدارة (اطّلاع وطباعة فقط)',role:'board',
+   groups:['building','finance','engage']},
+  {key:'manager',label:'📋 إداري العمارة (بدون ماليات)',role:'manager',groups:['building','engage']},
   {key:'owner',label:'🏠 صاحب الشقة والمحل (صلاحيات كاملة على حسابه)',role:'owner',groups:null},
   {key:'tenant',label:'🔑 المستأجر (بدون تسجيل دفعات أو مقترحات)',role:'tenant',groups:['engage']},
 ];
@@ -6026,14 +6036,14 @@ function guardAction(page,action){
 }
 function screenVisible(u,page){
   if(!u)return false;
-  const grp=pageGroupKey(page,u.role!=='admin');
+  const grp=pageGroupKey(page,!isStaffRole(u.role));
   if(grp&&!hasGroupPermission(u,grp))return false;
   if(!u.screenPerms)return true;
   return window.userCan?userCan(u,page,'view'):true;
 }
 function visibleNavGroups(u){
   const isCompound=D&&D.building&&D.building.communityType==='compound';
-  const base=u.role!=='admin'?OWNER_NAV_GROUPS:ADMIN_NAV_GROUPS;
+  const base=!isStaffRole(u.role)?OWNER_NAV_GROUPS:ADMIN_NAV_GROUPS;
   return base
     .filter(g=>hasGroupPermission(u,g.key))
     .map(g=>({...g,items:g.items.filter(it=>
@@ -6055,7 +6065,7 @@ function toggleNavGroup(key){
   nc.innerHTML=renderNavGroups(visibleNavGroups(u));
 }
 function shellHTML(u){
-  const isAdmin=u.role==='admin';
+  const isAdmin=isStaffRole(u.role);
   const ap=isAdmin?null:myApartment();
   const groups=visibleNavGroups(u);
   return `
@@ -6095,8 +6105,8 @@ function go(page){
 }
 function renderContent(){
   const u=currentUser(); if(!u)return renderRoot();
-  const pg=pageGroupKey(curPage,u.role!=='admin');
-  const defaultPage=u.role==='admin'?'dashboard':'home';
+  const pg=pageGroupKey(curPage,!isStaffRole(u.role));
+  const defaultPage=isStaffRole(u.role)?'dashboard':'home';
   if(!screenVisible(u,curPage)){
     curPage=defaultPage;
     if(window.showMessage)showMessage(
@@ -6113,7 +6123,7 @@ function renderContent(){
     treasury:pageTreasury,expenses:pageExpenses,expenseCategories:pageExpenseCategories,distweights:pageDistributionWeights,polls:pagePolls,announcements:pageAnnouncements,suggestions:pageSuggestions,meetings:pageMeetings,users:pageUsers,
     settings:pageSettings,aireports:pageAIReports,blocks:pageCompoundBlocks,vendors:pageVendors,maintenance:pageMaintenance,floors:()=>pageFloorsReport(),analytics:pageAnalytics,chat:pageBuildingChat,license:pageLicense,referral:pageReferralProgram,activity:pageActivity,myproposals:pageMyProposals,support:pageMySupportTickets,whatsnew:pageWhatsNew,home:pageOwnerHome,profile:pageProfile
   }[curPage]||pageAdminDashboard;
-  c.innerHTML=(u.role==='admin'?licenseBannerHTML():'')+fn(u);
+  c.innerHTML=(isStaffRole(u.role)?licenseBannerHTML():'')+fn(u);
   if(window.hydrateStorageImages) hydrateStorageImages(c);
   const bw=document.getElementById('notifBellWrap'); if(bw)bw.innerHTML=renderNotifBell();
   bindPageEvents(curPage,u);
@@ -6210,7 +6220,7 @@ function openPageHelp(){
   const isSys=s&&s.type==='sysowner';
   const content=(isSys?SYS_HELP_CONTENT:HELP_CONTENT)[curPage];
   if(!content){openModal(`<h3>❓ مساعدة</h3><p class="small mtop">لا توجد إرشادات مفصّلة لهذه الشاشة حاليًا.</p><div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`);return;}
-  const isAdminCtx=!isSys&&currentUser()&&currentUser().role==='admin';
+  const isAdminCtx=!isSys&&currentUser()&&isStaffRole(currentUser().role);
   const steps=typeof content.steps==='function'?content.steps(isAdminCtx):content.steps;
   const targets=typeof content.targets==='function'?content.targets(isAdminCtx):(content.targets||[]);
   window.__tourState={title:content.title,steps,targets,index:0};
@@ -6317,7 +6327,7 @@ function runSmartSearch(q){
   const box=document.getElementById('smartSearchResults');
   q=(q||'').trim().toLowerCase();
   if(q.length<2){box.innerHTML='<p class="small">اكتب حرفين على الأقل...</p>';return}
-  const isAdmin=currentUser().role==='admin';
+  const isAdmin=isStaffRole(currentUser().role);
   const groups=[];
   const navGroups=isAdmin?ADMIN_NAV_GROUPS:OWNER_NAV_GROUPS;
   const pageMatches=[];
@@ -6511,7 +6521,7 @@ function pageAdminDashboard(u){
   ${welcomeBannerHTML(u.name)}
   ${upgradeAlertBannerHTML()}
   ${installBannerHTML()}
-  ${u.role==='admin'?existingOfferBannerHTML():''}
+  ${isStaffRole(u.role)?existingOfferBannerHTML():''}
   <div class="grid g4">
     <div class="kpi"><div class="ic">🚪</div><div class="lbl">عدد الوحدات</div><div class="val">${aps.length}</div><div class="small">${apOnlyCount} شقة${shopCount?' + '+shopCount+' محل':''}</div></div>
     <div class="kpi ok"><div class="ic">💰</div><div class="lbl">إجمالي المحصّل</div><div class="val">${money(totalCollected())}</div></div>
@@ -6831,7 +6841,7 @@ function sendChatMessage(){
   const inp=document.getElementById('chatInput');
   const text=inp.value.trim(); if(!text)return;
   const u=currentUser(); const ap=myApartment();
-  const authorLabel=u.role==='admin'?'👔 رئيس الاتحاد':(ap?'🏠 '+unitLabel(ap)+' - '+u.name:u.name);
+  const authorLabel=isStaffRole(u.role)?'👔 '+roleLabelAr(u.role):(ap?'🏠 '+unitLabel(ap)+' - '+u.name:u.name);
   D.buildingChat=D.buildingChat||[];
   D.buildingChat.push({id:uid(),kind:'message',authorUsername:u.username,authorLabel,text,createdAt:new Date().toISOString()});
   u.lastChatRead=new Date().toISOString();
@@ -7026,7 +7036,7 @@ function monthlyTrendChartSVG(months,collected,expensed,shortLabel){
   </svg>`;
 }
 function pageMaintenance(u){
-  const isAdmin=u.role==='admin';
+  const isAdmin=isStaffRole(u.role);
   const reports=[...(D.maintenanceReports||[])].sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
   const mine=isAdmin?reports:reports.filter(r=>r.reportedByUsername===u.username);
   if(window.__maintFilter===undefined)window.__maintFilter='open';
@@ -8239,7 +8249,7 @@ function saveRefund(){
 
 /* ---------- المصروفات ---------- */
 function pageExpenses(u){
-  const isAdmin=u.role==='admin';
+  const isAdmin=isStaffRole(u.role);
   const rows=[...D.expenses];
   const byCat={}; rows.forEach(e=>{byCat[e.category]=(byCat[e.category]||0)+Number(e.amount)});
   const cols=[
@@ -8380,7 +8390,7 @@ function printExpenseEntry(id){if(!guardAction('expenses','print'))return;
 
 /* ---------- استطلاعات الرأي (مع تعليقات) ---------- */
 function pagePolls(u){
-  const isAdmin=u.role==='admin';
+  const isAdmin=isStaffRole(u.role);
   const polls=[...D.polls].sort((x,y)=>(y.createdAt||'').localeCompare(x.createdAt||''));
   if(window.__pollFilter===undefined)window.__pollFilter='open';
   const counts={all:polls.length,open:polls.filter(p=>p.status==='open').length,closed:polls.filter(p=>p.status==='closed').length};
@@ -8481,9 +8491,9 @@ function addPollComment(pollId){
   const u=currentUser(); const p=D.polls.find(x=>x.id===pollId);
   const input=document.getElementById('pc_'+pollId); const text=input.value.trim(); if(!text)return;
   const visSel=document.getElementById('pcv_'+pollId);
-  const visibility=u.role==='admin'?'public':(visSel?visSel.value:'public');
+  const visibility=isStaffRole(u.role)?'public':(visSel?visSel.value:'public');
   const ap=myApartment();
-  const authorLabel=u.role==='admin'?'رئيس الاتحاد':(ap?unitLabel(ap):u.name);
+  const authorLabel=isStaffRole(u.role)?roleLabelAr(u.role):(ap?unitLabel(ap):u.name);
   p.comments=p.comments||[]; p.comments.push({id:uid(),username:u.username,text,visibility,authorLabel,date:todayISO()});
   save();toast('تم إضافة التعليق');renderContent();
 }
@@ -8491,7 +8501,7 @@ function deletePollComment(pollId,cId){const p=D.polls.find(x=>x.id===pollId);p.
 
 /* ---------- الإعلانات (مع تعليقات عامة) ---------- */
 function pageAnnouncements(u){
-  const isAdmin=u.role==='admin';
+  const isAdmin=isStaffRole(u.role);
   const items=[...D.announcements].sort((x,y)=>(y.date||'').localeCompare(x.date||''));
   return `
   ${isAdmin?`<div class="flexrow"><button class="btn primary" onclick="openAnnModal()">+ إعلان جديد</button></div>`:''}
@@ -8544,7 +8554,7 @@ function deleteAnn(id){confirmDelete('حذف هذا الإعلان وكل الت
 function addAnnComment(annId){
   const u=currentUser(); const a=D.announcements.find(x=>x.id===annId);
   const input=document.getElementById('ac_'+annId); const text=input.value.trim(); if(!text)return;
-  const ap=myApartment(); const authorLabel=u.role==='admin'?'رئيس الاتحاد':(ap?unitLabel(ap):u.name);
+  const ap=myApartment(); const authorLabel=isStaffRole(u.role)?roleLabelAr(u.role):(ap?unitLabel(ap):u.name);
   a.comments=a.comments||[]; a.comments.push({id:uid(),username:u.username,text,authorLabel,date:todayISO()});
   save();toast('تم إضافة التعليق');renderContent();
 }
@@ -8552,7 +8562,7 @@ function deleteAnnComment(annId,cId){const a=D.announcements.find(x=>x.id===annI
 
 /* ---------- المقترحات (تحتاج موافقة رئيس الاتحاد قبل النشر العام) ---------- */
 function pageSuggestions(u){
-  const isAdmin=u.role==='admin';
+  const isAdmin=isStaffRole(u.role);
   const all=[...D.suggestions].sort((x,y)=>(y.date||'').localeCompare(x.date||''));
   if(isAdmin){
     if(window.__suggFilter===undefined)window.__suggFilter='pending';
@@ -8646,7 +8656,7 @@ function rejectSuggestion(id){
 
 /* ---------- الاجتماعات مع أصحاب الشقق ---------- */
 function pageMeetings(u){
-  const isAdmin=u.role==='admin';
+  const isAdmin=isStaffRole(u.role);
   const meetings=[...(D.meetings||[])].sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
   const upcoming=meetings.filter(m=>m.status==='scheduled');
   const past=meetings.filter(m=>m.status!=='scheduled');
@@ -8744,17 +8754,17 @@ function addMeetingComment(meetingId){
   const inp=document.getElementById('mc_'+meetingId);
   const text=inp.value.trim(); if(!text)return;
   const u=currentUser(); const ap=myApartment();
-  const authorLabel=u.role==='admin'?'رئيس الاتحاد':(ap?unitLabel(ap):u.name);
+  const authorLabel=isStaffRole(u.role)?roleLabelAr(u.role):(ap?unitLabel(ap):u.name);
   const m=D.meetings.find(x=>x.id===meetingId);
   m.comments=m.comments||[];
   m.comments.push({id:uid(),text,username:u.username,authorLabel,date:todayISO()});
   save();inp.value='';renderContent();
-  if(u.role!=='admin')pushNotification({type:'meeting',title:'تعليق جديد على اجتماع',message:m.title,audience:'admins',link:'meetings'});
+  if(!isStaffRole(u.role))pushNotification({type:'meeting',title:'تعليق جديد على اجتماع',message:m.title,audience:'admins',link:'meetings'});
 }
 function deleteMeetingComment(meetingId,cId){const m=D.meetings.find(x=>x.id===meetingId);m.comments=m.comments.filter(c=>c.id!==cId);save();renderContent()}
 /* ---------- طلبات دفع من أصحاب الشقق (بإثبات صورة) ---------- */
 function pagePaymentRequests(u){
-  const isAdmin=u.role==='admin';
+  const isAdmin=isStaffRole(u.role);
   if(isAdmin){
     const all=[...(D.paymentRequests||[])].sort((a,b)=>(b.requestedAt||'').localeCompare(a.requestedAt||''));
     if(window.__payReqFilter===undefined)window.__payReqFilter='pending';
@@ -8965,8 +8975,8 @@ function openUserModal(id){if(!guardAction('users','edit'))return;
   const isSelf=u&&currentUser()&&u.id===currentUser().id;
   const editorUnrestricted=!currentUser().permissions;
   if(!editorUnrestricted&&!u){showMessage('بس رئيس الاتحاد الأساسي (بكل الصلاحيات) يقدر يضيف مستخدم مسؤول جديد');return;}
-  if(!editorUnrestricted&&u&&u.role==='admin'&&!isSelf){showMessage('بس رئيس الاتحاد الأساسي (بكل الصلاحيات) يقدر يعدّل حساب أو صلاحيات مسؤول تاني');return;}
-  const showPerms=!isSelf&&editorUnrestricted&&(!u||u.role==='admin'||isApartmentUser);
+  if(!editorUnrestricted&&u&&isStaffRole(u.role)&&!isSelf){showMessage('بس رئيس الاتحاد الأساسي (بكل الصلاحيات) يقدر يعدّل حساب أو صلاحيات مسؤول تاني');return;}
+  const showPerms=!isSelf&&editorUnrestricted&&(!u||isStaffRole(u.role)||isApartmentUser);
   const perms=(u&&u.permissions)||{};
   const currentRole=u?u.role:(isApartmentUser?'owner':'admin');
   openModal(`
@@ -8977,10 +8987,10 @@ function openUserModal(id){if(!guardAction('users','edit'))return;
     </select></div>`:''}
     <div class="field2"><label>اسم المستخدم</label><input id="uUser" value="${u?esc(u.username):''}" ${isApartmentUser?'disabled':''}></div>
     <div class="field2"><label>الاسم</label><input id="uName" value="${u?esc(u.name):''}"></div>
-    ${isApartmentUser?`<div class="field2"><label>الصلاحية</label><select id="uRole" onchange="refreshPermCheckboxes()" ${(!editorUnrestricted&&u.role!=='admin')?'disabled':''}>
+    ${isApartmentUser?`<div class="field2"><label>الصلاحية</label><select id="uRole" onchange="refreshPermCheckboxes()" ${(!editorUnrestricted&&!isStaffRole(u.role))?'disabled':''}>
       <option value="owner" ${currentRole==='owner'?'selected':''}>مالك شقة</option>
       <option value="tenant" ${currentRole==='tenant'?'selected':''}>مستأجر</option>
-      ${editorUnrestricted||u.role==='admin'?`<option value="admin" ${currentRole==='admin'?'selected':''}>رئيس اتحاد إضافي (صلاحيات قابلة للتخصيص)</option>`:''}
+      ${editorUnrestricted||isStaffRole(u.role)?STAFF_ROLES.map(r=>`<option value="${r}" ${currentRole===r?'selected':''}>${esc(roleLabelAr(r))}${r==='admin'?' (صلاحيات كاملة)':''}</option>`).join(''):''}
     </select>${editorUnrestricted?`<p class="small mtop">لو رقّيته لرئيس اتحاد، هيفضل مرتبط بشقته لكن هيقدر يدخل على صفحات الإدارة اللي تحددها تحت.</p>`:`<p class="small mtop" style="color:var(--gold-dark)">بس رئيس الاتحاد الأساسي يقدر يرقّي مستخدم لرئيس اتحاد.</p>`}</div>`:''}
     <div class="grid g2">
       ${phoneField('uCountry','uPhone',u?u.phoneCountry:'+20',u?esc(u.phone||''):'','رقم الهاتف',true)}
@@ -9005,7 +9015,7 @@ function openUserModal(id){if(!guardAction('users','edit'))return;
     <div class="modal-actions"><button class="btn primary" onclick="saveUser(${u?`'${u.id}'`:'null'})">💾 حفظ</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
 }
 function renderPermCheckboxesFor(role,perms){
-  const groups=role==='admin'?ADMIN_PERMISSION_GROUPS:OWNER_PERMISSION_GROUPS;
+  const groups=isStaffRole(role)?ADMIN_PERMISSION_GROUPS:OWNER_PERMISSION_GROUPS;
   return groups.map(g=>`<label class="checkline"><input type="checkbox" class="uPermCheck" data-key="${g.key}" ${perms[g.key]!==false?'checked':''}> ${esc(g.label)}</label>`).join('');
 }
 function refreshPermCheckboxes(){
@@ -9022,7 +9032,7 @@ function applyPermTemplate(){
   const list=document.getElementById('uPermsCheckList');
   if(list){
     const perms=t.groups===null?{}:{};
-    const groups=t.role==='admin'?ADMIN_PERMISSION_GROUPS:OWNER_PERMISSION_GROUPS;
+    const groups=isStaffRole(t.role)?ADMIN_PERMISSION_GROUPS:OWNER_PERMISSION_GROUPS;
     if(t.groups!==null)groups.forEach(g=>{perms[g.key]=t.groups.includes(g.key);});
     list.innerHTML=renderPermCheckboxesFor(t.role,perms);
   }
@@ -9032,7 +9042,7 @@ async function saveUser(id){
   const existingTarget=id?D.users.find(x=>x.id===id):null;
   const isSelfSave=existingTarget&&existingTarget.id===currentUser().id;
   if(!editorUnrestricted&&!existingTarget)return showMessage('بس رئيس الاتحاد الأساسي يقدر يضيف مستخدم مسؤول جديد');
-  if(!editorUnrestricted&&existingTarget&&existingTarget.role==='admin'&&!isSelfSave)return showMessage('بس رئيس الاتحاد الأساسي يقدر يعدّل حساب مسؤول تاني');
+  if(!editorUnrestricted&&existingTarget&&isStaffRole(existingTarget.role)&&!isSelfSave)return showMessage('بس رئيس الاتحاد الأساسي يقدر يعدّل حساب مسؤول تاني');
   const name=document.getElementById('uName').value.trim(); if(!name)return showMessage('أدخل الاسم');
   const phone=document.getElementById('uPhone').value.trim();
   if(!phone)return showMessage('رقم الهاتف مطلوب');
@@ -9053,8 +9063,8 @@ async function saveUser(id){
     const roleSel=document.getElementById('uRole');
     if(roleSel){
       const newRole=roleSel.value;
-      if(u.role!=='admin'&&newRole==='admin'&&!editorUnrestricted)return showMessage('بس رئيس الاتحاد الأساسي يقدر يرقّي مستخدم لرئيس اتحاد إضافي');
-      if(u.role==='admin'&&newRole==='owner'){
+      if(!isStaffRole(u.role)&&isStaffRole(newRole)&&!editorUnrestricted)return showMessage('بس رئيس الاتحاد الأساسي يقدر يرقّي مستخدم لدور إداري');
+      if(u.role==='admin'&&newRole!=='admin'){
         const activeAdmins=D.users.filter(x=>x.role==='admin'&&x.active!==false);
         if(activeAdmins.length<=1)return showMessage('لا يمكن تحويل آخر حساب رئيس اتحاد نشط إلى مالك شقة عادي');
       }
