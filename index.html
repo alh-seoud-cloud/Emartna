@@ -179,6 +179,11 @@ th .sort-ic{opacity:.5;font-size:10px}
 td{padding:10px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
 tr:hover td{background:#faf8f2}
 .table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);-webkit-overflow-scrolling:touch;position:relative}
+.hscroll-proxy{position:fixed;bottom:0;height:16px;overflow-x:auto;overflow-y:hidden;
+  z-index:60;background:var(--panel,#fff);border-top:1px solid var(--line);
+  box-shadow:0 -2px 8px rgba(0,0,0,.08);display:none}
+.hscroll-proxy>div{height:1px}
+@media print{.hscroll-proxy{display:none!important}}
 @media(max-width:860px){
   .table-wrap{background:linear-gradient(to left,var(--panel) 0%,transparent 12px) left/16px 100% no-repeat local,linear-gradient(to right,var(--panel) 0%,transparent 12px) right/16px 100% no-repeat local,linear-gradient(to left,rgba(0,0,0,.12),transparent 16px) left/16px 100% no-repeat scroll,linear-gradient(to right,rgba(0,0,0,.12),transparent 16px) right/16px 100% no-repeat scroll}
   .table-wrap table td,.table-wrap table th{padding:8px 8px;font-size:12.5px;white-space:nowrap}
@@ -3037,6 +3042,8 @@ function pageSysDashboard(){
     <button class="btn ${window.__sysDashFilter==='expiringSoon'?'gold':'ghost'}" onclick="setSysDashFilter('expiringSoon')">⏰ هينتهي خلال 7 أيام (${expiringSoon.length})</button>
     ${window.__sysDashFilter!=='all'?`<button class="btn ghost" onclick="setSysDashFilter('all')">✕ مسح الفلتر (${filterMap[window.__sysDashFilter].label})</button>`:''}
     <div class="spacer"></div>
+    <button class="btn ghost" onclick="openAllContacts()">📇 سجل التواصل</button>
+    <button class="btn ghost" onclick="openFollowups()">📅 متابعات مستحقة</button>
     <button class="btn ghost" onclick="openImportBuildingsModal()">📥 استيراد عمارات بالجملة</button>
     <button class="btn primary" onclick="openNewBuildingModal()">+ إنشاء عمارة جديدة</button>
   </div>
@@ -10013,6 +10020,58 @@ document.addEventListener('DOMContentLoaded',async()=>{
 <script type="module" src="emartna-cities.js"></script>
 <script type="module" src="emartna-perms.js"></script>
 <script type="module" src="emartna-lastlogin.js"></script>
+
+<script>
+/* شريط تمرير أفقي عائم: الجداول العريضة شريطها في آخر الجدول، فلو الجدول
+   أطول من الشاشة لازم تنزل لآخره عشان تحركه. ده بيتثبّت تحت النافذة. */
+(function(){
+  let proxy=null, target=null;
+  function ensure(){
+    if(proxy)return proxy;
+    proxy=document.createElement('div');
+    proxy.className='hscroll-proxy';
+    proxy.innerHTML='<div></div>';
+    document.body.appendChild(proxy);
+    proxy.addEventListener('scroll',function(){
+      if(target&&!proxy.__lock)target.scrollLeft=proxy.scrollLeft;
+    });
+    return proxy;
+  }
+  function pick(){
+    var best=null,bestVis=0,vh=window.innerHeight;
+    document.querySelectorAll('.table-wrap').forEach(function(w){
+      if(w.scrollWidth<=w.clientWidth+4)return;      // مفيش تمرير أفقي أصلًا
+      var r=w.getBoundingClientRect();
+      var vis=Math.min(r.bottom,vh)-Math.max(r.top,0);
+      if(vis<60)return;                              // مش ظاهر كفاية
+      if(r.bottom<=vh-4)return;                      // شريطه الأصلي باين خلاص
+      if(vis>bestVis){bestVis=vis;best=w;}
+    });
+    return best;
+  }
+  function sync(){
+    var w=pick(), p=ensure();
+    if(!w){p.style.display='none';target=null;return;}
+    target=w;
+    var r=w.getBoundingClientRect();
+    p.style.display='block';
+    p.style.left=r.left+'px';
+    p.style.width=r.width+'px';
+    p.firstChild.style.width=w.scrollWidth+'px';
+    p.__lock=true;p.scrollLeft=w.scrollLeft;p.__lock=false;
+  }
+  document.addEventListener('scroll',function(e){
+    if(e.target&&e.target.classList&&e.target.classList.contains('table-wrap')&&e.target===target){
+      var p=ensure();p.__lock=true;p.scrollLeft=e.target.scrollLeft;p.__lock=false;
+      return;
+    }
+    sync();
+  },true);
+  window.addEventListener('resize',sync);
+  setInterval(sync,700);        // الجداول بتتبني ديناميكيًا
+  setTimeout(sync,800);
+})();
+</script>
 
 </body>
 </html>

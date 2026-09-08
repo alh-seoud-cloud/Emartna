@@ -241,6 +241,121 @@ window.deleteContactLog = async function(id, buildingId){
   }catch(e){ showMessage(e.message); }
 };
 
+/* ---------- سجل كل التواصلات (كل العمارات) ---------- */
+
+let ALL = [];      // كاش السجل الكامل
+
+window.openAllContacts = async function(){
+  try{
+    const { data, error } = await sb.from('head_contacts')
+      .select('*').order('contacted_at', { ascending:false }).limit(1000);
+    if (error) throw error;
+    ALL = data || [];
+  }catch(e){ return showMessage(e.message); }
+
+  // نربط كل صف باسم عمارته
+  const nameOf = {};
+  try{
+    const cache = CLOUD._cache.buildingUuid || {};
+    Object.entries(cache).forEach(([legacy, uuid]) => {
+      const d = window.loadBuildingData ? loadBuildingData(legacy) : null;
+      nameOf[uuid] = (d && d.building && d.building.name) || legacy;
+    });
+  }catch(e){}
+  ALL.forEach(r => { r.__b = nameOf[r.building_id] || '—'; });
+
+  renderAllContacts('');
+};
+
+window.searchContacts = function(q){ renderAllContacts(q); };
+
+function renderAllContacts(q){
+  const term = (q || '').trim().toLowerCase();
+  const rows = !term ? ALL : ALL.filter(r =>
+    [r.__b, r.head_name, r.head_phone, r.note, r.outcome,
+     (CHANNELS[r.channel] || {}).label, r.contacted_by_name]
+      .some(v => String(v || '').toLowerCase().includes(term)));
+
+  const byOutcome = {};
+  rows.forEach(r => { byOutcome[r.outcome] = (byOutcome[r.outcome] || 0) + 1; });
+
+  const html = `
+    <h3>📇 سجل التواصل مع كل العمارات</h3>
+    <p class="small mtop">${rows.length} من ${ALL.length} عملية تواصل
+      ${Object.entries(byOutcome).map(([k,v]) => `· ${esc2(k)}: ${v}`).join(' ')}</p>
+
+    <div class="field2 mtop"><label>بحث</label>
+      <input id="ctSearch" value="${esc2(q || '')}" oninput="searchContacts(this.value)"
+        placeholder="اسم عمارة، رئيس اتحاد، رقم، كلمة في ملاحظة، نتيجة..."></div>
+
+    <div class="flexrow" style="gap:6px;flex-wrap:wrap">
+      <button class="btn sm ghost" onclick="searchContacts('')">الكل</button>
+      ${['مردش','مؤجل','رفض','تم'].map(o =>
+        `<button class="btn sm ghost" onclick="searchContacts('${o}')">${o}</button>`).join('')}
+      <button class="btn sm ghost" onclick="exportContactsCsv()">📤 تصدير</button>
+    </div>
+
+    <div class="table-wrap mtop2" style="max-height:52vh;overflow:auto">
+      <table style="width:100%;font-size:12.5px">
+        <thead><tr>
+          <th style="text-align:start">العمارة</th><th style="text-align:start">رئيس الاتحاد</th>
+          <th>القناة</th><th>النتيجة</th><th>التاريخ</th>
+          <th style="text-align:start">الملاحظة</th><th>متابعة</th>
+        </tr></thead>
+        <tbody>
+          ${rows.length ? rows.map(r => {
+            const c = CHANNELS[r.channel] || CHANNELS.other;
+            const d = new Date(r.contacted_at);
+            return `<tr>
+              <td style="padding:5px 4px"><b>${esc2(r.__b)}</b></td>
+              <td>${esc2(r.head_name || '')}
+                <div class="small" style="color:var(--muted)">${esc2(r.head_phone || '')}</div></td>
+              <td style="text-align:center">${c.icon} ${esc2(c.label)}</td>
+              <td style="text-align:center"><span class="badge ${
+                r.outcome === 'تم' ? 'g' : r.outcome === 'مردش' ? 'n' : 'y'
+              }">${esc2(r.outcome)}</span></td>
+              <td style="text-align:center" class="small">${d.toLocaleDateString('ar-EG')}</td>
+              <td class="small" style="max-width:260px;white-space:normal">${esc2(r.note || '—')}</td>
+              <td style="text-align:center" class="small">${r.followup_at
+                ? '📅 ' + esc2(r.followup_at) : '—'}</td>
+            </tr>`;
+          }).join('') : '<tr><td colspan="7" class="small">مفيش نتائج.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">إغلاق</button>
+    </div>`;
+
+  const box = document.querySelector('.modal .modal-body') || null;
+  if (box && document.getElementById('ctSearch')){
+    const cur = document.getElementById('ctSearch');
+    const pos = cur.selectionStart;
+    box.innerHTML = html;
+    const nx = document.getElementById('ctSearch');
+    if (nx){ nx.focus(); try{ nx.setSelectionRange(pos, pos); }catch(e){} }
+  } else {
+    openModal(html, true);
+  }
+}
+
+window.exportContactsCsv = function(){
+  const head = ['العمارة','رئيس الاتحاد','الهاتف','القناة','النتيجة','التاريخ','الملاحظة','متابعة','بواسطة'];
+  const lines = [head.join(',')].concat(ALL.map(r => [
+    r.__b, r.head_name || '', r.head_phone || '',
+    (CHANNELS[r.channel] || {}).label || r.channel, r.outcome,
+    new Date(r.contacted_at).toLocaleString('ar-EG'),
+    (r.note || '').replace(/\n/g, ' '), r.followup_at || '', r.contacted_by_name || '',
+  ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')));
+  const blob = new Blob(['\uFEFF' + lines.join('\n')], { type:'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'سجل-التواصل.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
 /* ---------- المتابعات المستحقة ---------- */
 
 window.openFollowups = async function(){
