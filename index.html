@@ -6085,10 +6085,26 @@ function shellHTML(u){
     <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
     <div class="sidebar" id="sidebar">
       <div class="brand" style="cursor:pointer" onclick="go('${isAdmin?'dashboard':'home'}')"><div class="mark">${appLogoSVG(38)}</div><div><h1>عمارتنا</h1><p>${esc(D.building.name||'')}</p></div></div>
+      ${(function(){
+        /* مبدّل العمارات — يظهر بس لو المستخدم له صلاحية في أكتر من عمارة */
+        const list = window.myBuildings ? myBuildings() : [];
+        if (list.length < 2) return '';
+        const cur = (window.getSession && getSession()) ? getSession().buildingId : null;
+        return `<div style="padding:8px 12px 4px">
+          <label class="small" style="color:var(--sidebar-muted)">🏢 العمارة الحالية</label>
+          <select style="width:100%;margin-top:4px"
+            onchange="switchBuilding(this.value)">
+            ${list.map(b => `<option value="${esc(b.code)}" ${b.code===cur?'selected':''}>${
+              esc(b.name || b.code)}${b.role?' — '+esc(roleLabelAr(b.role)):''}</option>`).join('')}
+          </select>
+          <p class="small" style="color:var(--sidebar-muted);margin-top:4px">
+            التبديل بيقفل العمارة الحالية ويفتح التانية</p>
+        </div>`;
+      })()}
       <div id="navContainer">${renderNavGroups(groups)}</div>
       ${isSysOwnerAvailable()?`<div class="nav-sec"></div><button class="nav-btn" onclick="backToSysOwner()"><span class="ic">🏙️</span><span>كل العمارات</span></button>`:''}
       <div class="sidebar-foot">
-        <b>${esc(u.name)}</b>${isAdmin?'رئيس اتحاد الملاك':unitLabel(ap)}
+        <b>${esc(u.name)}</b>${isAdmin?roleLabelAr(u.role):unitLabel(ap)}
         <button class="btn sm ghost" style="margin-top:10px;width:100%;color:var(--sidebar-text);border-color:var(--sidebar-muted)" onclick="logout()">🚪 تسجيل الخروج</button>
       </div>
     </div>

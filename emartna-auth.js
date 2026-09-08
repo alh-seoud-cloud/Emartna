@@ -184,6 +184,43 @@ window.enterSysOwner = async function(){
   renderRoot(); resetHistoryBase();
 };
 
+/* ============================================================
+   تبديل العمارة — للمستخدم اللي له صلاحية في أكتر من عمارة
+   ------------------------------------------------------------
+   قبل كده كان بياخد أول عمارة في القائمة ويدخلها من غير ما يقول،
+   ومفيش طريقة يوصل للتانية.
+   التبديل بيقفل جلسة العمارة الحالية ويفتح التانية بالكامل —
+   عمارة واحدة مفتوحة في المرة، عشان ما يحصلش خلط بين البيانات.
+   ============================================================ */
+window.myBuildings = () => (CLOUD_AUTH.buildings || []);
+
+window.switchBuilding = async function(code){
+  const list = CLOUD_AUTH.buildings || [];
+  const b = list.find(x => x.code === code || x.building_id === code);
+  if (!b) return;
+  if (__sess && __sess.buildingId === b.code) return;   // نفس العمارة
+
+  try{
+    if (window.showLoading) showLoading('بنفتح ' + (b.name || '') + '...');
+    if (window.CLOUD && window.CLOUD.loadBuilding) await window.CLOUD.loadBuilding(b.code);
+  }catch(e){
+    if (window.hideLoading) hideLoading();
+    return showMessage('تعذّر فتح العمارة: ' + (e.message || ''));
+  }
+  if (window.hideLoading) hideLoading();
+
+  __sess = { type:'building', buildingId: b.code,
+             username: CLOUD_AUTH.user.id, authId: CLOUD_AUTH.user.id };
+  /* تصفير الحالة المحلية يجبر renderRoot يحمّل بيانات العمارة الجديدة */
+  window.D = null;
+  window.activeBuildingId = null;
+  window.__navExpandedGroup = null;
+  window.curPage = (window.isStaffRole && isStaffRole(b.role)) ? 'dashboard' : 'home';
+  renderRoot();
+  if (window.resetHistoryBase) resetHistoryBase();
+  if (window.toast) toast('دخلت على ' + (b.name || ''));
+};
+
 window.exitSysOwner = async function(){
   const list = CLOUD_AUTH.buildings || [];
   if (!list.length) return;
