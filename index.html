@@ -8866,12 +8866,12 @@ function openSubmitPaymentModal(){
     <div class="field2"><label>طريقة السداد</label>
       <select id="prMethod">
         ${(function(){
-          const list=(D.building.paymentMethods||[]).filter(m=>m&&m.type);
-          const opts=list.map(m=>`<option value="${esc(m.type+(m.details?' - '+m.details:''))}">${
-            esc(m.type)}${m.details?' — '+esc(m.details):''}</option>`);
-          // طرق عامة لو الاتحاد ما سجّلش طرق
-          if(!opts.length) return PAYMENT_METHOD_TYPES.map(t=>`<option>${esc(t)}</option>`).join('');
-          return opts.join('')+'<option value="أخرى">أخرى</option>';
+          /* المفعّل والمربوط بحساب بس. الطرق الثابتة القديمة اتشالت:
+             كانت بتعرض للساكن طرق الاتحاد أصلًا مش مفعّلها. */
+          const list=activePaymentMethods();
+          if(!list.length) return '<option value="">— الاتحاد لسه ما فعّلش طرق سداد —</option>';
+          return list.map(m=>`<option value="${esc(m.id)}">${
+            esc(m.type)}${m.details?' — '+esc(m.details):''}</option>`).join('');
         })()}
       </select></div>
     <div class="field2"><label>صورة إثبات التحويل</label><input id="prImage" type="file" accept="image/*"></div>
@@ -8894,7 +8894,10 @@ async function submitPaymentRequest(){
   const projectName=paymentFor==='project'?document.getElementById('prProjectName').value.trim():'';
   const amount=Number(document.getElementById('prAmount').value||0);
   const methodEl=document.getElementById('prMethod');
-  const method=methodEl?methodEl.value:'';
+  const methodId=methodEl?methodEl.value:'';
+  const pm=activePaymentMethods().find(m=>m.id===methodId);
+  if(!pm)return showMessage('اختار طريقة سداد. لو القائمة فاضية، كلّم رئيس الاتحاد يفعّل طريقة سداد.');
+  const method=pm.type+(pm.details?' - '+pm.details:'');
   const note=document.getElementById('prNote').value.trim();
   if(!amount||amount<=0)return showMessage('أدخل المبلغ');
   if(paymentFor==='project'&&!projectName)return showMessage('أدخل اسم المشروع');
@@ -8914,7 +8917,7 @@ async function submitPaymentRequest(){
     }
   }
 
-  D.paymentRequests.push({id:uid(),apartmentId:ap.id,username:u.username,paymentFor,projectName,amount,imageDataUrl:proof,method,note,status:'pending',requestedAt:new Date().toISOString()});
+  D.paymentRequests.push({id:uid(),apartmentId:ap.id,username:u.username,paymentFor,projectName,amount,imageDataUrl:proof,method,methodId,note,status:'pending',requestedAt:new Date().toISOString()});
   window.__prImageData=null;
   save();closeModal();toast('تم إرسال الدفعة للمراجعة');
   pushNotification({type:'payment',title:'طلب دفعة جديد',message:`${unitLabel(ap)} - ${money(amount)} - ${paymentForLabel({paymentFor,projectName})}`,audience:'admins',link:'paymentRequests'});
@@ -8926,7 +8929,13 @@ function approvePaymentRequest(id){if(!guardAction('paymentRequests','edit'))ret
   const ap=D.apartments.find(a=>a.id===r.apartmentId);
   openModal(`<h3>تأكيد قبول الدفعة</h3>
     <p class="small">${ap?unitLabel(ap)+' - '+esc(ap.ownerName):''} - المبلغ: <b>${money(r.amount)}</b></p>
-    <div class="field2 mtop"><label>الحساب المستلم للمبلغ</label><select id="prAccount">${D.accounts.map(a=>`<option value="${a.id}">${esc(a.name)} (${a.type})</option>`).join('')}</select></div>
+    <div class="field2 mtop"><label>الحساب المستلم للمبلغ</label><select id="prAccount">${(function(){
+      const pm=(D.building.paymentMethods||[]).find(m=>m.id===r.methodId);
+      return D.accounts.map(a=>`<option value="${a.id}" ${pm&&pm.accountId===a.id?'selected':''}>${esc(a.name)} (${a.type})</option>`).join('');
+    })()}</select>${(function(){
+      const pm=(D.building.paymentMethods||[]).find(m=>m.id===r.methodId);
+      return pm?`<p class="small mtop" style="color:var(--muted)">الساكن دفع بـ<b>${esc(pm.type)}</b> — اتحدّد الحساب المربوط بيها تلقائيًا.</p>`:'';
+    })()}</div>
     <div class="modal-actions"><button class="btn primary" onclick="doApprovePaymentRequest('${r.id}')">✅ تأكيد وتسجيل الدفعة</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
 }
 function doApprovePaymentRequest(id){
@@ -9474,8 +9483,15 @@ function openPaymentContactModal(){
   openModal(`<h3>طرق السداد والتواصل</h3>
     <p class="small mtop">البيانات دي هتظهر لكل الملاك عشان يعرفوا يدفعوا إزاي ويتواصلوا معاك إزاي. تقدر تضيف أكتر من طريقة سداد.</p>
     <div class="field2"><label>طرق السداد</label></div>
+    <p class="small" style="color:var(--muted)">كل طريقة لازم تترتبط بخزينة أو حساب بنكي —
+      عشان التحصيل يتسجّل في مكانه الصح. والمقفولة ما بتظهرش للملاك.</p>
     <div id="payMethodsList">${paymentMethodsListHTML(b.paymentMethods)}</div>
-    <div class="flexrow"><select id="newPayType">${PAYMENT_METHOD_TYPES.map(t=>`<option>${t}</option>`).join('')}</select><input id="newPayDetails" placeholder="التفاصيل (رقم المحفظة، آيبان...)" style="flex:1"><button class="btn sm" onclick="addPaymentMethod()">+ إضافة</button></div>
+    <div class="flexrow" style="flex-wrap:wrap;gap:6px">
+      <select id="newPayType">${PAYMENT_METHOD_TYPES.map(t=>`<option>${t}</option>`).join('')}</select>
+      <input id="newPayDetails" placeholder="التفاصيل (رقم المحفظة، آيبان...)" style="flex:1;min-width:140px">
+      <select id="newPayAccount"><option value="">— يُحصَّل في... —</option>${
+        (D.accounts||[]).map(a=>`<option value="${esc(a.id)}">${esc(a.name)} (${esc(a.type)})</option>`).join('')}</select>
+      <button class="btn" onclick="addPaymentMethod()">+ إضافة</button></div>
     <div class="grid g2 mtop">
       ${phoneField('payCountry','payPhone',b.contactPhoneCountry||'+20',esc(b.contactPhone||''),'رقم هاتف/واتساب رئيس الاتحاد',false)}
     </div>
@@ -9484,25 +9500,66 @@ function openPaymentContactModal(){
 function paymentMethodsListHTML(methods,isSysOwner){
   if(!methods.length)return'<p class="small">لا توجد طرق سداد مضافة بعد</p>';
   const removeFn=isSysOwner?'removeSysPaymentMethod':'removePaymentMethod';
-  return methods.map(m=>`<div class="flexrow" style="border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:6px">
-    <span class="badge y">${esc(m.type)}</span><span class="small" style="flex:1">${esc(m.details)}</span>
-    <span style="cursor:pointer;color:var(--red)" onclick="${removeFn}('${m.id}')">✕</span>
-  </div>`).join('');
+  return methods.map(m=>{
+    if(isSysOwner)return `<div class="flexrow" style="border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:6px">
+      <span class="badge y">${esc(m.type)}</span><span class="small" style="flex:1">${esc(m.details)}</span>
+      <span style="cursor:pointer;color:var(--red)" onclick="${removeFn}('${m.id}')">✕</span></div>`;
+    const acc=(D.accounts||[]).find(a=>a.id===m.accountId);
+    const on=m.active!==false&&!!acc;
+    return `<div style="border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:6px">
+      <div class="flexrow" style="gap:8px;flex-wrap:wrap">
+        <span class="badge ${on?'g':'n'}">${esc(m.type)}</span>
+        <span class="small" style="flex:1;min-width:110px">${esc(m.details)}</span>
+        <span style="cursor:pointer;color:var(--red)" onclick="${removeFn}('${m.id}')">✕</span>
+      </div>
+      <div class="flexrow mtop" style="gap:8px;flex-wrap:wrap">
+        <label class="small">يُحصَّل في
+          <select onchange="setPayMethodAccount('${m.id}',this.value)">
+            <option value="">— اختر —</option>
+            ${(D.accounts||[]).map(a=>`<option value="${esc(a.id)}"
+              ${a.id===m.accountId?'selected':''}>${esc(a.name)} (${esc(a.type)})</option>`).join('')}
+          </select></label>
+        <label class="checkline small" title="${acc?'':'اربطها بحساب الأول'}">
+          <input type="checkbox" ${on?'checked':''} ${acc?'':'disabled'}
+            onchange="setPayMethodActive('${m.id}',this.checked)"> مفعّلة للملاك</label>
+        ${acc?'':'<span class="small" style="color:var(--red)">مش مربوطة بحساب — مخفية عن الملاك</span>'}
+      </div></div>`;
+  }).join('');
+}
+function refreshPayMethods(){
+  const el=document.getElementById('payMethodsList');
+  if(el)el.innerHTML=paymentMethodsListHTML(D.building.paymentMethods||[]);
+}
+function setPayMethodAccount(id,accId){
+  const m=(D.building.paymentMethods||[]).find(x=>x.id===id); if(!m)return;
+  m.accountId=accId||null;
+  if(!accId)m.active=false;            // مفيش حساب = مينفعش تفضل مفعّلة
+  save();refreshPayMethods();
+}
+function setPayMethodActive(id,on){
+  const m=(D.building.paymentMethods||[]).find(x=>x.id===id); if(!m)return;
+  if(on&&!m.accountId)return showMessage('اربط الطريقة بخزينة أو حساب بنكي الأول');
+  m.active=!!on;save();refreshPayMethods();
 }
 function addPaymentMethod(){
   const type=document.getElementById('newPayType').value;
   const details=document.getElementById('newPayDetails').value.trim();
+  const accId=document.getElementById('newPayAccount').value;
   if(!details)return showMessage('أدخل تفاصيل طريقة السداد');
+  if(!accId)return showMessage('اختار الخزينة أو الحساب البنكي اللي هيتحصّل فيه');
   D.building.paymentMethods=D.building.paymentMethods||[];
-  D.building.paymentMethods.push({id:uid(),type,details});
-  save();
-  document.getElementById('payMethodsList').innerHTML=paymentMethodsListHTML(D.building.paymentMethods);
+  D.building.paymentMethods.push({id:uid(),type,details,accountId:accId,active:true});
+  save();refreshPayMethods();
   document.getElementById('newPayDetails').value='';
 }
 function removePaymentMethod(id){
   D.building.paymentMethods=(D.building.paymentMethods||[]).filter(m=>m.id!==id);
-  save();
-  document.getElementById('payMethodsList').innerHTML=paymentMethodsListHTML(D.building.paymentMethods);
+  save();refreshPayMethods();
+}
+/* الطرق اللي الساكن مسموح يشوفها: مفعّلة ومربوطة بحساب موجود */
+function activePaymentMethods(){
+  return (D.building.paymentMethods||[]).filter(m=>
+    m&&m.type&&m.active!==false&&m.accountId&&(D.accounts||[]).some(a=>a.id===m.accountId));
 }
 function savePaymentContact(){
   D.building.contactPhoneCountry=document.getElementById('payCountry').value;
@@ -9602,7 +9659,7 @@ function pageOwnerHome(u){
     </div>
   </div>
   ${((D.building.paymentMethods&&D.building.paymentMethods.length)||D.building.contactPhone)?`<div class="card mtop2" style="background:var(--tint-success)"><h3>💳 طرق السداد والتواصل مع رئيس الاتحاد</h3>
-    ${(D.building.paymentMethods||[]).map(m=>`<div class="mtop small"><span class="badge y">${esc(m.type)}</span> ${esc(m.details)}</div>`).join('')}
+    ${activePaymentMethods().map(m=>`<div class="mtop small"><span class="badge y">${esc(m.type)}</span> ${esc(m.details)}</div>`).join('')}
     ${D.building.contactPhone?`<p class="small mtop">📱 <b>للتواصل:</b> ${esc(D.building.contactPhoneCountry||'')} ${esc(D.building.contactPhone)}
     <a href="https://wa.me/${(D.building.contactPhoneCountry||'').replace('+','')}${D.building.contactPhone}" target="_blank" style="margin-right:8px">💬 واتساب</a></p>`:''}
   </div>`:''}
@@ -9871,7 +9928,6 @@ document.addEventListener('DOMContentLoaded',async()=>{
 <script type="module" src="emartna-users.js"></script>
 <script type="module" src="emartna-platform.js"></script>
 <script type="module" src="emartna-contactlog.js"></script>
-<script type="module" src="emartna-permreport.js"></script>
 <script type="module" src="emartna-recycle.js"></script>
 <script type="module" src="emartna-floors.js"></script>
 <script type="module" src="emartna-modal-size.js"></script>
