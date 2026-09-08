@@ -179,11 +179,16 @@ th .sort-ic{opacity:.5;font-size:10px}
 td{padding:10px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
 tr:hover td{background:#faf8f2}
 .table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);-webkit-overflow-scrolling:touch;position:relative}
-.hscroll-proxy{position:fixed;bottom:0;height:16px;overflow-x:auto;overflow-y:hidden;
-  z-index:60;background:var(--panel,#fff);border-top:1px solid var(--line);
-  box-shadow:0 -2px 8px rgba(0,0,0,.08);display:none}
-.hscroll-proxy>div{height:1px}
-@media print{.hscroll-proxy{display:none!important}}
+.hnav{position:fixed;bottom:14px;z-index:80;display:none;gap:6px;align-items:center;
+  background:var(--panel,#fff);border:1px solid var(--line);border-radius:999px;
+  padding:5px 8px;box-shadow:0 4px 16px rgba(0,0,0,.18)}
+.hnav button{border:0;background:var(--accent,#128C7E);color:#fff;width:34px;height:34px;
+  border-radius:50%;font-size:17px;line-height:1;cursor:pointer;display:flex;
+  align-items:center;justify-content:center}
+.hnav button:disabled{opacity:.35;cursor:default}
+.hnav .hbar{width:70px;height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+.hnav .hbar i{display:block;height:100%;background:var(--accent,#128C7E);border-radius:3px}
+@media print{.hnav{display:none!important}}
 @media(max-width:860px){
   .table-wrap{background:linear-gradient(to left,var(--panel) 0%,transparent 12px) left/16px 100% no-repeat local,linear-gradient(to right,var(--panel) 0%,transparent 12px) right/16px 100% no-repeat local,linear-gradient(to left,rgba(0,0,0,.12),transparent 16px) left/16px 100% no-repeat scroll,linear-gradient(to right,rgba(0,0,0,.12),transparent 16px) right/16px 100% no-repeat scroll}
   .table-wrap table td,.table-wrap table th{padding:8px 8px;font-size:12.5px;white-space:nowrap}
@@ -820,7 +825,8 @@ function generateYearOfTestData(data){
   const behaviors=['onTime','onTime','onTime','onTime','onTime','onTime','onTime','onTime','late','late','late','late','late','late','partial','partial','partial','partial','debt','debt','debt','overpay','overpay','mixed'];
   const today=new Date();
   const curYM=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0');
-  const months=[]; for(let i=11;i>=0;i--)months.push(addMonthsToYM(curYM,-i));
+  const DEMO_MONTHS=24;   // سنتين بيانات بدل سنة
+  const months=[]; for(let i=DEMO_MONTHS-1;i>=0;i--)months.push(addMonthsToYM(curYM,-i));
   const cashAcc=data.accounts[0].id, bankAcc=data.accounts[1]?data.accounts[1].id:data.accounts[0].id;
   months.forEach((month,mi)=>{
     const chargeDate=month+'-01';
@@ -828,7 +834,7 @@ function generateYearOfTestData(data){
       const behavior=behaviors[i]||'onTime';
       if(!a.monthlyFee||a.monthlyFee<=0)return;
       data.ledger.push({id:genId(),apartmentId:a.id,type:'شهري',amount:a.monthlyFee,month,date:chargeDate,note:'اشتراك شهر '+month,createdAt:chargeDate+'T09:00:00.000Z'});
-      const isRecent=mi>=10; // آخر شهرين نسيبهم "مفتوحين" زي الواقع، ما نخليش كله متسدد
+      const isRecent=mi>=DEMO_MONTHS-2; // آخر شهرين نسيبهم "مفتوحين" زي الواقع، ما نخليش كله متسدد
       if(behavior==='onTime'){
         data.ledger.push({id:genId(),apartmentId:a.id,type:'دفعة',amount:a.monthlyFee,accountId:mi%2===0?cashAcc:bankAcc,month,date:addDaysToDate(chargeDate,2),note:'دفعة شهر '+month,createdAt:addDaysToDate(chargeDate,2)+'T10:00:00.000Z'});
       }else if(behavior==='late'){
@@ -844,32 +850,169 @@ function generateYearOfTestData(data){
         if(mi%2===0)data.ledger.push({id:genId(),apartmentId:a.id,type:'دفعة',amount:a.monthlyFee,accountId:cashAcc,month,date:addDaysToDate(chargeDate,7),note:'دفعة شهر '+month,createdAt:addDaysToDate(chargeDate,7)+'T13:00:00.000Z'});
       }
     });
-    const cats=data.expenseCategories;
-    const expenseTemplates=[['كهرباء المرافق العامة',350],['مياه',180],['أجر حارس/بواب',1200],['نظافة',250]];
+    /* مصروفات ثابتة كل شهر + نثريات متغيرة، على الخزنتين مش واحدة */
+    const expenseTemplates=[['كهرباء المرافق العامة',350,cashAcc],['مياه',180,cashAcc],
+      ['أجر حارس/بواب',1200,bankAcc],['نظافة',250,cashAcc],['صيانة مصعد',400,bankAcc]];
     expenseTemplates.forEach((t,ti)=>{
-      data.expenses.push({id:genId(),date:addDaysToDate(chargeDate,8+ti*2),category:t[0],amount:t[1]+((mi*13)%60),accountId:cashAcc,description:t[0]+' - '+month,attachments:[]});
+      data.expenses.push({id:genId(),date:addDaysToDate(chargeDate,6+ti*2),category:t[0],
+        amount:t[1]+((mi*13)%60),accountId:t[2],description:t[0]+' - '+month,attachments:[]});
+    });
+    /* مصروفات عرضية: مش كل شهر، وبمبالغ متفاوتة */
+    if(mi%2===0)data.expenses.push({id:genId(),date:addDaysToDate(chargeDate,18),
+      category:'صيانة وإصلاحات',amount:300+((mi*37)%700),accountId:cashAcc,
+      description:'إصلاحات متفرقة - '+month,attachments:[]});
+    if(mi%4===1)data.expenses.push({id:genId(),date:addDaysToDate(chargeDate,22),
+      category:'دهانات وتشطيبات',amount:900+((mi*53)%800),accountId:bankAcc,
+      description:'دهان مدخل/سلالم - '+month,attachments:[]});
+    if(mi%6===2)data.expenses.push({id:genId(),date:addDaysToDate(chargeDate,25),
+      category:'أخرى',amount:200+((mi*29)%400),accountId:cashAcc,
+      description:'مصروفات نثرية - '+month,attachments:[]});
+
+    /* تحويل شهري من النقدي للبنك (ترحيل المتحصلات) */
+    data.transfers=data.transfers||[];
+    data.transfers.push({id:genId(),date:addDaysToDate(chargeDate,26),
+      fromAccount:cashAcc,toAccount:bankAcc,amount:2000+((mi*97)%1500),
+      note:'ترحيل متحصلات '+month});
+
+    /* تسويات: إعفاء أو خصم لوحدة كل كام شهر */
+    if(mi%5===3){
+      const ap=data.apartments[(mi*7)%data.apartments.length];
+      data.ledger.push({id:genId(),apartmentId:ap.id,type:'تسوية',
+        amount:-Math.round(ap.monthlyFee*0.5),month,date:addDaysToDate(chargeDate,12),
+        note:'إعفاء جزئي - ظروف خاصة',createdAt:addDaysToDate(chargeDate,12)+'T11:00:00.000Z'});
+    }
+    /* صرف: رد مبلغ لساكن دفع زيادة */
+    if(mi%7===4){
+      const ap=data.apartments[(mi*11)%data.apartments.length];
+      data.ledger.push({id:genId(),apartmentId:ap.id,type:'صرف',
+        amount:Math.round(ap.monthlyFee*0.3),accountId:cashAcc,month,
+        date:addDaysToDate(chargeDate,19),note:'رد فرق سداد زائد',
+        createdAt:addDaysToDate(chargeDate,19)+'T12:00:00.000Z'});
+    }
+  });
+  /* ٣ مشاريع على مدى السنتين: منتهي، جاري، ولسه بادئ */
+  const PROJECTS=[
+    {name:'صيانة وتحديث المصعد',desc:'استبدال كابلات المصعد وصيانة شاملة',
+     mi:2,  share:250,status:'done',   cat:'صيانة مصعد',   spend:[4200,1800],payRate:0.95},
+    {name:'دهان واجهة العمارة',   desc:'دهان الواجهة الخارجية والمدخل',
+     mi:9,  share:400,status:'active', cat:'دهانات وتشطيبات',spend:[5500,3200],payRate:0.7},
+    {name:'تركيب كاميرات مراقبة', desc:'٦ كاميرات بالمدخل والسلالم وجهاز تسجيل',
+     mi:19, share:300,status:'active', cat:'أخرى',          spend:[3800],     payRate:0.35},
+  ];
+  PROJECTS.forEach(pr=>{
+    const pid=genId();
+    const start=months[Math.min(pr.mi,months.length-1)];
+    data.projects.push({id:pid,name:pr.name,description:pr.desc,status:pr.status,
+      createdAt:start+'-15T10:00:00.000Z',attachments:[]});
+    data.apartments.forEach((a,i)=>{
+      data.ledger.push({id:genId(),apartmentId:a.id,type:'مشروع',amount:pr.share,
+        project:pr.name,projectId:pid,date:start+'-15',note:pr.name,
+        createdAt:start+'-15T10:30:00.000Z'});
+      /* جزء من الملاك سدّد حصته في المشروع */
+      if((i/data.apartments.length)<pr.payRate){
+        data.ledger.push({id:genId(),apartmentId:a.id,type:'دفعة',amount:pr.share,
+          accountId:i%2?bankAcc:cashAcc,projectId:pid,date:addDaysToDate(start+'-15',5+(i%20)),
+          note:'سداد حصة '+pr.name,createdAt:addDaysToDate(start+'-15',5+(i%20))+'T10:00:00.000Z'});
+      }
+    });
+    pr.spend.forEach((amt,k)=>{
+      data.expenses.push({id:genId(),date:addDaysToDate(start+'-15',20+k*25),category:pr.cat,
+        amount:amt,accountId:bankAcc,description:'دفعة '+(k+1)+' - '+pr.name,projectId:pid,
+        attachments:[]});
     });
   });
-  // مشروع نموذجي (تحصيل + صرف)
-  const projectId=genId();
-  data.projects.push({id:projectId,name:'صيانة وتحديث المصعد',description:'استبدال كابلات المصعد وصيانة شاملة',status:'active',createdAt:months[2]+'-15T10:00:00.000Z',attachments:[]});
-  data.apartments.forEach(a=>{data.ledger.push({id:genId(),apartmentId:a.id,type:'مشروع',amount:250,project:'صيانة وتحديث المصعد',projectId,date:months[2]+'-15',note:'صيانة وتحديث المصعد',createdAt:months[2]+'-15T10:30:00.000Z'});});
-  data.expenses.push({id:genId(),date:months[2]+'-20',category:'صيانة مصعد',amount:4200,accountId:bankAcc,description:'دفعة لشركة المصاعد - كابلات وصيانة',projectId,attachments:[]});
-  // بلاغات صيانة بحالات مختلفة
+  /* بلاغات صيانة موزعة على السنتين بحالات مختلفة */
   data.maintenanceReports=data.maintenanceReports||[];
-  data.maintenanceReports.push({id:genId(),title:'تسريب مياه في الدور الثاني',description:'تسريب من شقة أعلى مؤثر على السقف',apartmentId:data.apartments[5].id,reportedByUsername:data.apartments[5].username,status:'resolved',vendorId:null,resolutionNote:'تم استدعاء سباك وإصلاح التسريب',createdAt:months[9]+'-05T09:00:00.000Z'});
-  data.maintenanceReports.push({id:genId(),title:'عطل في إضاءة السلم',description:'لمبات السلم الرئيسي مطفية من الدور 3',apartmentId:data.apartments[12].id,reportedByUsername:data.apartments[12].username,status:'in_progress',vendorId:null,resolutionNote:'',createdAt:months[11]+'-10T09:00:00.000Z'});
-  data.maintenanceReports.push({id:genId(),title:'صوت غريب في المصعد',description:'صوت احتكاك عند الصعود',apartmentId:data.apartments[2].id,reportedByUsername:data.apartments[2].username,status:'open',vendorId:null,resolutionNote:'',createdAt:months[11]+'-25T09:00:00.000Z'});
+  const MAINT=[
+    ['تسريب مياه في الدور الثاني','تسريب من شقة أعلى مؤثر على السقف','resolved','تم استدعاء سباك وإصلاح التسريب',3,5],
+    ['باب المدخل الرئيسي لا يغلق','الكالون مكسور والباب بيفضل مفتوح','resolved','تم تغيير الكالون',7,8],
+    ['انقطاع مياه بالدور الأخير','ضعف في الضخ للأدوار العليا','resolved','تم صيانة الطلمبة',11,14],
+    ['كسر في بلاط السلم','بلاطتين مكسورتين في سلم الدور الأول','resolved','تم استبدال البلاط',15,3],
+    ['المصعد بيقف بين الأدوار','بيقف فجأة ويحتاج إعادة تشغيل','in_progress','',20,9],
+    ['عطل في إضاءة السلم','لمبات السلم الرئيسي مطفية من الدور 3','in_progress','',22,12],
+    ['صوت غريب في المصعد','صوت احتكاك عند الصعود','open','',23,2],
+    ['رشح في جراج العمارة','رطوبة في حائط الجراج','open','',23,17],
+  ];
+  MAINT.forEach(m=>{
+    const ap=data.apartments[m[5]%data.apartments.length];
+    data.maintenanceReports.push({id:genId(),title:m[0],description:m[1],apartmentId:ap.id,
+      reportedByUsername:ap.username,status:m[2],vendorId:null,resolutionNote:m[3],
+      createdAt:months[Math.min(m[4],months.length-1)]+'-05T09:00:00.000Z'});
+  });
+  const __oldMaint=[
+  ];
   // مقاولون
   data.vendors=data.vendors||[];
   data.vendors.push({id:genId(),name:'شركة الأمان للصيانة العامة',category:'صيانة عامة',phone:'01000000001',contractStart:months[0]+'-01',contractEnd:addMonthsToYM(curYM,6)+'-01',notes:'عقد صيانة سنوي شامل'});
   data.vendors.push({id:genId(),name:'مصاعد النيل',category:'مصعد',phone:'01000000002',contractStart:months[2]+'-01',contractEnd:'',notes:''});
-  // استطلاع رأي مغلق
-  data.polls.push({id:genId(),title:'هل نوافق على تركيب كاميرات مراقبة؟',description:'اقتراح تركيب 4 كاميرات في المدخل والسلم',options:['موافق','غير موافق'],votes:Object.fromEntries(data.apartments.slice(0,15).map((a,i)=>[a.username,i%4===0?'غير موافق':'موافق'])),status:'closed',showResultsBeforeClose:true,createdAt:months[6]+'-01T10:00:00.000Z',comments:[]});
-  // اجتماع سابق منتهي
-  data.meetings.push({id:genId(),title:'اجتماع الجمعية العمومية السنوي',date:months[3]+'-20',time:'19:00',location:'مدخل العمارة',agenda:'مناقشة الميزانية السنوية وانتخاب لجنة جديدة',status:'done',outcomes:'تمت الموافقة على الميزانية وتشكيل لجنة متابعة الصيانة',createdAt:months[3]+'-05T10:00:00.000Z',comments:[],remindedAt:null});
-  // إعلان
-  data.announcements.push({id:genId(),title:'صيانة دورية للمصعد الأسبوع القادم',body:'برجاء العلم أنه سيتم إيقاف المصعد يوم الخميس القادم من 10 ص حتى 2 ظ لأعمال الصيانة الدورية.',date:months[11]+'-20',comments:[]});
+  /* استطلاعات: مغلقة ومفتوحة */
+  const POLLS=[
+    ['هل نوافق على تركيب كاميرات مراقبة؟','اقتراح تركيب ٦ كاميرات في المدخل والسلم',
+     ['موافق','غير موافق'],'closed',6,18],
+    ['ميعاد اجتماع الجمعية العمومية','اختار الميعاد الأنسب ليك',
+     ['الجمعة 7 م','السبت 8 م','الأحد 7 م'],'closed',13,20],
+    ['هل ندهن الواجهة السنة دي؟','التكلفة التقديرية ٤٠٠ جنيه على الوحدة',
+     ['موافق','مؤجل للسنة الجاية'],'closed',17,22],
+    ['اقتراح تغيير شركة النظافة','بعد شكاوى متكررة من مستوى النظافة',
+     ['نغيّر','نديهم فرصة أخيرة'],'open',23,9],
+  ];
+  POLLS.forEach(pl=>{
+    data.polls.push({id:genId(),title:pl[0],description:pl[1],options:pl[2],
+      votes:Object.fromEntries(data.apartments.slice(0,pl[5]).map((a,i)=>
+        [a.username,pl[2][i%pl[2].length]])),
+      status:pl[3],showResultsBeforeClose:true,
+      createdAt:months[Math.min(pl[4],months.length-1)]+'-01T10:00:00.000Z',comments:[]});
+  });
+
+  /* اجتماعات: كل ٦ شهور + واحد قادم */
+  const MEET=[
+    ['اجتماع الجمعية العمومية السنوي','مناقشة الميزانية السنوية وانتخاب لجنة جديدة',
+     'تمت الموافقة على الميزانية وتشكيل لجنة متابعة الصيانة','done',3],
+    ['اجتماع طارئ - عطل المصعد','مناقشة تكلفة إصلاح المصعد وطريقة التحصيل',
+     'اتفقنا على تحصيل ٢٥٠ جنيه من كل وحدة','done',8],
+    ['اجتماع نصف السنة','مراجعة المصروفات ونسب التحصيل',
+     'تم استعراض التقرير المالي والموافقة عليه','done',14],
+    ['اجتماع الجمعية العمومية السنوي','الميزانية الجديدة ومشروع الكاميرات',
+     'الموافقة على مشروع الكاميرات بأغلبية','done',20],
+    ['اجتماع متابعة الصيانة','متابعة أعمال الدهانات وعقد شركة النظافة','','upcoming',23],
+  ];
+  MEET.forEach(mt=>{
+    const mo=months[Math.min(mt[4],months.length-1)];
+    data.meetings.push({id:genId(),title:mt[0],date:mo+'-20',time:'19:00',
+      location:'مدخل العمارة',agenda:mt[1],status:mt[3],outcomes:mt[2],
+      createdAt:mo+'-05T10:00:00.000Z',comments:[],remindedAt:null});
+  });
+
+  /* إعلانات: واحد كل شهرين تقريبًا */
+  const ANN=[
+    ['صيانة دورية للمصعد','هيتم إيقاف المصعد يوم الخميس من ١٠ ص لـ ٢ ظ لأعمال الصيانة الدورية.',22],
+    ['تذكير بسداد الاشتراك الشهري','برجاء سداد اشتراك الشهر قبل يوم ١٠ لتفادي التأخير.',20],
+    ['قطع مياه مجدول','هيتم قطع المياه عن العمارة يوم الثلاثاء من ٩ ص لـ ١٢ ظ لصيانة الخط الرئيسي.',17],
+    ['بدء أعمال دهان الواجهة','هيبدأ الشغل الأسبوع الجاي — برجاء إغلاق الشبابيك أثناء العمل.',14],
+    ['تنبيه بخصوص الجراج','ممنوع ركن السيارات أمام مدخل الجراج نهائيًا.',10],
+    ['نتيجة استطلاع الكاميرات','تمت الموافقة على تركيب الكاميرات بأغلبية ٧٥٪.',6],
+    ['تغيير موعد جمع القمامة','بقى يوميًا الساعة ٨ صباحًا بدل ٦ مساءً.',2],
+  ];
+  ANN.forEach(an=>{
+    data.announcements.push({id:genId(),title:an[0],body:an[1],
+      date:months[Math.max(0,months.length-1-an[2])]+'-20',comments:[]});
+  });
+
+  /* مقترحات من الملاك بحالات مختلفة */
+  data.suggestions=data.suggestions||[];
+  const SUGG=[
+    ['تركيب إنتركم لكل الشقق','يوفر أمان أكتر ويريح الحارس','approved',16,4],
+    ['زراعة نباتات في المدخل','منظر المدخل محتاج تحسين','approved',12,7],
+    ['تخصيص أماكن ركن مرقّمة','فيه خلافات متكررة على أماكن الركن','pending',21,11],
+    ['تركيب سخان مركزي للمياه','مقترح للأدوار العليا','rejected',9,15],
+    ['إضافة كشاف على باب الجراج','الباب مظلم بالليل','pending',23,19],
+  ];
+  SUGG.forEach(sg=>{
+    const ap=data.apartments[sg[4]%data.apartments.length];
+    data.suggestions.push({id:genId(),title:sg[0],body:sg[1],status:sg[2],
+      apartmentId:ap.id,createdByUsername:ap.username,
+      createdAt:months[Math.min(sg[3],months.length-1)]+'-08T10:00:00.000Z',comments:[]});
+  });
   return data;
 }
 async function seedRegistry(){
@@ -6906,7 +7049,10 @@ function sendChatMessage(){
   const u=currentUser(); const ap=myApartment();
   const authorLabel=isStaffRole(u.role)?'👔 '+roleLabelAr(u.role):(ap?'🏠 '+unitLabel(ap)+' - '+u.name:u.name);
   D.buildingChat=D.buildingChat||[];
-  D.buildingChat.push({id:uid(),kind:'message',authorUsername:u.username,authorLabel,text,createdAt:new Date().toISOString()});
+  /* author_id مطلوب في سياسة الحماية — من غيره الرسالة بتترفض */
+  const __auth=(window.CLOUD_AUTH&&CLOUD_AUTH.user)?CLOUD_AUTH.user.id:null;
+  D.buildingChat.push({id:uid(),kind:'message',authorUsername:u.username,authorLabel,text,
+    authorId:__auth,createdAt:new Date().toISOString()});
   u.lastChatRead=new Date().toISOString();
   save();inp.value='';renderContent();
   pushNotification({type:'chat',title:'رسالة جديدة في محادثة السكان',message:authorLabel+': '+text.slice(0,60),audience:'all',link:'chat'});
@@ -6958,6 +7104,7 @@ function pageAnalytics(){
       <button class="btn sm ghost" onclick="setAnalyticsPeriod(3)">آخر 3 شهور</button>
       <button class="btn sm ghost" onclick="setAnalyticsPeriod(6)">آخر 6 شهور</button>
       <button class="btn sm ghost" onclick="setAnalyticsPeriod(12)">آخر 12 شهر</button>
+      <button class="btn sm ghost" onclick="setAnalyticsPeriod(24)">آخر سنتين</button>
       <button class="btn sm ghost" onclick="setAnalyticsYearToDate()">من بداية السنة</button>
     </div>
   </div>
@@ -10026,55 +10173,67 @@ document.addEventListener('DOMContentLoaded',async()=>{
 <script type="module" src="emartna-perms.js"></script>
 <script type="module" src="emartna-lastlogin.js"></script>
 
+
+
 <script>
-/* شريط تمرير أفقي عائم: الجداول العريضة شريطها في آخر الجدول، فلو الجدول
-   أطول من الشاشة لازم تنزل لآخره عشان تحركه. ده بيتثبّت تحت النافذة. */
+/* ---------- تحريك الجداول العريضة يمين وشمال ----------
+   الشريط الأصلي بيبقى في آخر الجدول، والصفحة بتتمرّر جوه .content،
+   فلو الجدول أطول من الشاشة لازم تنزل لآخره عشان تحركه.
+   وشريط التمرير الوهمي مش حل: المتصفحات بتخفي الأشرطة على الموبايل وماك.
+   فده زرارين عائمين + مؤشر مكان — بيشتغلوا في كل الحالات. */
 (function(){
-  let proxy=null, target=null;
+  var nav=null,target=null;
   function ensure(){
-    if(proxy)return proxy;
-    proxy=document.createElement('div');
-    proxy.className='hscroll-proxy';
-    proxy.innerHTML='<div></div>';
-    document.body.appendChild(proxy);
-    proxy.addEventListener('scroll',function(){
-      if(target&&!proxy.__lock)target.scrollLeft=proxy.scrollLeft;
+    if(nav)return nav;
+    nav=document.createElement('div');
+    nav.className='hnav';
+    nav.innerHTML='<button type="button" data-d="1">›</button>'+
+                  '<span class="hbar"><i></i></span>'+
+                  '<button type="button" data-d="-1">‹</button>';
+    document.body.appendChild(nav);
+    nav.addEventListener('click',function(e){
+      var b=e.target.closest('button'); if(!b||!target)return;
+      target.scrollBy({left:Number(b.dataset.d)*Math.round(target.clientWidth*0.7),
+                       behavior:'smooth'});
+      setTimeout(sync,420);
     });
-    return proxy;
+    return nav;
   }
   function pick(){
     var best=null,bestVis=0,vh=window.innerHeight;
     document.querySelectorAll('.table-wrap').forEach(function(w){
-      if(w.scrollWidth<=w.clientWidth+4)return;      // مفيش تمرير أفقي أصلًا
+      if(w.scrollWidth<=w.clientWidth+4)return;    // مفيش تمرير أفقي
       var r=w.getBoundingClientRect();
       var vis=Math.min(r.bottom,vh)-Math.max(r.top,0);
-      if(vis<60)return;                              // مش ظاهر كفاية
-      if(r.bottom<=vh-4)return;                      // شريطه الأصلي باين خلاص
+      if(vis<80)return;                            // مش ظاهر كفاية
       if(vis>bestVis){bestVis=vis;best=w;}
     });
     return best;
   }
   function sync(){
-    var w=pick(), p=ensure();
-    if(!w){p.style.display='none';target=null;return;}
+    var w=pick(),n=ensure();
+    if(!w){n.style.display='none';target=null;return;}
     target=w;
     var r=w.getBoundingClientRect();
-    p.style.display='block';
-    p.style.left=r.left+'px';
-    p.style.width=r.width+'px';
-    p.firstChild.style.width=w.scrollWidth+'px';
-    p.__lock=true;p.scrollLeft=w.scrollLeft;p.__lock=false;
+    n.style.display='flex';
+    /* نحطه في نص الجدول أفقيًا */
+    n.style.left=Math.round(r.left+r.width/2-70)+'px';
+    var max=w.scrollWidth-w.clientWidth;
+    var pos=max>0?w.scrollLeft/max:0;
+    var rtl=getComputedStyle(w).direction==='rtl';
+    n.querySelector('.hbar i').style.width=Math.max(12,Math.round(70*(w.clientWidth/w.scrollWidth)))+'px';
+    n.querySelector('.hbar i').style.marginInlineStart=
+      Math.round((70-Math.max(12,70*(w.clientWidth/w.scrollWidth)))*(rtl?-pos:pos))+'px';
+    var atStart=Math.abs(w.scrollLeft)<2, atEnd=Math.abs(Math.abs(w.scrollLeft)-max)<2;
+    n.querySelectorAll('button').forEach(function(b){
+      var fwd=Number(b.dataset.d)>0;
+      b.disabled = rtl ? (fwd?atStart:atEnd) : (fwd?atEnd:atStart);
+    });
   }
-  document.addEventListener('scroll',function(e){
-    if(e.target&&e.target.classList&&e.target.classList.contains('table-wrap')&&e.target===target){
-      var p=ensure();p.__lock=true;p.scrollLeft=e.target.scrollLeft;p.__lock=false;
-      return;
-    }
-    sync();
-  },true);
+  document.addEventListener('scroll',sync,true);
   window.addEventListener('resize',sync);
-  setInterval(sync,700);        // الجداول بتتبني ديناميكيًا
-  setTimeout(sync,800);
+  setInterval(sync,600);
+  setTimeout(sync,900);
 })();
 </script>
 

@@ -199,6 +199,9 @@ const MAPS = {
       authorUsername:'legacy_username', eventType:'event_type',
       icon:'icon', title:'title', message:'message', link:'link',
       createdAt:'created_at',
+      /* سياسة الحماية بتطلب author_id = المستخدم الحالي لأي رسالة.
+         كان مش بيتبعت خالص، فكل رسالة بيكتبها المستخدم كان الحفظ بيترفض. */
+      authorId:'author_id',
     },
   },
 
