@@ -357,6 +357,7 @@
               عرض · طباعة · إضافة · تعديل · حذف — لكل شاشة على حدة</div>
           </div>
           <div class="flexrow" style="gap:6px;flex-wrap:wrap">
+            <button class="btn sm ghost" onclick="openPermReport()">📋 تقرير الصلاحيات</button>
             <span class="badge ${deps?'g':'n'}">🤝 ${deps} نائب</span>
             <span class="badge n">👥 ${staff.length} إداري</span>
           </div>
