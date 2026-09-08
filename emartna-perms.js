@@ -264,16 +264,46 @@
     if (btn) btn.textContent = allOn ? 'افتح المجموعة' : 'اقفل المجموعة';
   };
 
-  window.saveScreenPerms = function(userId){
+  /* الصلاحيات بتتخزّن في memberships/invitations على السيرفر.
+     كانت بتتحفظ محليًا بس (u.screenPerms + save)، والمستخدمين مش
+     ضمن المجموعات اللي بتتزامن — فأول ما البيانات تتحمّل من جديد
+     كانت الصلاحيات ترجع زي ما كانت. */
+  window.saveScreenPerms = async function(userId){
     const u = (D.users || []).find(x => x.id === userId);
     if (!u) return;
+
     const out = {};
     document.querySelectorAll('.sp-chk').forEach(el => {
       const s = el.dataset.s, a = el.dataset.a;
       out[s] = out[s] || {};
       out[s][a] = el.checked;
     });
+
+    /* صلاحية المجموعة مشتقّة من التفصيلي عشان الطبقتين ما يتعارضوش */
+    const perms = { home:true };
+    screens(u.role).forEach(g => {
+      perms[g.key] = g.items.some(it => out[it.key] && out[it.key].view);
+    });
+
+    const sb = window.CLOUD && window.CLOUD._sb;
+    if (!sb || (!u.__membershipId && !u.__inviteId)){
+      if (window.showMessage) showMessage(
+        'مش قادر أحفظ الصلاحيات: المستخدم ده مش متزامن مع السحابة.');
+      return;
+    }
+    try{
+      const tbl = u.__membershipId ? 'memberships' : 'invitations';
+      const id  = u.__membershipId || u.__inviteId;
+      const { error } = await sb.from(tbl)
+        .update({ permissions: perms, screen_perms: out }).eq('id', id);
+      if (error) throw error;
+    }catch(e){
+      if (window.showMessage) showMessage('الحفظ فشل: ' + (e.message || ''));
+      return;
+    }
+
     u.screenPerms = out;
+    u.permissions = perms;
     save();
     closeModal();
     if (window.toast) toast('اتحفظت الصلاحيات');
@@ -283,7 +313,7 @@
   /* ---------- مين عنده صلاحية إيه ---------- */
 
   window.openWhoCan = function(screenKey){
-    const gs = screens();
+    const gs = screens('admin');
     let sName = screenKey;
     gs.forEach(g => g.items.forEach(s => { if (s.key === screenKey) sName = s.icon + ' ' + s.label; }));
 
