@@ -652,11 +652,13 @@ window.openUserModal = function(id){
            ).join('')}
         </select></div>
       <div id="nuPerms">${permCheckboxes('nu', CLOUD_ROLES.admin.perms)}</div>
-      <details class="card mtop" id="nuDetailBox" ontoggle="if(this.open)buildInviteDetailGrid()">
+      <details class="card mtop" id="nuDetailBox">
         <summary style="cursor:pointer"><b>🔐 ضبط تفصيلي لكل شاشة</b>
-          <span class="small" style="color:var(--muted)"> — اختياري: حدد عرض/طباعة/تصدير/إضافة/تعديل/حذف
-          لكل شاشة على حدة</span></summary>
-        <div id="nuDetailGrid" class="mtop"></div>
+          <span class="small" style="color:var(--muted)"> — حدد عرض/طباعة/تصدير/إضافة/تعديل/حذف
+          واعتماد ومرفقات لكل شاشة على حدة</span></summary>
+        <div id="nuDetailGrid" class="mtop">${
+          window.permInviteGrid ? window.permInviteGrid('admin')
+          : '<p class="small">جدول الصلاحيات التفصيلي مش متحمّل.</p>'}</div>
       </details>
       <div class="field2"><label>وحدته في العمارة (اختياري)</label>
         <select id="nuApartment">
@@ -823,15 +825,31 @@ window.createAdminInvite = async function(){
         apartmentId: (apEl && apEl.value) || null, name });
     closeModal();
     await window.refreshUsers();
+    const base  = location.origin + location.pathname.replace(/[^/]*$/, '');
+    const link  = window.CLOUD.invites.link(inv.invite_code, base);
+    const bName = (D.building && D.building.name) || 'العمارة';
+    const text  =
+      `أهلًا ${name} 👋\n` +
+      `دي دعوتك للانضمام لتطبيق "${bName}" بصفة ${CLOUD_ROLES[role].label}.\n\n` +
+      `🔑 كود الدعوة: ${inv.invite_code}\n` +
+      `🔗 الرابط: ${link}\n\n` +
+      `افتح الرابط وسجّل برقم موبايلك، وهتلاقي صلاحياتك جاهزة.`;
+    const wa = '20' + String(phone || '').replace(/^0+/, '');
+
     openModal(`
       <h3>📨 دعوة ${esc(name)}</h3>
       <div class="card mtop" style="background:var(--tint-success);text-align:center">
         <p class="small">${CLOUD_ROLES[role].label}</p>
         <h2 style="letter-spacing:6px;font-family:monospace">${esc(inv.invite_code)}</h2>
       </div>
-      <p class="small mtop">ابعتله الكود ورابط الانضمام، وهو يسجّل بنفسه.</p>
+      <div class="field2 mtop"><label>الرسالة</label>
+        <textarea id="invMsg" rows="8" style="font-size:13px">${esc(text)}</textarea></div>
+      <p class="small" style="color:var(--muted)">
+        الرابط: <span style="word-break:break-all">${esc(link)}</span></p>
       <div class="modal-actions">
-        <button class="btn primary" onclick="closeModal()">تمام</button>
+        ${phone ? `<button class="btn primary" onclick="waSendInvite('${wa}')">📱 ابعت واتساب</button>` : ''}
+        <button class="btn" onclick="copyInviteMsg()">📋 نسخ</button>
+        <button class="btn ghost" onclick="closeModal()">إغلاق</button>
       </div>`);
   }catch(e){ showMessage(e.message); }
 };
@@ -840,8 +858,9 @@ window.createAdminInvite = async function(){
 window.roleBadge = function(role){
   const r = CLOUD_ROLES[role];
   if (!r) return '-';
-  const cls = role==='admin' ? 'b' : role==='accountant' ? 'g'
-            : role==='manager' ? 'y' : 'n';
+  const cls = role==='admin' ? 'b'
+            : (role==='accountant' || role==='treasurer') ? 'g'
+            : (role==='manager' || role==='deputy') ? 'y' : 'n';
   return `<span class="badge ${cls}">${r.label}</span>`;
 };
 

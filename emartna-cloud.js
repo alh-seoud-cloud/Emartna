@@ -459,11 +459,21 @@ async function fetchBuilding(buildingUuid, legacyId){
   (inv.data || []).forEach(v => {
     const apLegacy = apOf(v.apartment_id);
     const ap = apLegacy ? D.apartments.find(a => a.id === apLegacy) : null;
-    if (apLegacy && D.users.some(u => u.apartmentId === apLegacy)) return;
+    /* الوحدة عندها حساب بالفعل؟ ما نضيفش صف مكرر، لكن نعلّق كود الدعوة
+       على المستخدم الموجود — من غير كده زرار "ابعت الدعوة" كان بيقول
+       "مفيش دعوة للوحدة دي" رغم إن الدعوة اتعملت فعلاً. */
+    if (apLegacy){
+      const exist = D.users.find(u => u.apartmentId === apLegacy);
+      if (exist){
+        exist.inviteCode = v.invite_code;
+        exist.__inviteId = v.id;
+        return;
+      }
+    }
     D.users.push({
       id: 'inv_' + v.id,
       username: apLegacy || v.phone_e164 || v.email || '',
-      name: ap ? ap.ownerName : '',
+      name: v.name || (ap ? ap.ownerName : '') || '',
       role: v.role || 'owner',
       permissions: v.permissions || null,
       screenPerms: v.screen_perms || null,
@@ -1031,7 +1041,7 @@ const CLOUD = {
     /* دعوة واحدة لشقة */
     async create(legacyBuildingId, { apartmentId, phone, phoneCountry='+20',
                                      email, role='owner', permissions=null,
-                                     screenPerms=null, roleTemplate=null }){
+                                     screenPerms=null, roleTemplate=null, name=null }){
       const bUuid = cache.buildingUuid[legacyBuildingId];
       if (!bUuid) throw new Error('العمارة مش محمّلة');
       if (!phone && !email) throw new Error('لازم رقم موبايل أو إيميل');
@@ -1051,6 +1061,7 @@ const CLOUD = {
         permissions,
         screen_perms: screenPerms,
         role_template: roleTemplate,
+        name,
       }).select().single();
       if (error) throw error;
       return data;
