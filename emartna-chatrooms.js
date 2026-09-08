@@ -114,14 +114,23 @@ window.openNewRoom = function(){
 function peopleListHTML(list){
   const me = myId();
   if (!list.length) return '<p class="small">مفيش نتائج.</p>';
+  /* الأسماء كانت بتتلخبط على الموبايل: الصندوق ضيّق فالاسم بينزل حرف
+     تحت حرف. دلوقتي كل صف بعرض كامل والاسم فوق والتفاصيل تحته. */
   return list.map(p => `
-    <label class="checkline" style="display:flex;gap:8px;padding:4px 0">
+    <label class="rm-row" style="display:flex;align-items:center;gap:10px;
+           padding:8px 4px;border-bottom:1px solid var(--line);width:100%">
       <input type="checkbox" class="rm-chk" data-uid="${esc2(p.user_id)}"
-        ${p.user_id === me ? 'checked disabled' : ''}>
-      <span style="flex:1">${esc2(p.name || '—')}
-        <span class="small" style="color:var(--muted)"> · ${esc2(ROLE_AR[p.role] || p.role)}${
+        ${p.user_id === me ? 'checked disabled' : ''}
+        style="flex:0 0 auto;width:18px;height:18px;margin:0">
+      <span style="flex:1 1 auto;min-width:0">
+        <span style="display:block;font-weight:600;white-space:nowrap;
+              overflow:hidden;text-overflow:ellipsis">${esc2(p.name || '—')}
+          ${p.user_id === me ? '<span class="badge n">أنت</span>' : ''}</span>
+        <span class="small" style="display:block;color:var(--muted);
+              white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          ${esc2(ROLE_AR[p.role] || p.role)}${
           p.unit_number ? ' · وحدة ' + esc2(p.unit_number) : ''}</span>
-        ${p.user_id === me ? '<span class="badge n">أنت</span>' : ''}</span>
+      </span>
     </label>`).join('');
 }
 
@@ -281,10 +290,11 @@ async function paintRoom(){
   const box = document.querySelector('.modal .modal-body');
   const keep = document.getElementById('chatInput');
   const draft = keep ? keep.value : '';
+  const focused = keep && document.activeElement === keep;
   if (box && document.getElementById('chatBox')) box.innerHTML = body;
   else openModal(body, true);
   const inp = document.getElementById('chatInput');
-  if (inp){ inp.value = draft; }
+  if (inp){ inp.value = draft; if (focused) inp.focus(); }
   const cb = document.getElementById('chatBox');
   if (cb) cb.scrollTop = cb.scrollHeight;
 }
