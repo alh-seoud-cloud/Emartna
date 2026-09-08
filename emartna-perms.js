@@ -199,10 +199,11 @@
 
   /* جدول تفصيلي لمستخدم لسه ماتعملش — بيتعبّى من افتراضي الدور،
      ورئيس الاتحاد يعدّل عليه قبل ما يبعت الدعوة. */
-  window.permInviteGrid = function(role){
+  window.permInviteGrid = function(role, saved){
     const gs = screens(role);
+    const sp = saved || {};
     const row = (s, grpKey) => {
-      const cur = defaultsFor(role, grpKey);
+      const cur = sp[s.key] || defaultsFor(role, grpKey);
       const ok  = actionsFor(s.key).map(a => a.key);
       return `<tr>
         <td style="padding:5px 4px;font-size:12.5px">${s.icon} ${esc2(s.label)}</td>
@@ -225,7 +226,10 @@
             ${gs.map(g => `
               <tr style="background:var(--tint,#F3F8F7)">
                 <td colspan="${ACTIONS.length + 1}" style="padding:5px 4px">
-                  <b>${g.icon} ${esc2(g.label)}</b></td>
+                  <b>${g.icon} ${esc2(g.label)}</b>
+                  <button type="button" class="btn sm ghost"
+                    style="float:inline-end;padding:2px 8px"
+                    onclick="permToggleGroup('${esc2(g.key)}',this)">تبديل المجموعة</button></td>
               </tr>
               ${g.items.map(x => row(x, g.key)).join('')}`).join('')}
           </tbody>
@@ -389,6 +393,32 @@
         </details>` : ''}
       </div>`;
   }
+
+  /* مزامنة سجل الشاشات مع القاعدة.
+     من غيرها، أي شاشة جديدة تتضاف للتطبيق ما بتوصلش لسياسات الحماية،
+     فالرجوع لصلاحية المجموعة بيفشل عليها. بتتنفذ مرة كل جلسة. */
+  async function syncRegistry(){
+    try{
+      if (window.__screenRegSynced) return;
+      const sb = window.CLOUD && window.CLOUD._sb;
+      const me = window.currentUser ? currentUser() : null;
+      if (!sb || !me || me.role !== 'admin') return;
+      window.__screenRegSynced = true;
+
+      const rows = [];
+      const push = (groups, scope) => (groups || []).forEach((g, gi) =>
+        (g.items || []).forEach((it, ii) => rows.push({
+          screen_key: it[0], scope, group_key: g.key,
+          label: it[2] || it[1] || it[0], sort_order: gi * 100 + ii,
+        })));
+      push(window.ADMIN_NAV_GROUPS, 'admin');
+      push(window.OWNER_NAV_GROUPS, 'owner');
+      if (!rows.length) return;
+
+      await sb.rpc('sync_screen_registry', { p_screens: rows });
+    }catch(e){ /* المزامنة مش حرجة — الشاشة تشتغل عادي من غيرها */ }
+  }
+  setTimeout(syncRegistry, 4000);
 
   function hook(){
     if (window.__permCardHooked) return;

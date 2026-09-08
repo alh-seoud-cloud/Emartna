@@ -449,14 +449,21 @@ window.saveUser = async function(id){
       return showMessage('مينفعش تشيل آخر رئيس اتحاد نشط');
   }
 
+  /* الصلاحيات ماكانتش بتتحفظ من شاشة التعديل خالص — الدور والحالة بس.
+     يعني تظبط الجدول، تدوس حفظ، ومايتغيرش حاجة. */
+  const screenPerms = window.readScreenPerms ? readScreenPerms() : null;
+  const permissions = readPerms('u');
+
   try{
     if (u.__membershipId){
       const r = await window.CLOUD._sb.from('memberships')
-        .update({ role, active }).eq('id', u.__membershipId);
+        .update({ role, active, permissions, screen_perms: screenPerms })
+        .eq('id', u.__membershipId);
       if (r.error) throw r.error;
     } else if (u.__inviteId){
       const r = await window.CLOUD._sb.from('invitations')
-        .update({ role }).eq('id', u.__inviteId);
+        .update({ role, permissions, screen_perms: screenPerms })
+        .eq('id', u.__inviteId);
       if (r.error) throw r.error;
     }
     if (u.role !== role) logActivity('تغيير صلاحية', `${u.name}: ${u.role} → ${role}`);
@@ -652,15 +659,7 @@ window.openUserModal = function(id){
             `<option value="${k}">${CLOUD_ROLES[k].label} — ${CLOUD_ROLES[k].hint}</option>`
            ).join('')}
         </select></div>
-      <div id="nuPerms">${permCheckboxes('nu', CLOUD_ROLES.admin.perms)}</div>
-      <details class="card mtop" id="nuDetailBox">
-        <summary style="cursor:pointer"><b>🔐 ضبط تفصيلي لكل شاشة</b>
-          <span class="small" style="color:var(--muted)"> — حدد عرض/طباعة/تصدير/إضافة/تعديل/حذف
-          واعتماد ومرفقات لكل شاشة على حدة</span></summary>
-        <div id="nuDetailGrid" class="mtop">${
-          window.permInviteGrid ? window.permInviteGrid('admin')
-          : '<p class="small">جدول الصلاحيات التفصيلي مش متحمّل.</p>'}</div>
-      </details>
+      <div id="nuPerms">${permCheckboxes('nu', null)}</div>
       <div class="field2"><label>وحدته في العمارة (اختياري)</label>
         <select id="nuApartment">
           <option value="">— مش صاحب وحدة —</option>
@@ -699,7 +698,7 @@ window.openUserModal = function(id){
       ${isSelf ? '<p class="small" style="color:var(--muted)">مش هتقدر تغيّر صلاحيتك بنفسك</p>' : ''}
     </div>
 
-    <div id="uPerms">${permCheckboxes('u', perms)}</div>
+    <div id="uPerms">${permCheckboxes('u', perms, u)}</div>
 
     <div class="field2"><label class="checkline">
       <input type="checkbox" id="uActive" ${u.active!==false?'checked':''}
@@ -715,45 +714,94 @@ window.openUserModal = function(id){
     </div>`);
 };
 
-function permCheckboxes(prefix, perms){
+/* مصدر واحد للصلاحيات: جدول تفصيلي لكل شاشة.
+   الأقسام (المختصر) اتشالت — كانت بتتعارض مع التفصيلي وتوهم المستخدم
+   إنه قفل قسم وهو مفتوح. القسم دلوقتي مجرد صف عنوان فيه زرار
+   "تبديل المجموعة" بيفتح/يقفل شاشاته دفعة واحدة.
+   الشاشات بتتقرا من ADMIN_NAV_GROUPS / OWNER_NAV_GROUPS وقت العرض،
+   فأي شاشة جديدة تتضاف للتطبيق بتظهر هنا لوحدها. */
+function permCheckboxes(prefix, perms, user){
   const roleSel = document.getElementById(prefix + 'Role');
-  const role = roleSel ? roleSel.value : 'admin';
-  if (role === 'owner' || role === 'tenant'){
-    return `<p class="small" style="color:var(--muted)">
-      ${CLOUD_ROLES[role].label} — صلاحياته ثابتة على حسابه وشقته.</p>`;
+  const role = roleSel ? roleSel.value : (user && user.role) || 'admin';
+  if (!window.permInviteGrid){
+    return '<p class="small">جدول الصلاحيات مش متحمّل — حدّث الصفحة.</p>';
   }
   return `
     <div class="card mtop" style="background:var(--tint)">
-      <p class="small"><b>الأقسام المسموحة</b> — تقدر تظبطها زي ما تحب</p>
-      ${PERM_GROUPS.map(g => {
-        const on = !perms || perms[g.key] !== false;
-        return `<label class="checkline mtop">
-          <input type="checkbox" id="${prefix}P_${g.key}" ${on?'checked':''}
-                 onchange="syncGroupToDetail('${g.key}',this.checked)">
-          ${g.icon} ${g.label}
-          <span class="small" style="color:var(--muted)"> — ${g.note}</span>
-        </label>`;
-      }).join('')}
+      <div class="flexrow" style="justify-content:space-between;flex-wrap:wrap;gap:6px">
+        <b class="small">🔐 الصلاحيات — شاشة بشاشة</b>
+        <div class="flexrow" style="gap:6px;flex-wrap:wrap">
+          <button type="button" class="btn sm ghost" onclick="permBulk('all')">افتح الكل</button>
+          <button type="button" class="btn sm ghost" onclick="permBulk('view')">عرض وطباعة بس</button>
+          <button type="button" class="btn sm ghost" onclick="permBulk('none')">اقفل الكل</button>
+          <button type="button" class="btn sm ghost" onclick="permBulk('reset')">افتراضي الدور</button>
+        </div>
+      </div>
+      <div id="${prefix}DetailGrid" class="mtop">${
+        window.permInviteGrid(role, (user && user.screenPerms) || null)}</div>
     </div>`;
 }
+
+/* أزرار الضبط السريع فوق الجدول */
+window.permBulk = function(kind){
+  const roleSel = document.querySelector('#nuRole, #uRole');
+  const role = roleSel ? roleSel.value : 'admin';
+  document.querySelectorAll('.inv-chk').forEach(el => {
+    const a = el.dataset.a;
+    if (kind === 'all')       el.checked = true;
+    else if (kind === 'none') el.checked = false;
+    else if (kind === 'view') el.checked = ['view','print','export','att_view'].includes(a);
+    else if (kind === 'reset' && window.permDefaultsFor && window.pageGroupKey){
+      const grp = pageGroupKey(el.dataset.s, role === 'owner' || role === 'tenant');
+      el.checked = !!permDefaultsFor(role, grp)[a];
+    }
+  });
+};
+
+/* تبديل كل شاشات مجموعة — بديل خانة القسم القديمة */
+window.permToggleGroup = function(groupKey, btn){
+  const roleSel = document.querySelector('#nuRole, #uRole');
+  const role = roleSel ? roleSel.value : 'admin';
+  const g = (window.permScreens ? permScreens(role) : []).find(x => x.key === groupKey);
+  if (!g) return;
+  const keys = g.items.map(i => i.key);
+  const boxes = [...document.querySelectorAll('.inv-chk')].filter(el => keys.includes(el.dataset.s));
+  const allOn = boxes.every(b => b.checked);
+  boxes.forEach(b => { b.checked = !allOn; });
+  if (btn) btn.textContent = allOn ? 'افتح المجموعة' : 'اقفل المجموعة';
+};
 
 window.applyRoleTemplate = function(prefix){
   const role = document.getElementById(prefix + 'Role').value;
   const box  = document.getElementById(prefix + 'Perms');
-  if (box) box.innerHTML = permCheckboxes(prefix, (CLOUD_ROLES[role]||{}).perms);
-  const det = document.getElementById('nuDetailBox');
-  if (prefix === 'nu' && det && det.open) buildInviteDetailGrid();
+  if (box) box.innerHTML = permCheckboxes(prefix, null);
 };
 
+/* الجدول التفصيلي هو المصدر. صلاحية المجموعة بقت مشتقّة منه:
+   المجموعة مفتوحة لو فيه شاشة واحدة على الأقل مسموح عرضها.
+   بنفضل نبعتها عشان سياسات القاعدة اللي لسه بتقرا المجموعة. */
+window.readScreenPerms = function(){
+  const boxes = [...document.querySelectorAll('.inv-chk')];
+  if (!boxes.length) return null;
+  const out = {};
+  boxes.forEach(el => {
+    const s = el.dataset.s, a = el.dataset.a;
+    out[s] = out[s] || {}; out[s][a] = el.checked;
+  });
+  return out;
+};
+window.readInviteScreenPerms = window.readScreenPerms;
+
 function readPerms(prefix){
-  const role = document.getElementById(prefix + 'Role').value;
-  if (role === 'admin') return null;              // كل الصلاحيات
-  if (role === 'owner' || role === 'tenant')
-    return (CLOUD_ROLES[role] || {}).perms || null;
+  const roleEl = document.getElementById(prefix + 'Role');
+  const role = roleEl ? roleEl.value : 'admin';
+  const sp = window.readScreenPerms();
+  if (!sp) return role === 'admin' ? null : ((CLOUD_ROLES[role] || {}).perms || null);
+
+  const groups = (window.permScreens ? permScreens(role) : []);
   const out = { home:true };
-  PERM_GROUPS.forEach(g => {
-    const el = document.getElementById(prefix + 'P_' + g.key);
-    out[g.key] = el ? el.checked : false;
+  groups.forEach(g => {
+    out[g.key] = g.items.some(it => sp[it.key] && sp[it.key].view);
   });
   return out;
 }
