@@ -328,9 +328,11 @@ function renderAllContacts(q){
       <button class="btn ghost" onclick="closeModal()">إغلاق</button>
     </div>`;
 
-  const box = document.querySelector('.modal .modal-body') || null;
-  if (box && document.getElementById('ctSearch')){
-    const cur = document.getElementById('ctSearch');
+  /* النافذة اسمها #modalBox — .modal-body مش موجود في التطبيق،
+     فالبحث كان بيعيد فتح النافذة ويضيّع مكان المؤشر مع كل حرف. */
+  const box = document.getElementById('modalBox');
+  const cur = document.getElementById('ctSearch');
+  if (box && cur){
     const pos = cur.selectionStart;
     box.innerHTML = html;
     const nx = document.getElementById('ctSearch');

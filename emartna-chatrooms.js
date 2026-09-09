@@ -55,6 +55,12 @@ async function countMyRooms(){
 setTimeout(countMyRooms, 2500);
 document.addEventListener('emartna:building-complete', () => setTimeout(countMyRooms, 800));
 
+/* لو المستخدم قفل النافذة، التحديث الدوري لازم يقف —
+   من غير كده بيفضل يفتحها تاني كل ٦ ثواني. */
+setInterval(() => {
+  if (POLL && !document.getElementById('chatBox')) closeChatPoll();
+}, 3000);
+
 /* ---------- قائمة الغرف ---------- */
 
 window.openPrivateChats = async function(){
@@ -311,16 +317,25 @@ async function paintRoom(){
       <button class="btn ghost" onclick="closeChatPoll();openPrivateChats()">← الغرف</button>
     </div>`;
 
-  const box = document.querySelector('.modal .modal-body');
-  const keep = document.getElementById('chatInput');
+  /* النافذة في التطبيق اسمها #modalBox — مفيش عنصر اسمه .modal-body.
+     الكود كان بيلاقيه null فيعيد فتح النافذة من الصفر كل ٦ ثواني:
+     اللي بتكتبه يضيع، والنافذة تتكرر في سجل التصفح، والشكل إن
+     الرسايل مش بتتحفظ. */
+  const box   = document.getElementById('modalBox');
+  const shown = document.getElementById('chatBox');
+  const keep  = document.getElementById('chatInput');
   const draft = keep ? keep.value : '';
   const focused = keep && document.activeElement === keep;
-  if (box && document.getElementById('chatBox')) box.innerHTML = body;
-  else openModal(body, true);
+  const atBottom = !shown ||
+    (shown.scrollHeight - shown.scrollTop - shown.clientHeight < 40);
+
+  if (box && shown) box.innerHTML = body;     // تحديث في المكان
+  else openModal(body, true);                 // أول فتح بس
+
   const inp = document.getElementById('chatInput');
   if (inp){ inp.value = draft; if (focused) inp.focus(); }
   const cb = document.getElementById('chatBox');
-  if (cb) cb.scrollTop = cb.scrollHeight;
+  if (cb && atBottom) cb.scrollTop = cb.scrollHeight;
 }
 
 window.sendMsg = async function(){
