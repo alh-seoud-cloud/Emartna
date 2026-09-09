@@ -13,7 +13,7 @@
 
   const esc2 = s => (window.esc ? esc(s) : String(s == null ? '' : s));
   const KEY = 'emartna_welcome_seen';
-  const DELAY = 6000;              // بيظهر بعد ما الزائر يقرا شوية
+  const DELAY = 3000;              // الزائر الجاي من إعلان نيّته يجرّب — ما نأخّرهوش
 
   /* ---------- إعدادات قابلة للتعديل من لوحة صاحب البرنامج ---------- */
 
@@ -26,7 +26,7 @@
         title: 'جرّب البرنامج قبل ما تسجّل',
         subtitle: 'عمارة جاهزة بـ٢٨ وحدة وسنتين حركات مالية — ادخل شوف بنفسك.',
         offerLine: 'وسجّل دلوقتي واستفيد بشهرين مجانًا لأول عمارة.',
-        delaySeconds: 6,
+        delaySeconds: 3,
       }, ls.welcomePopup || {});
       return ls.welcomePopup;
     }catch(e){ return null; }
@@ -119,72 +119,86 @@
 
     const off = liveOffer();
     const offer = offerText();
+    /* واجهة العمارة: ٢٤ مربع = ٢٤ وحدة، بحالة التحصيل بتاعتها.
+       دي الحاجة اللي المنتج بيعملها فعلًا، فبتشرح نفسها من غير كلام. */
+    const PAID = [0,1,2,3,5,6,7,8,9,11,12,13,15,16,17,18,20,21,23];
+    const LATE = [4,10,19];
+    const tiles = Array.from({length:24}, (_,k) => {
+      const st = PAID.includes(k) ? 'paid' : LATE.includes(k) ? 'late' : 'due';
+      return `<i class="wp-u wp-${st}" style="--d:${k * 22}ms"></i>`;
+    }).join('');
+
     const html = `
-      <div style="margin:-18px -18px 0;padding:26px 20px 20px;text-align:center;
-           background:linear-gradient(135deg,#159A8C,#0f7a6f);color:#fff;
-           border-radius:16px 16px 0 0">
-        <div style="display:inline-block;background:rgba(255,255,255,.18);
-             border-radius:20px;padding:5px 14px;font-size:12px;font-weight:700;
-             margin-bottom:10px">🎁 ${esc2(offer)} · عرض لفترة محدودة</div>
-        <div style="font-size:40px;line-height:1">🏢</div>
-        <h3 style="margin:8px 0 4px;color:#fff;font-size:20px">${esc2(c.title)}</h3>
-        <p style="color:rgba(255,255,255,.92);line-height:1.85;font-size:13.5px;margin:0">
-          ${esc2(c.subtitle)}</p>
-      </div>
+      <style>
+        .wp{--wp-ink:#153733;--wp-green:#0F7A6F;--wp-gold:#C8912F;--wp-clay:#C4553B;
+            --wp-line:#DFE6E3;text-align:start}
+        .wp-facade{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;
+          padding:14px;background:#F6F9F8;border:1px solid var(--wp-line);
+          border-radius:12px}
+        .wp-u{display:block;aspect-ratio:1;border-radius:4px;background:#E7EDEB;
+          animation:wpIn .32s ease-out both;animation-delay:var(--d)}
+        .wp-paid{background:var(--wp-green)}
+        .wp-late{background:var(--wp-clay)}
+        .wp-due{background:var(--wp-gold);opacity:.55}
+        @keyframes wpIn{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+        @media (prefers-reduced-motion:reduce){.wp-u{animation:none}}
+        .wp-key{display:flex;gap:14px;flex-wrap:wrap;margin-top:9px;
+          font-size:12px;color:#6E7F7B}
+        .wp-key b{font-weight:600;color:var(--wp-ink)}
+        .wp-key i{display:inline-block;width:9px;height:9px;border-radius:2px;
+          margin-inline-end:5px}
+        .wp h3{font-size:21px;line-height:1.45;margin:16px 0 6px;color:var(--wp-ink)}
+        .wp-lede{font-size:14px;line-height:1.75;color:#4A5B57;margin:0}
+        .wp-cta{display:block;width:100%;text-align:start;border-radius:12px;
+          padding:13px 15px;margin-top:9px;cursor:pointer;font:inherit;
+          border:1px solid var(--wp-line);background:#fff;color:var(--wp-ink)}
+        .wp-cta b{display:block;font-size:15.5px;margin-bottom:2px}
+        .wp-cta span{font-size:12.5px;color:#6E7F7B}
+        .wp-cta.is-main{background:var(--wp-green);border-color:var(--wp-green);color:#fff}
+        .wp-cta.is-main span{color:rgba(255,255,255,.86)}
+        .wp-cta:focus-visible{outline:2px solid var(--wp-gold);outline-offset:2px}
+        .wp-offer{display:flex;gap:10px;align-items:center;margin-top:16px;
+          padding:11px 13px;border:1px solid var(--wp-gold);border-radius:12px;
+          background:#FFFBF2}
+        .wp-offer div{flex:1;min-width:0}
+        .wp-offer b{display:block;font-size:14px;color:#8A6414}
+        .wp-offer span{font-size:12.5px;color:#6E7F7B}
+        .wp-offer button{border:0;background:var(--wp-gold);color:#fff;border-radius:9px;
+          padding:9px 14px;font:600 13.5px inherit;cursor:pointer;white-space:nowrap}
+        .wp-skip{display:block;width:100%;margin-top:12px;background:none;border:0;
+          color:#8A9A96;font:inherit;font-size:12.5px;cursor:pointer}
+      </style>
 
-      <div class="flexrow" style="justify-content:center;gap:14px;flex-wrap:wrap;
-           margin:14px 0 4px;text-align:center">
-        <div><b style="display:block;font-size:18px;color:var(--accent)">٢٨</b>
-          <span class="small" style="color:var(--muted)">وحدة جاهزة</span></div>
-        <div><b style="display:block;font-size:18px;color:var(--accent)">٢٤</b>
-          <span class="small" style="color:var(--muted)">شهر حركات</span></div>
-        <div><b style="display:block;font-size:18px;color:var(--accent)">٠</b>
-          <span class="small" style="color:var(--muted)">تسجيل مطلوب</span></div>
-      </div>
-
-      <p class="small mtop" style="text-align:center;color:var(--muted)">
-        ادخل شوف بنفسك — من غير تسجيل ولا بيانات بنكية</p>
-
-      <div class="mtop">
-        <button class="btn primary" style="width:100%;padding:13px;font-size:15px"
-          onclick="welcomeGo('admin')">
-          🏢 جرّب كرئيس اتحاد
-          <div class="small" style="font-weight:400;opacity:.9;margin-top:2px">
-            تشوف التحصيل والمصروفات والتقارير كاملة</div>
-        </button>
-
-        <button class="btn ghost mtop" style="width:100%;padding:13px;font-size:15px"
-          onclick="welcomeGo('owner')">
-          🏠 جرّب كصاحب شقة
-          <div class="small" style="font-weight:400;opacity:.85;margin-top:2px">
-            تشوف اللي الساكن بيشوفه: حسابه ومستحقاته</div>
-        </button>
-      </div>
-
-      <div class="card mtop2" style="background:linear-gradient(135deg,rgba(216,163,59,.14),transparent);
-           border:1px solid var(--gold)">
-        <div style="text-align:center">
-          <b style="color:var(--gold);font-size:16px">🎁 ${esc2(off && off.title ? off.title : offer)}</b>
-          <p class="small mtop">${esc2((off && off.subtitle) || c.offerLine)}</p>
+      <div class="wp">
+        <div class="wp-facade" aria-hidden="true">${tiles}</div>
+        <div class="wp-key">
+          <span><i style="background:#0F7A6F"></i><b>١٩</b> سدّدوا</span>
+          <span><i style="background:#C8912F;opacity:.55"></i><b>٢</b> تحت التحصيل</span>
+          <span><i style="background:#C4553B"></i><b>٣</b> متأخرين</span>
         </div>
-        ${off && (off.features||[]).length ? `
-          <div style="margin-top:10px;padding:10px 12px;background:rgba(255,255,255,.5);
-               border-radius:10px;text-align:start">
-            ${(off.features||[]).slice(0,4).map(f =>
-              `<div class="small" style="padding:2px 0">✔️ ${esc2(f)}</div>`).join('')}
-          </div>` : ''}
-        <button class="btn gold mtop" style="width:100%;padding:12px;font-size:15px"
-          onclick="welcomeSignup()">${esc2((off && off.ctaText) || 'ابدأ اشتراكك المجاني')}</button>
-        ${off && off.footnote ? `<p class="small mtop" style="text-align:center;color:var(--muted)">
-          ${esc2(off.footnote)}</p>` : ''}
-      </div>
 
-      <p class="small mtop" style="text-align:center">
-        <button onclick="welcomeClose(true)"
-          style="background:none;border:0;color:var(--muted);cursor:pointer;
-                 text-decoration:underline;font-size:12px">
-          مش دلوقتي — بلاش تفكّرني تاني</button>
-      </p>`;
+        <h3>${esc2(c.title)}</h3>
+        <p class="wp-lede">${esc2(c.subtitle)}</p>
+
+        <button class="wp-cta is-main" onclick="welcomeGo('admin')">
+          <b>ادخل كرئيس اتحاد</b>
+          <span>التحصيل والمصروفات والتقارير على سنتين بيانات</span>
+        </button>
+        <button class="wp-cta" onclick="welcomeGo('owner')">
+          <b>ادخل كصاحب شقة</b>
+          <span>اللي الساكن بيشوفه: حسابه ومستحقاته</span>
+        </button>
+
+        <div class="wp-offer">
+          <div>
+            <b>${esc2(off && off.title ? off.title : offer)}</b>
+            <span>${esc2((off && off.subtitle) || c.offerLine)}</span>
+          </div>
+          <button onclick="welcomeSignup()">${esc2((off && off.ctaText) || 'سجّل')}</button>
+        </div>
+
+        <button class="wp-skip" onclick="welcomeClose(true)">مش دلوقتي</button>
+      </div>`;
 
     if (typeof window.openModal === 'function') openModal(html, true);
   };
@@ -327,7 +341,7 @@
     if (!window.REG || !window.ensureLandingSettings) return;
     started = true; clearInterval(t);
     const c = cfg();
-    setTimeout(maybeShow, Math.max(1500, (c && c.delaySeconds ? c.delaySeconds : 6) * 1000));
+    setTimeout(maybeShow, Math.max(1500, (c && c.delaySeconds ? c.delaySeconds : 3) * 1000));
   }, 400);
 
   /* ---------- إعداد النافذة من لوحة صاحب البرنامج ---------- */
