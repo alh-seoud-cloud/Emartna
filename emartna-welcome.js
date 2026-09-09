@@ -56,7 +56,11 @@
 
   function seen(){
     try{
-      if (localStorage.getItem(KEY) === '1') return true;    // اختار "بلاش تفكّرني"
+      /* "بلاش تفكّرني" كانت بتكتم النافذة للأبد على الجهاز — وده كتير
+         لنافذة تسويقية. بقت ٣٠ يوم وبعدين تظهر تاني. */
+      const forever = Number(localStorage.getItem(KEY) || 0);
+      if (forever && (Date.now() - forever) < 30*24*60*60*1000) return true;
+      if (forever) localStorage.removeItem(KEY);
       const t = Number(sessionStorage.getItem(KEY) || 0);
       // بتظهر تاني بعد ساعتين حتى في نفس الجلسة
       return t && (Date.now() - t) < 2 * 60 * 60 * 1000;
@@ -65,7 +69,7 @@
   function markSeen(forever){
     try{
       sessionStorage.setItem(KEY, String(Date.now()));
-      if (forever) localStorage.setItem(KEY, '1');
+      if (forever) localStorage.setItem(KEY, String(Date.now()));
     }catch(e){}
   }
 
@@ -286,6 +290,37 @@
     }catch(e){}
   }
 
+  /* تشخيص: ليه النافذة مش ظاهرة؟ نداء واحد من الـ Console يقول السبب. */
+  window.whyNoWelcome = function(){
+    const c = cfg();
+    const reasons = [];
+    if (!c) reasons.push('إعدادات الصفحة الرئيسية لسه ما اتحمّلتش');
+    else if (!c.enabled) reasons.push('النافذة مقفولة من لوحة صاحب البرنامج');
+    if (window.landingUIOn && !landingUIOn('welcomePopup'))
+      reasons.push('مقفولة من "عناصر الصفحة الرئيسية"');
+    try{
+      if (localStorage.getItem(KEY) === '1')
+        reasons.push('الزائر اختار "بلاش تفكّرني" على الجهاز ده');
+      const t = Number(sessionStorage.getItem(KEY) || 0);
+      if (t && (Date.now() - t) < 2*60*60*1000)
+        reasons.push('ظهرت خلال آخر ساعتين في نفس الجلسة');
+    }catch(e){}
+    if (window.getSession && getSession())
+      reasons.push('انت مسجّل دخول — النافذة للزوّار غير المسجّلين بس');
+
+    const msg = reasons.length
+      ? 'النافذة مش ظاهرة للأسباب دي:\n\n• ' + reasons.join('\n• ')
+      : 'مفيش مانع — المفروض تظهر بعد ' + ((c && c.delaySeconds) || 6) + ' ثواني.';
+    if (window.showMessage) showMessage(msg); else console.log(msg);
+    return reasons;
+  };
+
+  /* تصفير الكتم — عشان تقدر تجرّبها من غير ما تفتح متصفح جديد */
+  window.resetWelcomePopup = function(){
+    try{ localStorage.removeItem(KEY); sessionStorage.removeItem(KEY); }catch(e){}
+    if (window.toast) toast('اتصفّر الكتم — النافذة هتظهر تاني للزوّار');
+  };
+
   let started = false;
   const t = setInterval(() => {
     if (started) return clearInterval(t);
@@ -354,8 +389,12 @@
               <div class="small" style="color:var(--muted)">
                 ${c.enabled ? `مفعّلة — بتظهر بعد ${c.delaySeconds} ثواني` : 'مقفولة'}</div>
             </div>
-            <button class="btn ${c.enabled?'ghost':'gold'} sm" onclick="openWelcomeSettings()">
-              ${c.enabled ? 'تعديل' : 'تفعيل'}</button>
+            <div class="flexrow" style="gap:6px;flex-wrap:wrap">
+              <button class="btn sm ghost" onclick="whyNoWelcome()">ليه مش ظاهرة؟</button>
+              <button class="btn sm ghost" onclick="resetWelcomePopup()">تصفير الكتم</button>
+              <button class="btn ${c.enabled?'ghost':'gold'} sm" onclick="openWelcomeSettings()">
+                ${c.enabled ? 'تعديل' : 'تفعيل'}</button>
+            </div>
           </div>
         </div>`;
       return card + origLandingPage.apply(this, arguments);
