@@ -24,10 +24,10 @@
       ls.welcomePopup = Object.assign({
         enabled: true,
         title: 'جرّب البرنامج قبل ما تسجّل',
-        subtitle: 'عمارة جاهزة بـ٢٨ وحدة وسنتين حركات مالية — ادخل شوف بنفسك.',
+        subtitle: 'عمارة تجريبية بـ٢٤ وحدة وسنتين حركات مالية — ادخل شوف بنفسك.',
         offerLine: 'وسجّل دلوقتي واستفيد بشهرين مجانًا لأول عمارة.',
         delaySeconds: 3,
-        floors: 5, perFloor: 4, lateCount: 3, dueCount: 2,
+        floors: 6, perFloor: 4, lateCount: 3, dueCount: 2,   // ٢٤ وحدة = نفس العمارة التجريبية
       }, ls.welcomePopup || {});
       return ls.welcomePopup;
     }catch(e){ return null; }
@@ -122,7 +122,7 @@
     const offer = offerText();
     /* واجهة عمارة: أدوار وشبابيك وباب — الشباك المنوّر = وحدة سدّدت.
        الحالة بتتظبط من لوحة صاحب البرنامج (عدد الأدوار والمتأخرين). */
-    const floors = Math.max(2, Math.min(8, Number(c.floors) || 5));
+    const floors = Math.max(2, Math.min(8, Number(c.floors) || 6));
     const perFloor = Math.max(2, Math.min(6, Number(c.perFloor) || 4));
     const total = floors * perFloor;
     const late  = Math.max(0, Math.min(total, Number(c.lateCount) === 0 ? 0
@@ -152,16 +152,20 @@
     const html = `
       <style>
         .wp{--wp-ink:#153733;--wp-green:#0F7A6F;--wp-gold:#C8912F;--wp-clay:#C4553B;
-            --wp-line:#DFE6E3;--wp-wall:#E9E2D6;text-align:start}
-        .wp-bld{width:100%;max-width:196px;margin:2px auto 0}
-        .wp-roof{height:11px;border-radius:4px 4px 0 0;background:#2E4B46;
+            --wp-line:#DFE6E3;--wp-wall:#E9E2D6;text-align:start;
+            max-width:380px;margin:0 auto}
+        @media (max-width:420px){.wp{max-width:100%}}
+        .wp-bld{width:100%;max-width:150px;margin:0 auto}
+        .wp-tag{display:block;text-align:center;margin:7px 0 0;font-size:11.5px;
+          color:#8A9A96}
+        .wp-roof{height:9px;border-radius:4px 4px 0 0;background:#2E4B46;
           margin:0 -7px;box-shadow:inset 0 -3px 0 rgba(0,0,0,.12)}
         .wp-body{background:var(--wp-wall);padding:9px 8px 0;
           border-inline:1px solid #D6CDBD}
-        .wp-floor{display:flex;gap:7px;justify-content:center;
-          padding-bottom:9px;border-bottom:1px solid rgba(0,0,0,.07)}
+        .wp-floor{display:flex;gap:5px;justify-content:center;
+          padding-bottom:6px;border-bottom:1px solid rgba(0,0,0,.07)}
         .wp-floor:last-of-type{border-bottom:0}
-        .wp-w{flex:1;height:19px;border-radius:2px;background:#CFC6B6;
+        .wp-w{flex:1;height:14px;border-radius:2px;background:#CFC6B6;
           box-shadow:inset 0 0 0 1.5px rgba(0,0,0,.16);
           animation:wpLight .3s ease-out both;animation-delay:var(--d)}
         .wp-paid{background:var(--wp-green)}
@@ -170,9 +174,9 @@
         .wp-base{background:var(--wp-wall);border-inline:1px solid #D6CDBD;
           border-radius:0 0 3px 3px;padding:7px 8px 9px;display:flex;
           gap:7px;justify-content:center;align-items:flex-end}
-        .wp-door{width:22px;height:26px;border-radius:11px 11px 2px 2px;
+        .wp-door{width:17px;height:20px;border-radius:9px 9px 2px 2px;
           background:#2E4B46}
-        .wp-shop{flex:1;height:17px;border-radius:2px;background:#CFC6B6;
+        .wp-shop{flex:1;height:13px;border-radius:2px;background:#CFC6B6;
           box-shadow:inset 0 0 0 1.5px rgba(0,0,0,.14)}
         .wp-ground{height:5px;background:#D9D2C6;border-radius:2px;margin:0 -9px}
         @keyframes wpLight{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
@@ -182,12 +186,12 @@
         .wp-key b{font-weight:600;color:var(--wp-ink)}
         .wp-key i{display:inline-block;width:9px;height:9px;border-radius:2px;
           margin-inline-end:5px}
-        .wp h3{font-size:20px;line-height:1.45;margin:14px 0 6px;color:var(--wp-ink)}
-        .wp-lede{font-size:13.5px;line-height:1.75;color:#4A5B57;margin:0}
-        .wp-cta{display:block;width:100%;text-align:start;border-radius:12px;
-          padding:12px 14px;margin-top:9px;cursor:pointer;font:inherit;
+        .wp h3{font-size:18px;line-height:1.45;margin:12px 0 5px;color:var(--wp-ink)}
+        .wp-lede{font-size:13px;line-height:1.7;color:#4A5B57;margin:0}
+        .wp-cta{display:block;width:100%;text-align:start;border-radius:11px;
+          padding:10px 13px;margin-top:8px;cursor:pointer;font:inherit;
           border:1px solid var(--wp-line);background:#fff;color:var(--wp-ink)}
-        .wp-cta b{display:block;font-size:15px;margin-bottom:2px}
+        .wp-cta b{display:block;font-size:14.5px;margin-bottom:2px}
         .wp-cta span{font-size:12.5px;color:#6E7F7B}
         .wp-cta.is-main{background:var(--wp-green);border-color:var(--wp-green);color:#fff}
         .wp-cta.is-main span{color:rgba(255,255,255,.86)}
@@ -222,6 +226,8 @@
           ${late ? `<span><i style="background:#C4553B"></i><b>${late}</b> متأخرين</span>` : ''}
         </div>
 
+        <span class="wp-tag">عمارة تجريبية للعرض — مش بيانات عميل حقيقي</span>
+
         <h3>${esc2(c.title)}</h3>
         <p class="wp-lede">${esc2(c.subtitle)}</p>
 
@@ -245,7 +251,7 @@
         <button class="wp-skip" onclick="welcomeClose(true)">مش دلوقتي</button>
       </div>`;
 
-    if (typeof window.openModal === 'function') openModal(html, true);
+    if (typeof window.openModal === 'function') openModal(html, false);
   };
 
   window.welcomeGo = function(role){
