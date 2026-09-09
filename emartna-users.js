@@ -851,10 +851,17 @@ window.visibleNavGroups = function(u){
   const isCompound = window.D && window.D.building &&
                      window.D.building.communityType === 'compound';
 
+  /* كانت بتفلتر بالمجموعة بس، فالشاشة المقفولة تفضل ظاهرة في القايمة
+     وتترفض عند الدخول. لازم تمرّ على screenVisible زي بوابة الراوتر
+     بالظبط — مصدر واحد لقرار "الشاشة دي تتشاف ولا لأ". */
+  const canSee = it =>
+    (it[0] !== 'blocks' || isCompound) &&
+    (window.screenVisible ? screenVisible(u, it[0]) : true);
+
   return groups
     .filter(g => hasGroupPermission(u, g.key))
-    .map(g => ({ ...g, items: g.items.filter(it =>
-        it[0] !== 'blocks' || isCompound) }));
+    .map(g => ({ ...g, items: g.items.filter(canSee) }))
+    .filter(g => g.items.length);      // مجموعة كل شاشاتها مقفولة ما تظهرش
 };
 
 function hasGroupPermission(u, key){
