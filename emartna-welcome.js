@@ -27,6 +27,7 @@
         subtitle: 'عمارة جاهزة بـ٢٨ وحدة وسنتين حركات مالية — ادخل شوف بنفسك.',
         offerLine: 'وسجّل دلوقتي واستفيد بشهرين مجانًا لأول عمارة.',
         delaySeconds: 3,
+        floors: 5, perFloor: 4, lateCount: 3, dueCount: 2,
       }, ls.welcomePopup || {});
       return ls.welcomePopup;
     }catch(e){ return null; }
@@ -119,62 +120,106 @@
 
     const off = liveOffer();
     const offer = offerText();
-    /* واجهة العمارة: ٢٤ مربع = ٢٤ وحدة، بحالة التحصيل بتاعتها.
-       دي الحاجة اللي المنتج بيعملها فعلًا، فبتشرح نفسها من غير كلام. */
-    const PAID = [0,1,2,3,5,6,7,8,9,11,12,13,15,16,17,18,20,21,23];
-    const LATE = [4,10,19];
-    const tiles = Array.from({length:24}, (_,k) => {
-      const st = PAID.includes(k) ? 'paid' : LATE.includes(k) ? 'late' : 'due';
-      return `<i class="wp-u wp-${st}" style="--d:${k * 22}ms"></i>`;
-    }).join('');
+    /* واجهة عمارة: أدوار وشبابيك وباب — الشباك المنوّر = وحدة سدّدت.
+       الحالة بتتظبط من لوحة صاحب البرنامج (عدد الأدوار والمتأخرين). */
+    const floors = Math.max(2, Math.min(8, Number(c.floors) || 5));
+    const perFloor = Math.max(2, Math.min(6, Number(c.perFloor) || 4));
+    const total = floors * perFloor;
+    const late  = Math.max(0, Math.min(total, Number(c.lateCount) === 0 ? 0
+                                      : (Number(c.lateCount) || 3)));
+    const due   = Math.max(0, Math.min(total - late, Number(c.dueCount) === 0 ? 0
+                                      : (Number(c.dueCount) || 2)));
+    const paid  = total - late - due;
+
+    /* بنوزّع المتأخرين والمستحق بشكل ثابت (مش عشوائي) عشان الشكل ما يترعشش */
+    const state = Array(total).fill('paid');
+    for (let k = 0; k < late; k++) state[(k * 7 + 1) % total] = 'late';
+    let placed = 0;
+    for (let k = 0; k < total && placed < due; k++){
+      const idx = (k * 5 + 3) % total;
+      if (state[idx] === 'paid'){ state[idx] = 'due'; placed++; }
+    }
+
+    let win = '', n = 0, delay = 0;
+    for (let f = 0; f < floors; f++){
+      let row = '';
+      for (let u = 0; u < perFloor; u++, n++){
+        row += `<i class="wp-w wp-${state[n]}" style="--d:${(delay += 28)}ms"></i>`;
+      }
+      win += `<div class="wp-floor">${row}</div>`;
+    }
 
     const html = `
       <style>
         .wp{--wp-ink:#153733;--wp-green:#0F7A6F;--wp-gold:#C8912F;--wp-clay:#C4553B;
-            --wp-line:#DFE6E3;text-align:start}
-        .wp-facade{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;
-          padding:14px;background:#F6F9F8;border:1px solid var(--wp-line);
-          border-radius:12px}
-        .wp-u{display:block;aspect-ratio:1;border-radius:4px;background:#E7EDEB;
-          animation:wpIn .32s ease-out both;animation-delay:var(--d)}
+            --wp-line:#DFE6E3;--wp-wall:#E9E2D6;text-align:start}
+        .wp-bld{width:100%;max-width:196px;margin:2px auto 0}
+        .wp-roof{height:11px;border-radius:4px 4px 0 0;background:#2E4B46;
+          margin:0 -7px;box-shadow:inset 0 -3px 0 rgba(0,0,0,.12)}
+        .wp-body{background:var(--wp-wall);padding:9px 8px 0;
+          border-inline:1px solid #D6CDBD}
+        .wp-floor{display:flex;gap:7px;justify-content:center;
+          padding-bottom:9px;border-bottom:1px solid rgba(0,0,0,.07)}
+        .wp-floor:last-of-type{border-bottom:0}
+        .wp-w{flex:1;height:19px;border-radius:2px;background:#CFC6B6;
+          box-shadow:inset 0 0 0 1.5px rgba(0,0,0,.16);
+          animation:wpLight .3s ease-out both;animation-delay:var(--d)}
         .wp-paid{background:var(--wp-green)}
         .wp-late{background:var(--wp-clay)}
-        .wp-due{background:var(--wp-gold);opacity:.55}
-        @keyframes wpIn{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
-        @media (prefers-reduced-motion:reduce){.wp-u{animation:none}}
-        .wp-key{display:flex;gap:14px;flex-wrap:wrap;margin-top:9px;
-          font-size:12px;color:#6E7F7B}
+        .wp-due{background:var(--wp-gold)}
+        .wp-base{background:var(--wp-wall);border-inline:1px solid #D6CDBD;
+          border-radius:0 0 3px 3px;padding:7px 8px 9px;display:flex;
+          gap:7px;justify-content:center;align-items:flex-end}
+        .wp-door{width:22px;height:26px;border-radius:11px 11px 2px 2px;
+          background:#2E4B46}
+        .wp-shop{flex:1;height:17px;border-radius:2px;background:#CFC6B6;
+          box-shadow:inset 0 0 0 1.5px rgba(0,0,0,.14)}
+        .wp-ground{height:5px;background:#D9D2C6;border-radius:2px;margin:0 -9px}
+        @keyframes wpLight{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+        @media (prefers-reduced-motion:reduce){.wp-w{animation:none}}
+        .wp-key{display:flex;gap:13px;flex-wrap:wrap;justify-content:center;
+          margin-top:11px;font-size:12px;color:#6E7F7B}
         .wp-key b{font-weight:600;color:var(--wp-ink)}
         .wp-key i{display:inline-block;width:9px;height:9px;border-radius:2px;
           margin-inline-end:5px}
-        .wp h3{font-size:21px;line-height:1.45;margin:16px 0 6px;color:var(--wp-ink)}
-        .wp-lede{font-size:14px;line-height:1.75;color:#4A5B57;margin:0}
+        .wp h3{font-size:20px;line-height:1.45;margin:14px 0 6px;color:var(--wp-ink)}
+        .wp-lede{font-size:13.5px;line-height:1.75;color:#4A5B57;margin:0}
         .wp-cta{display:block;width:100%;text-align:start;border-radius:12px;
-          padding:13px 15px;margin-top:9px;cursor:pointer;font:inherit;
+          padding:12px 14px;margin-top:9px;cursor:pointer;font:inherit;
           border:1px solid var(--wp-line);background:#fff;color:var(--wp-ink)}
-        .wp-cta b{display:block;font-size:15.5px;margin-bottom:2px}
+        .wp-cta b{display:block;font-size:15px;margin-bottom:2px}
         .wp-cta span{font-size:12.5px;color:#6E7F7B}
         .wp-cta.is-main{background:var(--wp-green);border-color:var(--wp-green);color:#fff}
         .wp-cta.is-main span{color:rgba(255,255,255,.86)}
         .wp-cta:focus-visible{outline:2px solid var(--wp-gold);outline-offset:2px}
-        .wp-offer{display:flex;gap:10px;align-items:center;margin-top:16px;
-          padding:11px 13px;border:1px solid var(--wp-gold);border-radius:12px;
+        .wp-offer{display:flex;gap:10px;align-items:center;margin-top:14px;
+          padding:10px 12px;border:1px solid var(--wp-gold);border-radius:12px;
           background:#FFFBF2}
         .wp-offer div{flex:1;min-width:0}
-        .wp-offer b{display:block;font-size:14px;color:#8A6414}
+        .wp-offer b{display:block;font-size:13.5px;color:#8A6414}
         .wp-offer span{font-size:12.5px;color:#6E7F7B}
         .wp-offer button{border:0;background:var(--wp-gold);color:#fff;border-radius:9px;
           padding:9px 14px;font:600 13.5px inherit;cursor:pointer;white-space:nowrap}
-        .wp-skip{display:block;width:100%;margin-top:12px;background:none;border:0;
+        .wp-skip{display:block;width:100%;margin-top:11px;background:none;border:0;
           color:#8A9A96;font:inherit;font-size:12.5px;cursor:pointer}
       </style>
 
       <div class="wp">
-        <div class="wp-facade" aria-hidden="true">${tiles}</div>
+        <div class="wp-bld" aria-hidden="true">
+          <div class="wp-roof"></div>
+          <div class="wp-body">${win}</div>
+          <div class="wp-base">
+            <span class="wp-shop"></span>
+            <span class="wp-door"></span>
+            <span class="wp-shop"></span>
+          </div>
+          <div class="wp-ground"></div>
+        </div>
+
         <div class="wp-key">
-          <span><i style="background:#0F7A6F"></i><b>١٩</b> سدّدوا</span>
-          <span><i style="background:#C8912F;opacity:.55"></i><b>٢</b> تحت التحصيل</span>
-          <span><i style="background:#C4553B"></i><b>٣</b> متأخرين</span>
+          <span><i style="background:#0F7A6F"></i><b>${paid}</b> سدّدوا</span>
+          ${due  ? `<span><i style="background:#C8912F"></i><b>${due}</b> تحت التحصيل</span>` : ''}
+          ${late ? `<span><i style="background:#C4553B"></i><b>${late}</b> متأخرين</span>` : ''}
         </div>
 
         <h3>${esc2(c.title)}</h3>
@@ -366,6 +411,25 @@
       <div class="field2"><label>تظهر بعد كام ثانية من فتح الصفحة</label>
         <input id="wpDelay" type="number" min="0" max="60" value="${c.delaySeconds}"></div>
 
+      <div class="card mtop2" style="background:var(--tint)">
+        <b class="small">🏢 شكل العمارة في النافذة</b>
+        <p class="small" style="color:var(--muted)">الشبابيك المنوّرة = وحدات سدّدت.
+          خلّي الأرقام قريبة من الواقع — الزائر بيصدّق الصورة اللي تشبه عمارته.</p>
+        <div class="flexrow mtop" style="gap:8px;flex-wrap:wrap">
+          <div class="field2" style="flex:1;min-width:104px"><label>عدد الأدوار</label>
+            <input id="wpFloors" type="number" min="2" max="8" value="${c.floors}"></div>
+          <div class="field2" style="flex:1;min-width:104px"><label>وحدات في الدور</label>
+            <input id="wpPer" type="number" min="2" max="6" value="${c.perFloor}"></div>
+        </div>
+        <div class="flexrow" style="gap:8px;flex-wrap:wrap">
+          <div class="field2" style="flex:1;min-width:104px"><label>متأخرين (أحمر)</label>
+            <input id="wpLate" type="number" min="0" max="20" value="${c.lateCount}"></div>
+          <div class="field2" style="flex:1;min-width:104px"><label>تحت التحصيل (ذهبي)</label>
+            <input id="wpDue" type="number" min="0" max="20" value="${c.dueCount}"></div>
+        </div>
+        <p class="small" style="color:var(--muted)">الباقي بيتحسب تلقائيًا كوحدات سدّدت.</p>
+      </div>
+
       <div class="flexrow mtop2" style="gap:8px;flex-wrap:wrap">
         <button class="btn primary" onclick="saveWelcomeSettings()">💾 حفظ</button>
         <button class="btn ghost" onclick="closeModal();setTimeout(()=>openWelcomePopup(true),150)">
@@ -382,7 +446,11 @@
       title: g('wpTitle').trim(),
       subtitle: g('wpSub').trim(),
       offerLine: g('wpOffer').trim(),
-      delaySeconds: Math.max(0, Number(g('wpDelay')) || 6),
+      delaySeconds: Math.max(0, Number(g('wpDelay')) || 3),
+      floors:    Math.min(8, Math.max(2, Number(g('wpFloors')) || 5)),
+      perFloor:  Math.min(6, Math.max(2, Number(g('wpPer'))    || 4)),
+      lateCount: Math.max(0, Number(g('wpLate')) || 0),
+      dueCount:  Math.max(0, Number(g('wpDue'))  || 0),
     };
     saveRegistry();
     closeModal();
