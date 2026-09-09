@@ -9208,126 +9208,14 @@ function pageUsers(){
   <div class="flexrow mtop"><button class="btn primary" onclick="openUserModal()">+ إضافة مستخدم مسؤول إضافي (محاسب/لجنة)</button></div>
   <div class="mtop">${sortableTable('usersTable',rows,cols,null,{defaultKey:'role',exportName:'المستخدمون'})}</div>`;
 }
-function openUserModal(id){if(!guardAction('users','edit'))return;
-  const u=id?D.users.find(x=>x.id===id):null;
-  const isApartmentUser=u&&u.apartmentId;
-  const isSelf=u&&currentUser()&&u.id===currentUser().id;
-  const editorUnrestricted=!currentUser().permissions;
-  if(!editorUnrestricted&&!u){showMessage('بس رئيس الاتحاد الأساسي (بكل الصلاحيات) يقدر يضيف مستخدم مسؤول جديد');return;}
-  if(!editorUnrestricted&&u&&isStaffRole(u.role)&&!isSelf){showMessage('بس رئيس الاتحاد الأساسي (بكل الصلاحيات) يقدر يعدّل حساب أو صلاحيات مسؤول تاني');return;}
-  const showPerms=!isSelf&&editorUnrestricted&&(!u||isStaffRole(u.role)||isApartmentUser);
-  const perms=(u&&u.permissions)||{};
-  const currentRole=u?u.role:(isApartmentUser?'owner':'admin');
-  openModal(`
-    <h3>${u?'تعديل مستخدم':'إضافة مستخدم مسؤول إضافي'}</h3>
-    ${showPerms&&editorUnrestricted?`<div class="field2"><label>🎯 قالب صلاحيات جاهز (اختياري - للتسريع)</label><select id="uPermTemplate" onchange="applyPermTemplate()">
-      <option value="">— اختر قالب جاهز أو حدد الصلاحيات يدويًا تحت —</option>
-      ${PERMISSION_ROLE_TEMPLATES.map(t=>`<option value="${t.key}">${esc(t.label)}</option>`).join('')}
-    </select></div>`:''}
-    <div class="field2"><label>اسم المستخدم</label><input id="uUser" value="${u?esc(u.username):''}" ${isApartmentUser?'disabled':''}></div>
-    <div class="field2"><label>الاسم</label><input id="uName" value="${u?esc(u.name):''}"></div>
-    ${isApartmentUser?`<div class="field2"><label>الصلاحية</label><select id="uRole" onchange="refreshPermCheckboxes()" ${(!editorUnrestricted&&!isStaffRole(u.role))?'disabled':''}>
-      <option value="owner" ${currentRole==='owner'?'selected':''}>مالك شقة</option>
-      <option value="tenant" ${currentRole==='tenant'?'selected':''}>مستأجر</option>
-      ${editorUnrestricted||isStaffRole(u.role)?STAFF_ROLES.map(r=>`<option value="${r}" ${currentRole===r?'selected':''}>${esc(roleLabelAr(r))}${r==='admin'?' (صلاحيات كاملة)':''}</option>`).join(''):''}
-    </select>${editorUnrestricted?`<p class="small mtop">لو رقّيته لرئيس اتحاد، هيفضل مرتبط بشقته لكن هيقدر يدخل على صفحات الإدارة اللي تحددها تحت.</p>`:`<p class="small mtop" style="color:var(--gold-dark)">بس رئيس الاتحاد الأساسي يقدر يرقّي مستخدم لرئيس اتحاد.</p>`}</div>`:''}
-    <div class="grid g2">
-      ${phoneField('uCountry','uPhone',u?u.phoneCountry:'+20',u?esc(u.phone||''):'','رقم الهاتف',true)}
-    </div>
-    <div class="field2"><label>البريد الإلكتروني (اختياري)</label><input id="uEmail" type="email" value="${u?esc(u.email||''):''}"></div>
-    <div class="field2"><label>كلمة مرور جديدة (اتركها فارغة للإبقاء)</label>${pwField('uPass')}</div>
-    <label class="checkline"><input type="checkbox" id="uActive" ${!u||u.active?'checked':''}> الحساب نشط (يمكنه تسجيل الدخول)</label>
-    ${showPerms?`<div class="card mtop" id="uPermsBox"><h3 style="font-size:14px">🔐 صلاحيات الوصول للشاشات</h3>
-      <p class="small mtop">حدد أي أقسام يقدر هذا المستخدم يدخلها. سيب الكل بدون تحديد لصلاحيات كاملة.</p>
-      <div id="uPermsCheckList">${renderPermCheckboxesFor(currentRole,perms)}</div>
-    </div>`:''}
-    ${isApartmentUser?`<p class="small mtop">لتعديل بيانات الشقة نفسها (المالك، الاشتراك...) استخدم صفحة "الشقق والملاك".</p>`:`
-      <div class="field2 mtop"><label>وحدته في العمارة (اختياري)</label>
-        <select id="uApartment">
-          <option value="">— مش صاحب وحدة —</option>
-          ${(D.apartments||[]).slice().sort((a,b)=>(a.number||0)-(b.number||0))
-            .map(a=>`<option value="${esc(a.id)}" ${u&&u.apartmentId===a.id?'selected':''}>${
-              esc(unitLabel(a))}${a.ownerName?' — '+esc(a.ownerName):''}</option>`).join('')}
-        </select>
-        <p class="small">معظم أعضاء الإدارة عندهم شقة في نفس العمارة. اربطه بوحدته
-        عشان يشوف حسابه ومستحقاته زي أي ساكن — <b>بحساب واحد مش اتنين</b>.</p></div>`}
-    <div class="modal-actions"><button class="btn primary" onclick="saveUser(${u?`'${u.id}'`:'null'})">💾 حفظ</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
-}
-function renderPermCheckboxesFor(role,perms){
-  const groups=isStaffRole(role)?ADMIN_PERMISSION_GROUPS:OWNER_PERMISSION_GROUPS;
-  return groups.map(g=>`<label class="checkline"><input type="checkbox" class="uPermCheck" data-key="${g.key}" ${perms[g.key]!==false?'checked':''}> ${esc(g.label)}</label>`).join('');
-}
-function refreshPermCheckboxes(){
-  const list=document.getElementById('uPermsCheckList'); if(!list)return;
-  const roleSel=document.getElementById('uRole');
-  const role=roleSel?roleSel.value:'admin';
-  list.innerHTML=renderPermCheckboxesFor(role,{});
-}
-function applyPermTemplate(){
-  const key=document.getElementById('uPermTemplate').value; if(!key)return;
-  const t=PERMISSION_ROLE_TEMPLATES.find(x=>x.key===key); if(!t)return;
-  const roleSel=document.getElementById('uRole');
-  if(roleSel&&!roleSel.disabled)roleSel.value=t.role;
-  const list=document.getElementById('uPermsCheckList');
-  if(list){
-    const perms=t.groups===null?{}:{};
-    const groups=isStaffRole(t.role)?ADMIN_PERMISSION_GROUPS:OWNER_PERMISSION_GROUPS;
-    if(t.groups!==null)groups.forEach(g=>{perms[g.key]=t.groups.includes(g.key);});
-    list.innerHTML=renderPermCheckboxesFor(t.role,perms);
-  }
-}
-async function saveUser(id){
-  const editorUnrestricted=!currentUser().permissions;
-  const existingTarget=id?D.users.find(x=>x.id===id):null;
-  const isSelfSave=existingTarget&&existingTarget.id===currentUser().id;
-  if(!editorUnrestricted&&!existingTarget)return showMessage('بس رئيس الاتحاد الأساسي يقدر يضيف مستخدم مسؤول جديد');
-  if(!editorUnrestricted&&existingTarget&&isStaffRole(existingTarget.role)&&!isSelfSave)return showMessage('بس رئيس الاتحاد الأساسي يقدر يعدّل حساب مسؤول تاني');
-  const name=document.getElementById('uName').value.trim(); if(!name)return showMessage('أدخل الاسم');
-  const phone=document.getElementById('uPhone').value.trim();
-  if(!phone)return showMessage('رقم الهاتف مطلوب');
-  const pass=document.getElementById('uPass').value;
-  if(pass){const pwErr=passwordPolicyError(pass); if(pwErr)return showMessage(pwErr);}
-  const active=document.getElementById('uActive').checked;
-  const phoneCountry=document.getElementById('uCountry').value;
-  const email=document.getElementById('uEmail').value.trim();
-  const permsBox=document.getElementById('uPermsBox');
-  let newPerms=null;
-  if(permsBox){
-    const checks=[...document.querySelectorAll('.uPermCheck')];
-    const allChecked=checks.every(c=>c.checked);
-    newPerms=allChecked?null:Object.fromEntries(checks.map(c=>[c.dataset.key,c.checked]));
-  }
-  if(id){
-    const u=D.users.find(x=>x.id===id);
-    const roleSel=document.getElementById('uRole');
-    if(roleSel){
-      const newRole=roleSel.value;
-      if(!isStaffRole(u.role)&&isStaffRole(newRole)&&!editorUnrestricted)return showMessage('بس رئيس الاتحاد الأساسي يقدر يرقّي مستخدم لدور إداري');
-      if(u.role==='admin'&&newRole!=='admin'){
-        const activeAdmins=D.users.filter(x=>x.role==='admin'&&x.active!==false);
-        if(activeAdmins.length<=1)return showMessage('لا يمكن تحويل آخر حساب رئيس اتحاد نشط إلى مالك شقة عادي');
-      }
-      if(u.role!==newRole)logActivity('تغيير صلاحية',`${u.username}: ${u.role} → ${newRole}`);
-      u.role=newRole;
-    }
-    u.name=name;u.phoneCountry=phoneCountry;u.phone=phone;u.email=email;u.active=active;
-    const apSel=document.getElementById('uApartment');
-    if(apSel)u.apartmentId=apSel.value||null;      // ربطه بوحدته
-    if(permsBox)u.permissions=newPerms;
-    if(pass)u.password=await hashPassword(pass);
-  }else{
-    const username=document.getElementById('uUser').value.trim();
-    if(!username)return showMessage('أدخل اسم المستخدم');
-    if(isUsernameTaken(username))return showMessage('اسم المستخدم مستخدم بالفعل');
-    const apSel=document.getElementById('uApartment');
-    const roleSel=document.getElementById('uRole');
-    D.users.push({id:uid(),username,password:await hashPassword(pass||'Admin@1234'),
-      role:(roleSel&&roleSel.value)||'admin',name,phoneCountry,phone,email,
-      apartmentId:(apSel&&apSel.value)||null,active,permissions:newPerms});
-    logActivity('إضافة مستخدم مسؤول',username);
-  }
-  save();closeModal();toast('تم الحفظ');renderContent();
-}
+/* ============================================================
+   شاشة المستخدمين والصلاحيات اتنقلت بالكامل لـ emartna-users.js
+   ------------------------------------------------------------
+   كانت هنا نسخة قديمة بخانات "مجموعات" (العمارة/الماليات/التواصل)
+   منفصلة عن الجدول التفصيلي. الوحدة بتتحمّل بعد الملف ده فكانت
+   بتدوس عليها — يعني الكود ده كان ميت، لكن وجوده كان بيوهم إن
+   فيه مكانين للصلاحيات. اتشال عشان يفضل مصدر واحد.
+   ============================================================ */
 function deleteUser(id){if(!guardAction('users','delete'))return;
   const admins=D.users.filter(u=>u.role==='admin');
   const u=D.users.find(x=>x.id===id);
