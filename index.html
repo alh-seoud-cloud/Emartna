@@ -1026,9 +1026,29 @@ async function seedRegistry(){
   saveRegistry();
 }
 function buildingKey(id){return 'omaretna_b_'+id}
-function loadBuildingData(id){try{const raw=localStorage.getItem(buildingKey(id));return raw?JSON.parse(raw):null}catch(e){return null}}
+/* الكاش المحلي كان مشترك بين كل مين يدخل من نفس المتصفح.
+   يعني رئيس اتحاد يدخل (الكاش يتملي بكل الوحدات)، يخرج، ويدخل ساكن —
+   فيلاقي بيانات العمارة كلها قدامه لحد ما السحابة ترد.
+   دلوقتي كل نسخة كاش متعلّمة بصاحبها، وبتتجاهل لو مش بتاعته. */
+function cacheOwnerId(){
+  try{ return (window.CLOUD_AUTH && CLOUD_AUTH.user) ? CLOUD_AUTH.user.id : 'local'; }
+  catch(e){ return 'local'; }
+}
+function loadBuildingData(id){
+  try{
+    const raw=localStorage.getItem(buildingKey(id));
+    if(!raw)return null;
+    const d=JSON.parse(raw);
+    if(d && d.__owner && d.__owner!==cacheOwnerId()){
+      localStorage.removeItem(buildingKey(id));   // بتاع مستخدم تاني
+      return null;
+    }
+    return d;
+  }catch(e){return null}
+}
 function saveBuildingData(id,data){
   try{
+    if(data && typeof data==='object')data.__owner=cacheOwnerId();
     localStorage.setItem(buildingKey(id),JSON.stringify(data));
   }catch(e){
     showMessage('تعذر حفظ البيانات - مساحة التخزين في المتصفح ممتلئة. احذف نسخة احتياطية قديمة أو صور مرفقة كبيرة وحاول تاني.');
@@ -1451,26 +1471,22 @@ async function loginAsDemo(role){
 }
 function logout(){
   const wasDemoBuilding=activeBuildingId&&REG.demoBuildingId&&activeBuildingId===REG.demoBuildingId;
-  clearTimeout(__idleTimer);clearTimeout(__idleWarnTimer);clearSession();D=null;activeBuildingId=null;curPage='dashboard';window.__navExpandedGroup=null;
+  clearTimeout(__idleTimer);clearTimeout(__idleWarnTimer);
+  /* بنمسح كاش العمارة عشان اللي يدخل بعده مايلاقيش بياناتها */
+  try{ if(activeBuildingId)localStorage.removeItem(buildingKey(activeBuildingId)); }catch(e){}
+  clearSession();D=null;activeBuildingId=null;curPage='dashboard';window.__navExpandedGroup=null;
   // شاشة الدخول هي المتوقعة بعد الخروج، مش الصفحة الرئيسية
   window.__viewMode=wasDemoBuilding?'landing':'login';window.__previewMode=false;
   renderRoot();resetHistoryBase();try{window.scrollTo(0,0);}catch(e){}
   if(wasDemoBuilding)resetDemoBuildingData();
 }
-const IDLE_TIMEOUT_MIN=20;
+/* نظام الخمول اتنقل لـ emartna-idle.js: السياسة من القاعدة (سقف المنصة
+   + تشديد العمارة)، ومدة مختلفة للإدارة والسكان، وما بيقفلش والمزامنة
+   شغالة أو فيه كلام مكتوب. النسخة القديمة كانت 20 دقيقة ثابتة للكل
+   وكانت شغالة بالتوازي مع الجديدة. */
 let __idleTimer=null,__idleWarnTimer=null;
-function resetIdleTimer(){
-  if(!getSession())return;
-  clearTimeout(__idleTimer); clearTimeout(__idleWarnTimer);
-  __idleWarnTimer=setTimeout(()=>{ if(getSession())toast('⏳ هيتم تسجيل خروجك تلقائيًا خلال دقيقة بسبب عدم النشاط'); },(IDLE_TIMEOUT_MIN-1)*60*1000);
-  __idleTimer=setTimeout(()=>{
-    if(getSession()){ logout(); toast('تم تسجيل خروجك تلقائيًا بسبب عدم النشاط لفترة طويلة، سجّل الدخول تاني'); }
-  },IDLE_TIMEOUT_MIN*60*1000);
-}
-function initIdleWatcher(){
-  ['mousemove','keydown','click','touchstart','scroll'].forEach(evt=>document.addEventListener(evt,resetIdleTimer,{passive:true}));
-  resetIdleTimer();
-}
+function resetIdleTimer(){}
+function initIdleWatcher(){}
 function showLoginError(msg){const e=document.getElementById('loginErr');if(e){e.textContent=msg;e.style.display='block';if(e.scrollIntoView)e.scrollIntoView({behavior:'smooth',block:'center'});}}
 
 /* ---------- منع الرجوع للخلف من إغلاق التطبيق ---------- */

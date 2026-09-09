@@ -699,23 +699,41 @@ window.saveUser = async function(id){
   const actEl  = document.getElementById('uActive');
   const role   = roleEl && !roleEl.disabled ? roleEl.value : u.role;
   const active = actEl && !actEl.disabled ? actEl.checked : u.active;
-  const perms  = roleEl && !roleEl.disabled ? readPerms('u') : (u.permissions || null);
-
   if (u.role === 'admin' && role !== 'admin'){
     const admins = (D.users||[]).filter(x => x.role==='admin' && x.active!==false);
     if (admins.length <= 1) return showMessage('مينفعش تشيل آخر رئيس اتحاد نشط');
   }
 
+  /* كانت بتقرا u.screenPerms (القيمة القديمة في الذاكرة) بدل ما تقرا
+     الجدول اللي قدام المستخدم — فأي تعديل في الخانات ما كانش بيتحفظ
+     خالص، والصلاحيات "ترجع زي الأول" بعد التحديث. */
+  const screenPerms = window.readScreenPerms ? readScreenPerms() : null;
+  if (!screenPerms && u.screenPerms)
+    return showMessage('جدول الصلاحيات ما اتحمّلش — الحفظ اتوقف عشان ما تتمسحش الصلاحيات الحالية. حدّث الصفحة وجرّب تاني.');
+  const perms = screenPerms ? readPerms('u') : (u.permissions || null);
+
+  if (!u.__membershipId && !u.__inviteId)
+    return showMessage('المستخدم ده لسه مش متزامن مع السحابة — مش قادر أحفظ صلاحياته.');
+
   try{
+    const patch = screenPerms
+      ? { role, permissions: perms, screen_perms: screenPerms }
+      : { role };
     if (u.__membershipId){
+      patch.active = active;
       const r = await window.CLOUD._sb.from('memberships')
-        .update({ role, active, permissions: perms, screen_perms: u.screenPerms || null }).eq('id', u.__membershipId);
+        .update(patch).eq('id', u.__membershipId).select('id');
       if (r.error) throw r.error;
+      if (!r.data || !r.data.length)
+        return showMessage('الحفظ ما أثّرش على أي صف — يمكن مالكش صلاحية تعديل المستخدم ده.');
     } else if (u.__inviteId){
       const r = await window.CLOUD._sb.from('invitations')
-        .update({ role, permissions: perms, screen_perms: u.screenPerms || null }).eq('id', u.__inviteId);
+        .update(patch).eq('id', u.__inviteId).select('id');
       if (r.error) throw r.error;
+      if (!r.data || !r.data.length)
+        return showMessage('الحفظ ما أثّرش على أي صف.');
     }
+    if (screenPerms){ u.screenPerms = screenPerms; u.permissions = perms; }
     if (u.role !== role)
       logActivity('تغيير صلاحية', `${u.name}: ${u.role} → ${role}`);
     closeModal();
