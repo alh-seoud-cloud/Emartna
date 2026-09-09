@@ -588,6 +588,8 @@ async function pushBuilding(legacyId){
     if (r.error) throw r.error;
   }
 
+  const skipped = [];   // صفوف رفضها السيرفر — بنعزلها بدل ما توقف الكل
+
   const order = ['accounts','apartments','projects','vendors','expenses',
                  'transfers','ledger','ledgerAllocations',
                  'maintenanceReports','meetings','polls',
@@ -601,12 +603,30 @@ async function pushBuilding(legacyId){
 
     if (added.length){
       const rows = added.map(x => toDB(x, map, ctx));
-      const r = await sb.from(map.table).insert(rows).select('id,legacy_id');
-      if (r.error) throw r.error;
-      // سجّل الـ uuid الجديد
       ctx.uuidOf[coll] = ctx.uuidOf[coll] || {};
       ctx.legacyOf[coll] = ctx.legacyOf[coll] || {};
-      r.data.forEach(row => {
+
+      let r = await sb.from(map.table).insert(rows).select('id,legacy_id');
+
+      /* صف واحد مرفوض كان بيوقف المزامنة كلها، واللقطة المرجعية
+         ما بتتحدّثش — فنفس الصف يتحاول تاني كل مرة والحفظ يفضل
+         مقفول للأبد. دلوقتي بنعيد المحاولة صف صف ونعزل الفاشل. */
+      if (r.error){
+        const ok = [];
+        for (let i = 0; i < rows.length; i++){
+          const one = await sb.from(map.table).insert(rows[i]).select('id,legacy_id');
+          if (one.error){
+            skipped.push({ coll, id: added[i].id, msg: one.error.message });
+            /* بنشيله من الحالة المحلية عشان ما يفضلش يتحاول للأبد */
+            const arr = D[coll] || [];
+            const k = arr.findIndex(x => x.id === added[i].id);
+            if (k >= 0) arr.splice(k, 1);
+          } else if (one.data && one.data[0]) ok.push(one.data[0]);
+        }
+        r = { data: ok, error: null };
+      }
+
+      (r.data || []).forEach(row => {
         ctx.uuidOf[coll][row.legacy_id] = row.id;
         ctx.legacyOf[coll][row.id] = row.legacy_id;
       });
@@ -649,6 +669,11 @@ async function pushBuilding(legacyId){
   }
 
   cache.snapshot[legacyId] = JSON.stringify(D);
+
+  if (skipped.length){
+    console.warn('[عمارتنا] صفوف اترفضت واتعزلت:', skipped);
+    if (window.toast) toast(skipped.length + ' عنصر اترفض من السيرفر واتشال — الباقي اتحفظ');
+  }
 }
 
 

@@ -748,8 +748,10 @@ function permCheckboxes(prefix, perms, user){
 
 /* أزرار الضبط السريع فوق الجدول */
 window.permBulk = function(kind){
-  const roleSel = document.querySelector('#nuRole, #uRole');
-  const role = roleSel ? roleSel.value : 'admin';
+  /* شاشة التطبيق الجماعي مفيهاش قائمة دور — بناخد الدور من هدف التطبيق */
+  const roleSel = document.querySelector('#nuRole, #uRole, #brTarget');
+  let role = roleSel ? roleSel.value : 'admin';
+  if (role === 'both') role = 'owner';
   document.querySelectorAll('.inv-chk').forEach(el => {
     const a = el.dataset.a;
     if (kind === 'all')       el.checked = true;
