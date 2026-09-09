@@ -31,6 +31,29 @@ const ROLE_AR = {
 };
 
 let ROOMS = [], PEOPLE = [], CUR = null, POLL = null;
+let MY_ROOMS = -1;      // -1 = لسه ما اتحسبش
+
+/* عدد غرفي — الشاشة بتخبّي القسم كله لو صفر */
+window.myRoomCount = () => (MY_ROOMS < 0 ? 0 : MY_ROOMS);
+
+async function countMyRooms(){
+  try{
+    const uuid = bUuid();
+    if (!uuid) return;
+    const { count, error } = await sb.from('chat_rooms')
+      .select('id', { count:'exact', head:true })
+      .eq('building_id', uuid).eq('archived', false);
+    if (error) return;
+    const was = MY_ROOMS;
+    MY_ROOMS = count || 0;
+    /* أول مرة نلاقي غرفة، نعيد رسم الشاشة عشان القسم يظهر */
+    if (was <= 0 && MY_ROOMS > 0 && window.renderContent){
+      try{ renderContent(); }catch(e){}
+    }
+  }catch(e){}
+}
+setTimeout(countMyRooms, 2500);
+document.addEventListener('emartna:building-complete', () => setTimeout(countMyRooms, 800));
 
 /* ---------- قائمة الغرف ---------- */
 
@@ -45,6 +68,7 @@ window.openPrivateChats = async function(){
     ]);
     if (r.error) throw r.error;
     ROOMS = r.data || [];
+    MY_ROOMS = ROOMS.length;
     PEOPLE = (p.data || []).filter(x => x.active !== false);
   }catch(e){ return showMessage(e.message); }
 
