@@ -3200,6 +3200,7 @@ function pageSysDashboard(){
     ${window.__sysDashFilter!=='all'?`<button class="btn ghost" onclick="setSysDashFilter('all')">✕ مسح الفلتر (${filterMap[window.__sysDashFilter].label})</button>`:''}
     <div class="spacer"></div>
     <button class="btn ghost" onclick="openPlanScreens()">🎚️ شاشات الاشتراك</button>
+    <button class="btn ghost" onclick="openIdlePolicy()">⏳ سياسة إقفال الجلسة</button>
     <button class="btn ghost" onclick="openAllContacts()">📇 سجل التواصل</button>
     <button class="btn ghost" onclick="openFollowups()">📅 متابعات مستحقة</button>
     <button class="btn ghost" onclick="openImportBuildingsModal()">📥 استيراد عمارات بالجملة</button>
@@ -6009,6 +6010,7 @@ function pageActivity(){
   <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
     <button class="btn sm" onclick="openFinanceAudit()">🧾 سجل التدقيق المالي</button>
     <button class="btn sm" onclick="openPeriodLocks()">🔒 إقفال الفترات المحاسبية</button>
+    <button class="btn sm" onclick="openIdleBuilding()">⏳ إقفال الجلسة عند الخمول</button>
   </div>
   <p class="small" style="color:var(--muted)">سجل التدقيق المالي بيسجّل قيمة كل حقل قبل وبعد
     التعديل، ومايتمسحش. سجل النشاط تحت أبسط منه وبيتحفظ محليًا.</p>

@@ -14,18 +14,27 @@
 (function(){
   'use strict';
 
-  const DEFAULTS = { enabled: true, minutes: 10, warnSeconds: 60 };
+  /* السياسة بتيجي من القاعدة — مش من الجهاز.
+     في localStorage كان أي مستخدم يقدر يمسحها ويلغي الحماية عن نفسه.
+     السقف من المنصة، والعمارة تقدر تشدّد بس مش ترخّي. */
+  const FALLBACK = { enabled: true, minutes: 15, warnSeconds: 60, role: 'owner' };
+  let POLICY = null;
 
-  function cfg(){
-    try{
-      const raw = localStorage.getItem('emartna_idle_cfg');
-      return Object.assign({}, DEFAULTS, raw ? JSON.parse(raw) : {});
-    }catch(e){ return DEFAULTS; }
-  }
-  function saveCfg(c){
-    try{ localStorage.setItem('emartna_idle_cfg', JSON.stringify(c)); }catch(e){}
-  }
+  function cfg(){ return POLICY || FALLBACK; }
   window.idleConfig = cfg;
+
+  async function loadPolicy(){
+    try{
+      const sb = window.CLOUD && window.CLOUD._sb;
+      const uuid = CLOUD._cache.buildingUuid[window.activeBuildingId];
+      if (!sb || !uuid) return;
+      const { data, error } = await sb.rpc('my_idle_policy', { p_building: uuid });
+      if (!error && data) POLICY = data;
+    }catch(e){}
+  }
+  setTimeout(loadPolicy, 3000);
+  setInterval(loadPolicy, 10 * 60 * 1000);   // نلتقط أي تغيير في السياسة
+  document.addEventListener('emartna:building-complete', () => setTimeout(loadPolicy, 900));
 
   let lastAct = Date.now(), warnBox = null, tick = null;
 
@@ -118,39 +127,94 @@
 
   /* ---------- إعداد المدة ---------- */
 
-  window.openIdleSettings = function(){
-    const c = cfg();
+  /* ---------- سياسة المنصة (مسؤول النظام) ---------- */
+
+  window.openIdlePolicy = async function(){
+    const sb = window.CLOUD && window.CLOUD._sb;
+    if (!sb) return showMessage('مش متصل بالسحابة.');
+    let p = {};
+    try{
+      const { data } = await sb.from('platform_settings')
+        .select('value').eq('key','idle_policy').single();
+      p = (data && data.value) || {};
+    }catch(e){}
+
     openModal(`
-      <h3>⏳ إقفال الجلسة عند الخمول</h3>
-      <p class="small mtop">لو المستخدم ساب البرنامج مفتوح ومشي، الجلسة بتتقفل لوحدها.
-        بتحذّره الأول بعدّاد، ومش بتقفل وهو بيكتب أو فيه نافذة مفتوحة.</p>
+      <h3>⏳ سياسة إقفال الجلسة</h3>
+      <p class="small mtop">سياسة أمان على كل العملاء. رئيس الاتحاد يقدر
+        <b>يشدّدها</b> على عمارته، ومايقدرش يرخّيها ولا يقفلها.</p>
 
       <div class="field2 mtop2">
-        <label><input type="checkbox" id="idOn" ${c.enabled?'checked':''}> تفعيل</label>
+        <label><input type="checkbox" id="ipOn" ${p.enabled!==false?'checked':''}>
+          تفعيل على كل العمارات</label>
       </div>
-      <div class="field2"><label>يقفل بعد كام دقيقة بدون نشاط</label>
-        <input id="idMin" type="number" min="3" max="120" value="${c.minutes}"></div>
+      <div class="field2"><label>الإدارة — يقفل بعد كام دقيقة خمول</label>
+        <input id="ipStaff" type="number" min="5" max="120" value="${p.staffMinutes||15}"></div>
+      <div class="field2"><label>الملاك والمستأجرين — كام دقيقة</label>
+        <input id="ipRes" type="number" min="5" max="240" value="${p.residentMinutes||60}"></div>
       <div class="field2"><label>مدة التحذير قبل الإقفال (ثانية)</label>
-        <input id="idWarn" type="number" min="15" max="180" value="${c.warnSeconds}"></div>
+        <input id="ipWarn" type="number" min="15" max="180" value="${p.warnSeconds||60}"></div>
+      <div class="field2">
+        <label><input type="checkbox" id="ipOvr" ${p.allowBuildingOverride!==false?'checked':''}>
+          اسمح لرئيس الاتحاد يشدّدها على عمارته</label>
+      </div>
 
-      <p class="small" style="color:var(--muted)">الإعداد ده على الجهاز ده.</p>
+      <p class="small" style="color:var(--muted)">الإدارة بتشوف أرصدة وكشوف حساب،
+        فمدتها أقصر. الساكن بيشوف وحدته بس — إقفال متكرر عليه إزعاج بلا مقابل.</p>
 
       <div class="modal-actions">
-        <button class="btn primary" onclick="saveIdleSettings()">💾 حفظ</button>
+        <button class="btn primary" onclick="saveIdlePolicy()">💾 حفظ</button>
         <button class="btn ghost" onclick="closeModal()">إلغاء</button>
       </div>`);
   };
 
-  window.saveIdleSettings = function(){
+  window.saveIdlePolicy = async function(){
     const g = i => (document.getElementById(i) || {}).value;
-    saveCfg({
-      enabled: !!(document.getElementById('idOn') || {}).checked,
-      minutes: Math.min(120, Math.max(3, Number(g('idMin')) || 10)),
-      warnSeconds: Math.min(180, Math.max(15, Number(g('idWarn')) || 60)),
-    });
-    lastAct = Date.now();
-    closeModal();
-    if (window.toast) toast('اتحفظ إعداد إقفال الجلسة');
+    const chk = i => !!(document.getElementById(i) || {}).checked;
+    const value = {
+      enabled: chk('ipOn'),
+      staffMinutes:    Math.min(120, Math.max(5, Number(g('ipStaff')) || 15)),
+      residentMinutes: Math.min(240, Math.max(5, Number(g('ipRes'))   || 60)),
+      warnSeconds:     Math.min(180, Math.max(15, Number(g('ipWarn')) || 60)),
+      allowBuildingOverride: chk('ipOvr'),
+    };
+    try{
+      const { error } = await window.CLOUD._sb.from('platform_settings')
+        .upsert({ key:'idle_policy', value }, { onConflict:'key' });
+      if (error) throw error;
+      closeModal();
+      if (window.toast) toast('اتحفظت السياسة');
+      loadPolicy();
+    }catch(e){ showMessage(e.message); }
+  };
+
+  /* ---------- تشديد على مستوى العمارة ---------- */
+
+  window.openIdleBuilding = async function(){
+    const p = cfg();
+    openModal(`
+      <h3>⏳ إقفال الجلسة في عمارتك</h3>
+      <p class="small mtop">السياسة الحالية لدورك: <b>${p.minutes} دقيقة</b>.
+        تقدر تقصّرها لو الأجهزة في مكان مشترك — مش تطوّلها.</p>
+      <div class="field2 mtop2"><label>يقفل بعد كام دقيقة (فاضي = سياسة المنصة)</label>
+        <input id="ibMin" type="number" min="3" max="${p.minutes}" placeholder="${p.minutes}"></div>
+      <div class="modal-actions">
+        <button class="btn primary" onclick="saveIdleBuilding()">💾 حفظ</button>
+        <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+      </div>`);
+  };
+
+  window.saveIdleBuilding = async function(){
+    const v = (document.getElementById('ibMin') || {}).value;
+    try{
+      const uuid = CLOUD._cache.buildingUuid[window.activeBuildingId];
+      const { error } = await window.CLOUD._sb.from('buildings')
+        .update({ idle_minutes: v ? Math.max(3, Number(v)) : null }).eq('id', uuid);
+      if (error) throw error;
+      closeModal();
+      if (window.toast) toast('اتحفظ');
+      loadPolicy();
+    }catch(e){ showMessage(e.message); }
   };
 
   console.log('[عمارتنا] إقفال الجلسة عند الخمول جاهز');
