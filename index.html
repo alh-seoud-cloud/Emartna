@@ -1182,6 +1182,18 @@ function migrateBuildingData(){
   D.vendors=D.vendors||[];
   D.maintenanceReports=D.maintenanceReports||[];
   D.buildingChat=D.buildingChat||[];
+  /* رسايل قديمة اتسجلت من غير author_id بتترفض من السيرفر.
+     بنكمّل الهوية لرسايلي أنا، والباقي بيتعزل عند الدفع. */
+  (function(){
+    try{
+      const me=(window.CLOUD_AUTH&&CLOUD_AUTH.user)?CLOUD_AUTH.user.id:null;
+      if(!me)return;
+      const un=(window.currentUser&&currentUser())?currentUser().username:null;
+      D.buildingChat.forEach(m=>{
+        if(m&&m.kind==='message'&&!m.authorId&&m.authorUsername===un)m.authorId=me;
+      });
+    }catch(e){}
+  })();
   D.activityLog=D.activityLog||[];
   D.building.paymentInfo=D.building.paymentInfo||'';
   if(!D.building.paymentMethods){
@@ -3159,6 +3171,8 @@ function pageSysDashboard(){
       onclick="contactHead('${b.id}','sms')">✉️</button>`:''}
     <button class="btn sm ghost" title="سجل التواصل"
       onclick="openContactHistory('${b.id}')">📇</button>
+    <button class="btn sm ghost" title="شاشات العمارة"
+      onclick="openBuildingScreens(buildingUuidOf('${b.id}'),'${esc(b.name)}')">🎚️</button>
     <button class="btn sm ghost" onclick="renameBuildingPrompt('${b.id}')">الاسم</button>
     <button class="btn sm gold" onclick="resetBuildingAdminPasswordPrompt('${b.id}')">🔑</button>
     <button class="btn sm red" onclick="deleteBuildingPrompt('${b.id}')">حذف</button>
@@ -3185,6 +3199,7 @@ function pageSysDashboard(){
     <button class="btn ${window.__sysDashFilter==='expiringSoon'?'gold':'ghost'}" onclick="setSysDashFilter('expiringSoon')">⏰ هينتهي خلال 7 أيام (${expiringSoon.length})</button>
     ${window.__sysDashFilter!=='all'?`<button class="btn ghost" onclick="setSysDashFilter('all')">✕ مسح الفلتر (${filterMap[window.__sysDashFilter].label})</button>`:''}
     <div class="spacer"></div>
+    <button class="btn ghost" onclick="openPlanScreens()">🎚️ شاشات الاشتراك</button>
     <button class="btn ghost" onclick="openAllContacts()">📇 سجل التواصل</button>
     <button class="btn ghost" onclick="openFollowups()">📅 متابعات مستحقة</button>
     <button class="btn ghost" onclick="openImportBuildingsModal()">📥 استيراد عمارات بالجملة</button>
@@ -7008,10 +7023,13 @@ function pushChatEvent(eventType,icon,title,message,link){
   if(D.buildingChat.length>500)D.buildingChat=D.buildingChat.slice(-500);
 }
 function pageBuildingChat(u){
-  const __pc = `<div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
+  /* الساكن ما يشوفش القسم ده أصلًا غير لو متضاف في غرفة —
+     عرض زرار بيفتح على "مفيش غرف" بيوحي بحاجة مخفية عنه. */
+  const __pcShow = isStaffRole(u.role) || (window.myRoomCount && myRoomCount() > 0);
+  const __pc = __pcShow ? `<div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
     <button class="btn" onclick="openPrivateChats()">🔒 المحادثات الخاصة</button>
     <span class="small" style="color:var(--muted)">غرف مقفولة على أعضاء محدّدين —
-      مختلفة عن المحادثة العامة اللي تحت</span></div>`;
+      مختلفة عن المحادثة العامة اللي تحت</span></div>` : '';
   markChatRead();
   const items=[...(D.buildingChat||[])].sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
   return `${__pc}
@@ -10129,6 +10147,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
 <script type="module" src="emartna-permreport.js"></script>
 <script type="module" src="emartna-finops.js"></script>
 <script type="module" src="emartna-chatrooms.js"></script>
+<script type="module" src="emartna-planscreens.js"></script>
 <script type="module" src="emartna-recycle.js"></script>
 <script type="module" src="emartna-floors.js"></script>
 <script type="module" src="emartna-modal-size.js"></script>
