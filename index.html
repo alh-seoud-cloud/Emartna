@@ -6290,7 +6290,17 @@ function guardAction(page,action){
 }
 function screenVisible(u,page){
   if(!u)return false;
-  const grp=pageGroupKey(page,!isStaffRole(u.role));
+  const ownerCtx=!isStaffRole(u.role);
+  const grp=pageGroupKey(page,ownerCtx);
+  /* الشاشة مش ضمن نطاق المستخدم؟ ممنوعة.
+     من غير الشرط ده، pageGroupKey بترجع null للشاشات اللي برّه نطاقه
+     والدالة كانت بتكمّل لـ return true — فالساكن كان بيعدّي على لوحة
+     التحكم وبيانات العمارة وكشوف حساب باقي الشقق، لأن curPage قيمتها
+     الابتدائية 'dashboard' فبعد أي تحديث للصفحة بيبدأ عليها. */
+  if(!grp){
+    const other=pageGroupKey(page,!ownerCtx);
+    if(other)return false;
+  }
   if(grp&&!hasGroupPermission(u,grp))return false;
   if(!u.screenPerms)return true;
   return window.userCan?userCan(u,page,'view'):true;
@@ -6378,8 +6388,12 @@ function renderContent(){
   const pg=pageGroupKey(curPage,!isStaffRole(u.role));
   const defaultPage=isStaffRole(u.role)?'dashboard':'home';
   if(!screenVisible(u,curPage)){
+    /* شاشة برّه نطاق المستخدم (زي 'dashboard' الافتراضية للساكن بعد
+       تحديث الصفحة) = تحويل صامت. الرسالة تظهر بس لما يطلب شاشة من
+       نطاقه لكن مقفولة عليه — غير كده هيشوفها كل مرة يدخل. */
+    const outOfScope=!pageGroupKey(curPage,!isStaffRole(u.role));
     curPage=defaultPage;
-    if(window.showMessage)showMessage(
+    if(!outOfScope&&window.showMessage)showMessage(
       'ليس لديك صلاحية للوصول إلى هذه الصفحة.\n\n'+
       'يرجى التواصل مع رئيس اتحاد الملاك أو مسؤول النظام للحصول على الصلاحية المناسبة.');
   }
@@ -10085,6 +10099,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
 <script type="module" src="emartna-cloud.js"></script>
 <script type="module" src="emartna-auth.js"></script>
 <script type="module" src="emartna-users.js"></script>
+<script src="emartna-contacts.js"></script>
 <script type="module" src="emartna-platform.js"></script>
 <script type="module" src="emartna-contactlog.js"></script>
 <script type="module" src="emartna-permreport.js"></script>
