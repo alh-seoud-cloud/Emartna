@@ -382,11 +382,20 @@ window.deleteUser = function(id){
    4) شاشة الساكن — ربط الحساب بالشقة
    ============================================================ */
 
+/* الساكن ممكن يملك أكتر من وحدة. الوحدة النشطة هي اللي اختارها من
+   المبدّل (متخزّنة في الجلسة)، وبنرجع لوحدة حسابه لو مفيش اختيار.
+   النسخة القديمة كانت بتقرا u.apartmentId على طول — فالتبديل بين
+   الوحدات ماكانش بيأثر على أي شاشة. */
 window.myApartment = function(){
   const D = window.D, u = currentUser();
   if (!D || !u) return null;
+  const sel = (window.getSession && getSession()) ? getSession().apartmentId : null;
+  if (sel){
+    const a = D.apartments.find(x => x.id === sel);
+    if (a) return a;
+  }
   if (u.apartmentId) return D.apartments.find(a => a.id === u.apartmentId) || null;
-  return null;
+  return D.apartments[0] || null;
 };
 
 /* دوال الاسترجاع القديمة مش شغالة في السحابة */
