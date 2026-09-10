@@ -58,6 +58,32 @@ window.setSession   = (o) => { __sess = o; };
 window.clearSession = () => { __sess = null; };
 
 /* بعد تسجيل الدخول: نحدد المستخدم ده مين */
+/* الوحدة في الرابط: كل وحدة بقى ليها عنوان خاص بيها.
+   الجلسة في الذاكرة مش مشتركة بين التابات، فكل تاب يفتح وحدة
+   مختلفة ويشتغلوا مع بعض من غير تداخل. */
+function urlPick(){
+  try{
+    const q = new URLSearchParams(location.search);
+    return { b: q.get('b') || null, u: q.get('u') || null };
+  }catch(e){ return { b:null, u:null }; }
+}
+function writeUrlPick(code, apId){
+  try{
+    const q = new URLSearchParams(location.search);
+    if (code) q.set('b', code); else q.delete('b');
+    if (apId) q.set('u', apId); else q.delete('u');
+    const qs = q.toString();
+    history.replaceState(history.state, '',
+      location.pathname + (qs ? '?' + qs : '') + location.hash);
+  }catch(e){}
+}
+window.unitUrl = function(b){
+  const q = new URLSearchParams();
+  q.set('b', b.code);
+  if (b.apartment_id) q.set('u', b.apartment_id);
+  return location.origin + location.pathname + '?' + q.toString();
+};
+
 async function establishSession(preferBuildingId){
   const sb = window.CLOUD._sb;
 
@@ -114,13 +140,23 @@ async function establishSession(preferBuildingId){
     throw new Error('حسابك مش مربوط بأي عمارة. لو معاك كود دعوة، افتح رابط الدعوة. أو أنشئ عمارة جديدة.');
   }
 
-  const pick = preferBuildingId
-    ? list.find(b => b.code === preferBuildingId || b.building_id === preferBuildingId) || list[0]
-    : list[0];
+  const fromUrl = urlPick();
+  const wantB = preferBuildingId || fromUrl.b;
+  let pick = wantB
+    ? list.find(b => b.code === wantB || b.building_id === wantB)
+    : null;
+  /* لو الرابط محدد وحدة بعينها، نفتحها هي مش أول وحدة في العمارة */
+  if (pick && fromUrl.u){
+    const exact = list.find(b =>
+      (b.code === pick.code) && b.apartment_id === fromUrl.u);
+    if (exact) pick = exact;
+  }
+  if (!pick) pick = list[0];
 
   __sess = { type:'building', buildingId: pick.code,
                apartmentId: pick.apartment_id || null,      /* الوحدة جزء من الجلسة */
                username: user.id, authId: user.id };
+  writeUrlPick(pick.code, pick.apartment_id);
   return __sess;
 }
 
@@ -139,8 +175,21 @@ window.currentUser = function(){
   // كان `x.__authId === undefined` بيطابق أول دعوة مستنية —
   // فبيدخل بحساب صاحب شقة أو محل بالغلط.
   if (uid){
-    const u = (D.users || []).find(x => x.__authId === uid);
-    if (u) return u;
+    const mine = (D.users || []).filter(x => x.__authId === uid);
+    /* الساكن ممكن يملك أكتر من وحدة، فبيبقى له صف عضوية لكل وحدة.
+       لازم نرجّع صف الوحدة اللي مفتوحة في الجلسة — من غير كده
+       بنرجّع أول صف دايمًا وتبديل الوحدة مالوش أي أثر. */
+    if (mine.length > 1 && s.apartmentId){
+      /* الجلسة فيها uuid الوحدة، وصفوف المستخدمين فيها الرقم المحلي —
+         فبنترجم الأول. المقارنة المباشرة كانت بتفشل دايمًا. */
+      const ap = (D.apartments || []).find(a =>
+        a.__uuid === s.apartmentId || a.id === s.apartmentId);
+      const legacy = ap ? ap.id : s.apartmentId;
+      const exact = mine.find(x =>
+        x.apartmentId === legacy || x.apartmentId === s.apartmentId);
+      if (exact) return exact;
+    }
+    if (mine.length) return mine[0];
   }
 
   // الرجوع لاسم الجلسة لو موجود (وبنستبعد الدعوات المستنية)
@@ -222,6 +271,7 @@ window.switchBuilding = async function(key){
              apartmentId: b.apartment_id || null,
              username: CLOUD_AUTH.user.id, authId: CLOUD_AUTH.user.id };
   window.__activeApartmentId = b.apartment_id || null;
+  writeUrlPick(b.code, b.apartment_id);   /* الرابط يفضل مطابق للوحدة المفتوحة */
   /* تصفير الحالة المحلية يجبر renderRoot يحمّل بيانات العمارة الجديدة */
   window.D = null;
   window.activeBuildingId = null;
