@@ -118,7 +118,9 @@ async function establishSession(preferBuildingId){
     ? list.find(b => b.code === preferBuildingId || b.building_id === preferBuildingId) || list[0]
     : list[0];
 
-  __sess = { type:'building', buildingId: pick.code, username: user.id, authId: user.id };
+  __sess = { type:'building', buildingId: pick.code,
+               apartmentId: pick.apartment_id || null,      /* الوحدة جزء من الجلسة */
+               username: user.id, authId: user.id };
   return __sess;
 }
 
@@ -194,11 +196,18 @@ window.enterSysOwner = async function(){
    ============================================================ */
 window.myBuildings = () => (CLOUD_AUTH.buildings || []);
 
-window.switchBuilding = async function(code){
+/* المفتاح بقى "العمارة + الوحدة" مش العمارة بس — الساكن ممكن يملك
+   وحدتين في نفس العمارة، ولازم يفرّق بينهم في المبدّل. */
+window.myUnitKey = m => m.code + '::' + (m.apartment_id || '');
+
+window.switchBuilding = async function(key){
   const list = CLOUD_AUTH.buildings || [];
-  const b = list.find(x => x.code === code || x.building_id === code);
+  const b = list.find(x => myUnitKey(x) === key)
+         || list.find(x => x.code === key || x.building_id === key);
   if (!b) return;
-  if (__sess && __sess.buildingId === b.code) return;   // نفس العمارة
+  const sameUnit = __sess && __sess.buildingId === b.code
+                && (__sess.apartmentId || '') === (b.apartment_id || '');
+  if (sameUnit) return;
 
   try{
     if (window.showLoading) showLoading('بنفتح ' + (b.name || '') + '...');
@@ -210,7 +219,9 @@ window.switchBuilding = async function(code){
   if (window.hideLoading) hideLoading();
 
   __sess = { type:'building', buildingId: b.code,
+             apartmentId: b.apartment_id || null,
              username: CLOUD_AUTH.user.id, authId: CLOUD_AUTH.user.id };
+  window.__activeApartmentId = b.apartment_id || null;
   /* تصفير الحالة المحلية يجبر renderRoot يحمّل بيانات العمارة الجديدة */
   window.D = null;
   window.activeBuildingId = null;
@@ -218,13 +229,15 @@ window.switchBuilding = async function(code){
   window.curPage = (window.isStaffRole && isStaffRole(b.role)) ? 'dashboard' : 'home';
   renderRoot();
   if (window.resetHistoryBase) resetHistoryBase();
-  if (window.toast) toast('دخلت على ' + (b.name || ''));
+  if (window.toast) toast('دخلت على ' + (b.name || '') +
+    (b.unit_number ? ' — وحدة ' + b.unit_number : ''));
 };
 
 window.exitSysOwner = async function(){
   const list = CLOUD_AUTH.buildings || [];
   if (!list.length) return;
   __sess = { type:'building', buildingId:list[0].code,
+             apartmentId:list[0].apartment_id || null,
              username:CLOUD_AUTH.user.id, authId:CLOUD_AUTH.user.id };
   window.curPage = 'dashboard';
   renderRoot(); resetHistoryBase();
