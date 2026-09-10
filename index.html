@@ -9301,6 +9301,7 @@ const SETTINGS_CARDS=[
   {key:'categories',icon:'📋',title:'بنود المصروفات',sub:'إدارة تصنيفات المصروفات'},
   {key:'payment',icon:'💳',title:'طرق السداد والتواصل',sub:'بيانات تظهر لكل الملاك'},
   {key:'reminders',icon:'🔔',title:'التذكيرات التلقائية',sub:'تحكم في تذكيرات السداد والتحصيل'},
+  {key:'transparency',icon:'👁️',title:'اللي السكان يشوفوه',sub:'مصروفات العمارة وأرصدة الخزينة'},
   {key:'backup',icon:'☁️',title:'النسخ الاحتياطي',sub:'تصدير واستيراد بيانات العمارة'},
   {key:'license',icon:'🪪',title:'الرخصة والاشتراك',sub:'خطتك الحالية وحدود الاستخدام'},
   {key:'activity',icon:'📜',title:'سجل النشاط',sub:'كل التعديلات والحذف في العمارة'},
@@ -9320,8 +9321,54 @@ function openSettingsCard(key){
   if(key==='license'){go('license');return}
   if(key==='activity'){go('activity');return}
   if(key==='categories'){go('expenseCategories');return}
-  const fn={theme:openThemeModal,account:openMyAccountModal,payment:openPaymentContactModal,backup:openBackupModal,danger:openDangerZoneModal,reminders:openRemindersModal}[key];
+  const fn={theme:openThemeModal,account:openMyAccountModal,payment:openPaymentContactModal,backup:openBackupModal,danger:openDangerZoneModal,reminders:openRemindersModal,transparency:openTransparencyModal}[key];
   if(fn)fn();
+}
+/* الشفافية المالية قرار رئيس الاتحاد — فيه اتحادات بتنشر كل حاجة
+   للسكان، وفيه اللي بيعتبر رصيد الخزنة معلومة إدارية.
+   الحماية في القاعدة، فالإخفاء هنا مش شكلي. */
+async function openTransparencyModal(){
+  const b=D.building||{};
+  const ex=b.residentsSeeExpenses!==false, ba=b.residentsSeeBalances!==false;
+  openModal(`<h3>👁️ اللي السكان يشوفوه</h3>
+    <p class="small mtop">ده بيتطبّق على الخادم مش على الشاشة بس — لو قفلته،
+      البيانات ما بتوصلش لجهاز الساكن أصلًا.</p>
+
+    <label class="checkline mtop2">
+      <input type="checkbox" id="trExp" ${ex?'checked':''}>
+      <span><b>مصروفات العمارة</b>
+        <div class="small" style="color:var(--muted)">الساكن يشوف على إيه بتتصرف فلوس الاتحاد</div></span>
+    </label>
+    <label class="checkline mtop">
+      <input type="checkbox" id="trBal" ${ba?'checked':''}>
+      <span><b>أرصدة الخزينة والبنك</b>
+        <div class="small" style="color:var(--muted)">الرصيد الحالي والتحويلات بين الحسابات</div></span>
+    </label>
+
+    <p class="small mtop2" style="color:var(--muted)">
+      كشف حساب الساكن ومستحقاته بتفضل ظاهرة له في الحالتين — دي حقه.</p>
+
+    <div class="modal-actions">
+      <button class="btn primary" onclick="saveTransparency()">💾 حفظ</button>
+      <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+    </div>`);
+}
+async function saveTransparency(){
+  const ex=document.getElementById('trExp').checked;
+  const ba=document.getElementById('trBal').checked;
+  D.building.residentsSeeExpenses=ex; D.building.residentsSeeBalances=ba;
+  save();
+  try{
+    const uuid=CLOUD._cache.buildingUuid[activeBuildingId];
+    if(uuid){
+      const r=await CLOUD._sb.from('buildings')
+        .update({residents_see_expenses:ex,residents_see_balances:ba})
+        .eq('id',uuid).select('id');
+      if(r.error)throw r.error;
+      if(!r.data||!r.data.length)return showMessage('الحفظ ما أثّرش على أي صف.');
+    }
+  }catch(e){ return showMessage('الحفظ على الخادم فشل: '+(e.message||'')); }
+  closeModal(); toast('اتحفظ');
 }
 function openRemindersModal(){
   const rs=D.building.remindersSettings||{};
