@@ -225,6 +225,10 @@ const BUILDING_FIELDS = {
   paymentMethods:'payment_methods',
   contactPhoneCountry:'contact_phone_country', contactPhone:'contact_phone',
   remindersSettings:'reminders_settings',
+  /* قرار رئيس الاتحاد: السكان يشوفوا المصروفات والأرصدة ولا لأ.
+     لازم يتقرا من القاعدة عشان الشاشة تعرض الوضع الصح. */
+  residentsSeeExpenses:'residents_see_expenses',
+  residentsSeeBalances:'residents_see_balances',
   distributionWeights:'distribution_weights',
   lastReminderMonth:'last_reminder_month',
   lastChargeReminderMonth:'last_charge_reminder_month',
