@@ -1132,7 +1132,8 @@ async function createBuildingRecord(name,apartmentsCount,perFloor,adminUsername,
       appliedOfferId=offer.id;
     }
   }
-  REG.buildings.push({id,name,code,createdAt:todayISO(),license,referralCode:generateReferralCode(name),referredBy,appliedCoupon,appliedOfferId,claimedOfferId:appliedOfferId,signupSource:opts.signupSource||null});
+  REG.buildings.push({id,name,code,createdAt:todayISO(),license,referralCode:generateReferralCode(name),referredBy,appliedCoupon,appliedOfferId,claimedOfferId:appliedOfferId,signupSource:opts.signupSource||null,
+    ownerType:opts.ownerType||null,ownerTypeOther:opts.ownerTypeOther||null});
   if(adminPhone)linkLeadsToBuilding(adminPhone,id);
   saveRegistry();
 
@@ -1166,6 +1167,13 @@ async function createBuildingRecord(name,apartmentsCount,perFloor,adminUsername,
         const rec=REG.buildings.find(b=>b.id===id);
         if(rec){rec.code=r.code;rec.__uuid=r.uuid;}
         saveRegistry();
+        /* نوع الجهة المسجّلة — تحديث منفصل بدل ما نزوّد بارامتر
+           لدالة create_building اللي عندها ١٥ بارامتر أصلًا. */
+        if(opts.ownerType&&r.uuid){
+          try{ await CLOUD._sb.from('buildings').update({
+            owner_type:opts.ownerType, owner_type_other:opts.ownerTypeOther||null
+          }).eq('id',r.uuid); }catch(e){}
+        }
         return{id,code:r.code};
       }
     }catch(e){
@@ -2451,6 +2459,32 @@ function loginHTML(){
     </div>
   </div>`;
 }
+/* نوع الجهة المسجّلة — بيفرق في المتابعة والتسعير:
+   اتحاد سكني غير شركة إدارة عقارات غير مركز إداري. */
+const VISITOR_TYPES=[
+  ['union_head','رئيس اتحاد ملاك'],['owner','صاحب شقة / محل'],['tenant','مستأجر'],
+  ['company','شركة'],['admin_center','مركز إداري'],['other','أخرى'],
+];
+function visitorTypeLabel(k){const t=VISITOR_TYPES.find(x=>x[0]===k);return t?t[1]:(k||'—');}
+function visitorTypeField(selId,otherId,val,other){
+  return `<div class="field"><label>إنت مين؟</label>
+    <select id="${selId}" onchange="toggleVisitorOther('${selId}','${otherId}')">
+      <option value="">— اختار —</option>
+      ${VISITOR_TYPES.map(([k,l])=>`<option value="${k}" ${val===k?'selected':''}>${l}</option>`).join('')}
+    </select>
+    <input id="${otherId}" class="mtop ${val==='other'?'':'hidden'}"
+      placeholder="اكتب نوع الجهة" value="${esc(other||'')}">
+    <p class="small">بيساعدنا نجهّز البرنامج على احتياجك.</p></div>`;
+}
+function toggleVisitorOther(selId,otherId){
+  const sel=document.getElementById(selId), inp=document.getElementById(otherId);
+  if(sel&&inp)inp.classList.toggle('hidden',sel.value!=='other');
+}
+function readVisitorType(selId,otherId){
+  const k=(document.getElementById(selId)||{}).value||'';
+  const o=((document.getElementById(otherId)||{}).value||'').trim();
+  return {type:k||null, other:k==='other'?(o||null):null};
+}
 function signupHTML(){
   return `
   <div class="login-wrap">
@@ -2532,6 +2566,7 @@ function signupHTML(){
         <div class="field"><label>اسمك <span style="color:var(--red)">*</span></label><input id="suUser" name="name" autocomplete="name" placeholder="مثال: حسن محمد"><p class="small" style="margin-top:4px">الاسم ده بيظهر للسكان — مش اسم دخول.</p></div>
         <div class="field" style="display:flex;gap:8px">
           ${phoneField('suCountry','suPhone','+20','','رقم الهاتف',true,'ده اللي هتدخل بيه')}
+          ${visitorTypeField('suVisitorType','suVisitorOther')}
         </div>
         <div class="field"><label>البريد الإلكتروني <span style="font-weight:400">(اختياري — تقدر تدخل بيه كمان)</span></label><input id="suEmail" type="email" placeholder="غير إلزامي"></div>
         <div class="field"><label>كلمة المرور</label>${pwField('suPass','','','new-password')}<p class="small" style="margin-top:4px">٨ خانات على الأقل</p></div>
@@ -2697,7 +2732,9 @@ async function doSignup(){
   const referralCodeUsed=document.getElementById('suReferral').value.trim();
   const couponCodeUsed=document.getElementById('suCoupon').value.trim();
   const signupSource=getCampaignSource();
-  const{code,id:newBuildingId}=await createBuildingRecord(name,count,4,username,password,rq,ra,phoneCountry,phone,email,trialPlan().key,{groundShopsCount:groundShops,groundFloorCount:groundCount,address,locationUrl,city,country,governorate,communityType,referralCodeUsed,couponCodeUsed,signupSource});
+  const{code,id:newBuildingId}=await createBuildingRecord(name,count,4,username,password,rq,ra,phoneCountry,phone,email,trialPlan().key,{groundShopsCount:groundShops,groundFloorCount:groundCount,address,locationUrl,city,country,governorate,communityType,referralCodeUsed,couponCodeUsed,signupSource,
+    ...(function(){const v=readVisitorType('suVisitorType','suVisitorOther');
+      return {ownerType:v.type,ownerTypeOther:v.other};})()});
   pushSysNotification('عمارة جديدة سجّلت بنفسها',`"${name}" - خطة تجريبية - دخول رئيس الاتحاد: ${phoneFull(phoneCountry,phone)}`,'sysdash');
   window.__viewMode='login';
   try{history.pushState({viewMode:'login'},'',location.href);}catch(e){}
