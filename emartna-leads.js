@@ -47,14 +47,16 @@
     }catch(e){}
   }
 
-  async function saveLead(phone, name, role){
+  async function saveLead(phone, name, role, vt){
     try{
       const sb = window.CLOUD && window.CLOUD._sb;
       if (!sb || !phone) return;
       const o = srcOf();
+      const t = vt || { type: savedType() || null, other: null };
       await sb.rpc('record_demo_lead', {
         p_phone: phone, p_name: name || null, p_role: role || null,
         p_source: o.s, p_campaign: o.c,
+        p_visitor_type: t.type || null, p_visitor_other: t.other || null,
       });
     }catch(e){}
   }
@@ -92,10 +94,19 @@
 
   /* ---------- نافذة طلب الرقم ---------- */
 
+  const NAME_KEY = 'emartna_demo_name';
+  const TYPE_KEY = 'emartna_demo_vtype';
+  const savedType = () => { try{ return localStorage.getItem(TYPE_KEY) || ''; }catch(e){ return ''; } };
+  const saveType  = t => { try{ if(t) localStorage.setItem(TYPE_KEY, t); }catch(e){} };
+  const savedName = () => { try{ return localStorage.getItem(NAME_KEY) || ''; }catch(e){ return ''; } };
+  const saveName  = n => { try{ if(n) localStorage.setItem(NAME_KEY, n); }catch(e){} };
+
   window.askPhoneThenDemo = function(role){
     const prev = savedPhone();
-    if (prev){                                  // جرّب قبل كده — مش هنسأله تاني
-      saveLead(prev, '', role);
+    /* عنده رقم واسم = جرّب قبل كده بالكامل، ما نضايقهوش تاني.
+       عنده رقم من غير اسم = اتخطّى الاسم أول مرة، فنسأله عنه بس. */
+    if (prev && savedName()){
+      saveLead(prev, savedName(), role, { type: savedType() || null, other:null });
       return startDemo(role);
     }
 
@@ -105,13 +116,15 @@
       <p class="small mtop">التجربة مجانية بالكامل ومن غير تسجيل. سيبلنا رقمك عشان
       نقدر نساعدك لو احتجت — <b>مش هنبعتلك أي إعلانات</b>.</p>
 
-      <div class="field2 mtop2"><label>الاسم (اختياري)</label>
-        <input id="dlName" placeholder="اسمك"></div>
+      <div class="field2 mtop2"><label>الاسم</label>
+        <input id="dlName" placeholder="اسمك" value="${esc2(savedName())}"></div>
+      ${window.visitorTypeField ? visitorTypeField('dlType','dlTypeOther', savedType()) : ''}
       <div class="grid g2">
         <div class="field2"><label>مفتاح الدولة</label>
           <input id="dlCC" value="+20" dir="ltr"></div>
         <div class="field2"><label>رقم الموبايل</label>
-          <input id="dlPhone" dir="ltr" placeholder="01xxxxxxxxx" inputmode="numeric"></div>
+          <input id="dlPhone" dir="ltr" placeholder="01xxxxxxxxx" inputmode="numeric"
+            value="${esc2(prev ? String(prev).replace(/^20/, '0') : '')}"></div>
       </div>
 
       <button class="btn primary mtop2" style="width:100%;padding:13px;font-size:15px"
@@ -132,7 +145,11 @@
     if (!ph || ph.length < 8) return showMessage('اكتب رقم موبايل صحيح، أو اضغط "تخطّي"');
     const full = (cc + ph.replace(/^0+/,'')).replace(/[^\d]/g,'');
     savePhone(full);
-    saveLead(full, g('dlName').trim(), role);
+    const nm = g('dlName').trim();
+    saveName(nm);                // عشان ما نسألوش عن الاسم تاني
+    const vt = window.readVisitorType ? readVisitorType('dlType','dlTypeOther') : {};
+    saveType(vt.type || '');
+    saveLead(full, nm, role, vt);
     ev('phone_given');           // حدث مستقل — 'demo' معناه جرّب البرنامج
     ev('demo');
     closeModal();
@@ -317,6 +334,14 @@
       { key:'role', label:'جرّب كـ', value:r => r.role_tried||'',
         cell:r => r.role_tried === 'owner' ? '🏠 صاحب شقة'
                 : r.role_tried === 'admin' ? '🏢 رئيس اتحاد' : '—' },
+      /* نوع الجهة اللي قال عن نفسه إنه هي — بيفرق في المتابعة والتسعير */
+      { key:'vtype', label:'نوع الجهة',
+        value:r => r.visitor_type || '',
+        cell:r => r.visitor_type
+          ? esc2(r.visitor_type === 'other' && r.visitor_type_other
+              ? r.visitor_type_other
+              : (window.visitorTypeLabel ? visitorTypeLabel(r.visitor_type) : r.visitor_type))
+          : '<span style="color:var(--muted)">—</span>' },
       { key:'source', label:'المصدر', value:r => r.source||'',
         cell:r => esc2(LB[r.source] || r.source || '—') },
       { key:'first', label:'أول تجربة', value:r => r.first_try_at||'',
@@ -542,6 +567,14 @@
       { key:'role', label:'جرّب كـ', value:r => r.role_tried||'',
         cell:r => r.role_tried === 'owner' ? '🏠 صاحب شقة'
                 : r.role_tried === 'admin' ? '🏢 رئيس اتحاد' : '—' },
+      /* نوع الجهة اللي قال عن نفسه إنه هي — بيفرق في المتابعة والتسعير */
+      { key:'vtype', label:'نوع الجهة',
+        value:r => r.visitor_type || '',
+        cell:r => r.visitor_type
+          ? esc2(r.visitor_type === 'other' && r.visitor_type_other
+              ? r.visitor_type_other
+              : (window.visitorTypeLabel ? visitorTypeLabel(r.visitor_type) : r.visitor_type))
+          : '<span style="color:var(--muted)">—</span>' },
       { key:'source', label:'المصدر', value:r => r.source||'',
         cell:r => esc2(LB[r.source] || r.source || '—') },
       { key:'phone', label:'الموبايل', value:r => r.phone||'',
