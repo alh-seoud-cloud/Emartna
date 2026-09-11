@@ -147,20 +147,20 @@ window.saveProfileComplete = async function(){
     }
 
     if (vals.email){
-      /* مهم: الإيميل لازم يتغيّر في auth مش في profiles بس — إيميل
-         الدخول هو اللي رسالة الاسترجاع بتروح عليه. تحديث profiles
-         لوحده بيوثّق الإيميل من غير ما يفعّل الاسترجاع. */
-      const { error: aErr } = await sb.auth.updateUser({ email: vals.email });
+      /* auth.updateUser بيعمل تدفق "تغيير إيميل" بيطلب تأكيد من العنوان
+         القديم كمان — والقديم هنا وهمي (@emartna.local) فالعملية كانت
+         بتترفض برسالة "Email address is invalid".
+         الدالة دي بتكتب إيميل الدخول مباشرة للمستخدم الحالي بس. */
+      const { error: aErr } = await sb.rpc('set_my_login_email', { p_email: vals.email });
       if (aErr) throw aErr;
-      await sb.from('profiles').update({ email: vals.email }).eq('id', p.id);
     }
 
     PROFILE = null;
     closeModal();
     if (vals.email){
-      showMessage('بعتنالك رسالة تأكيد على ' + vals.email + '.\n\n' +
-        'افتحها واضغط اللينك عشان الإيميل يتفعّل — وبعدها تقدر تسترجع ' +
-        'كلمة المرور بنفسك في أي وقت.');
+      showMessage('اتسجّل بريدك: ' + vals.email + '\n\n' +
+        'دلوقتي تقدر تدخل بيه أو برقم موبايلك، ولو نسيت كلمة المرور ' +
+        'هتوصلك رسالة الاسترجاع عليه.');
     } else if (window.toast) toast('اتحفظت بياناتك');
   }catch(e){
     const m = String(e.message || '');

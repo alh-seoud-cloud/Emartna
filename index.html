@@ -10103,11 +10103,26 @@ function pageProfile(u){
   <div class="card content-narrow mtop2"><h3>🔐 الدخول بالبصمة</h3>${bioAccountSectionHTML()}</div>
   <div class="card content-narrow mtop2">${deviceNotificationSectionHTML()}</div>`;
 }
-function saveProfile(){
+async function saveProfile(){
   const u=currentUser();
   const phone=document.getElementById('prPhone').value.trim();
   if(!phone)return showMessage('رقم الهاتف مطلوب');
-  u.name=document.getElementById('prName').value.trim(); u.phoneCountry=document.getElementById('prCountry').value; u.phone=phone; u.email=document.getElementById('prEmail').value.trim();
+  const email=document.getElementById('prEmail').value.trim().toLowerCase();
+  if(email&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
+    return showMessage('البريد الإلكتروني مش مكتوب صح');
+
+  /* الإيميل كان بيتحفظ محليًا بس، فما كانش بيوصل القاعدة ولا بيفعّل
+     الاسترجاع. دلوقتي بيتكتب كإيميل دخول فعلي. */
+  if(email&&email!==(u.email||'')){
+    try{
+      const { error } = await CLOUD._sb.rpc('set_my_login_email',{ p_email: email });
+      if(error) throw error;
+    }catch(e){ return showMessage('البريد ما اتحفظش: '+(e.message||'')); }
+  }
+
+  u.name=document.getElementById('prName').value.trim();
+  u.phoneCountry=document.getElementById('prCountry').value;
+  u.phone=phone; u.email=email;
   const a=myApartment(); if(a){a.ownerName=u.name;a.phoneCountry=u.phoneCountry;a.phone=u.phone;a.email=u.email;}
   save();toast('تم الحفظ');renderRoot();
 }
