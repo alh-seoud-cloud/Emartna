@@ -115,6 +115,8 @@ window.pageUsers = function(){
         if (s === 'none' && r.ap)
           return `<div class="flexrow">
             <button class="btn sm" onclick="createInvite('${r.ap.id}')">📨 ولّد دعوة</button>
+            <button class="btn sm ghost" onclick="linkExistingUser('${r.ap.id}')"
+              title="الوحدة دي لحد عنده حساب في العمارة بالفعل">🔗 اربطها بمستخدم موجود</button>
             <button class="btn sm ghost" onclick="openApartmentModal('${r.ap.id}')">🏠 تعديل الوحدة</button></div>`;
         if (r.u)
           return `<div class="flexrow">
@@ -173,6 +175,79 @@ window.refreshUsers = async function(){
     renderContent();
     toast('تم التحديث');
   }catch(e){ showMessage(e.message); }
+};
+
+/* الساكن اللي عنده حساب بالفعل: ربطه بوحدة تانية مباشرة بدل دعوة
+   جديدة. الدعوة لها معنى لما الشخص لسه ما عملش حساب — بس لو عنده
+   حساب، الدورة دي زيادة: كود وواتساب وتسجيل دخول عشان حاجة رئيس
+   الاتحاد يقدر يعملها بضغطة. */
+window.linkExistingUser = async function(apId){
+  const D = window.D;
+  const ap = (D.apartments || []).find(a => a.id === apId);
+  if (!ap) return;
+
+  const joined = (D.users || []).filter(u =>
+    u.__authId && u.inviteStatus !== 'pending' && u.active !== false);
+  if (!joined.length)
+    return showMessage('مفيش حد عنده حساب في العمارة دي لسه. استخدم "ولّد دعوة".');
+
+  openModal(`
+    <h3>🔗 ربط ${esc(unitLabel(ap))} بمستخدم موجود</h3>
+    <p class="small mtop">اختار حد عنده حساب في العمارة — الوحدة هتتضاف
+      لحسابه على طول من غير دعوة، وهيلاقيها في مبدّل الوحدات.</p>
+
+    <div class="field2 mtop2"><label>المستخدم</label>
+      <select id="lkUser">
+        ${joined.map(u => `<option value="${esc(u.id)}">${esc(u.name || u.username)}
+          · ${esc(phoneFull(u.phoneCountry, u.phone) || '')}</option>`).join('')}
+      </select></div>
+
+    <div class="field2"><label>صفته في الوحدة دي</label>
+      <select id="lkRole">
+        <option value="owner">🏠 مالك</option>
+        <option value="tenant">🔑 مستأجر</option>
+      </select></div>
+
+    <div class="modal-actions">
+      <button class="btn primary" onclick="doLinkExistingUser('${esc(apId)}')">🔗 اربط</button>
+      <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+    </div>`);
+};
+
+window.doLinkExistingUser = async function(apId){
+  const D = window.D;
+  const uid  = (document.getElementById('lkUser') || {}).value;
+  const role = (document.getElementById('lkRole') || {}).value || 'owner';
+  const u = (D.users || []).find(x => x.id === uid);
+  const ap = (D.apartments || []).find(a => a.id === apId);
+  if (!u || !u.__authId || !ap) return showMessage('اختيار غير صالح.');
+
+  try{
+    const sb = window.CLOUD._sb;
+    const bUuid = CLOUD._cache.buildingUuid[window.activeBuildingId];
+    const apUuid = ap.__uuid;
+    if (!bUuid || !apUuid)
+      return showMessage('الوحدة لسه مش متزامنة مع السحابة — حدّث الصفحة وجرّب تاني.');
+
+    const r = await sb.from('memberships').insert({
+      building_id: bUuid, user_id: u.__authId,
+      apartment_id: apUuid, role, active: true,
+    }).select('id');
+    if (r.error) throw r.error;
+
+    closeModal();
+    showMessage(`اتربطت ${unitLabel(ap)} بحساب ${u.name || u.username}.\n` +
+      'هيلاقيها في مبدّل الوحدات عنده من غير ما يعمل حاجة.');
+    if (window.refreshUsers) refreshUsers();
+  }catch(e){
+    const m = String(e.message || '');
+    if (/uq_unit_one_owner/.test(m))
+      return showMessage('الوحدة دي ليها ' + (role==='owner'?'مالك':'مستأجر') +
+        ' نشط بالفعل. شيله الأول أو اربطها بصفة تانية.');
+    if (/uq_membership_unit/.test(m))
+      return showMessage('المستخدم ده مربوط بالوحدة دي بالفعل.');
+    showMessage('الربط فشل: ' + m);
+  }
 };
 
 window.createInvite = async function(apId){
@@ -580,6 +655,14 @@ window.openUserModal = function(id){
         ${u.inviteStatus === 'pending' ? '⏳ لسه مسجّلش' : '✅ عنده حساب'}</p>
     </div>
 
+    <div class="field2 mtop"><label>البريد الإلكتروني</label>
+      <input id="uEmail" type="email" dir="ltr" value="${esc(u.email || '')}"
+        placeholder="مثال: name@mail.com">
+      <p class="small" style="color:var(--muted)">
+        ${u.email ? 'الإيميل ده بيستخدمه في استرجاع كلمة المرور.'
+                  : '⚠️ مالوش إيميل — يعني مش هيقدر يسترجع كلمة المرور بنفسه. ضيفه هنا.'}</p>
+    </div>
+
     <div class="field2 mtop"><label>الصلاحية</label>
       <select id="uRole" ${isSelf?'disabled':''} onchange="applyRoleTemplate('u')">
         ${Object.entries(CLOUD_ROLES).map(([k,v]) =>
@@ -716,6 +799,13 @@ window.saveUser = async function(id){
   /* كانت بتقرا u.screenPerms (القيمة القديمة في الذاكرة) بدل ما تقرا
      الجدول اللي قدام المستخدم — فأي تعديل في الخانات ما كانش بيتحفظ
      خالص، والصلاحيات "ترجع زي الأول" بعد التحديث. */
+  /* الإيميل: المستخدم المسجّل برقم موبايل بس مش بيقدر يسترجع كلمة
+     المرور — الاسترجاع بيمشي بالإيميل. فرئيس الاتحاد يقدر يضيفه هنا. */
+  const emailEl = document.getElementById('uEmail');
+  const newEmail = emailEl ? (emailEl.value || '').trim().toLowerCase() : null;
+  if (newEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(newEmail))
+    return showMessage('الإيميل مش مكتوب صح.');
+
   const screenPerms = window.readScreenPerms ? readScreenPerms() : null;
   if (!screenPerms && u.screenPerms)
     return showMessage('جدول الصلاحيات ما اتحمّلش — الحفظ اتوقف عشان ما تتمسحش الصلاحيات الحالية. حدّث الصفحة وجرّب تاني.');
@@ -743,6 +833,16 @@ window.saveUser = async function(id){
         return showMessage('الحفظ ما أثّرش على أي صف.');
     }
     if (screenPerms){ u.screenPerms = screenPerms; u.permissions = perms; }
+
+    /* الإيميل على الملف الشخصي مش على العضوية */
+    if (newEmail !== null && newEmail !== (u.email || '') && u.__authId){
+      const pr = await window.CLOUD._sb.from('profiles')
+        .update({ email: newEmail || null }).eq('id', u.__authId).select('id');
+      if (pr.error) return showMessage('الإيميل ما اتحفظش: ' + pr.error.message);
+      if (!pr.data || !pr.data.length)
+        return showMessage('الإيميل ما اتحفظش — مالكش صلاحية تعديل الملف ده.');
+      u.email = newEmail;
+    }
     if (u.role !== role)
       logActivity('تغيير صلاحية', `${u.name}: ${u.role} → ${role}`);
     closeModal();
