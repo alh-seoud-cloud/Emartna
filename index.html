@@ -10002,11 +10002,17 @@ function pageOwnerHome(u){
 /* ---------- بياناتي ---------- */
 function pageProfile(u){
   return `
+  ${window.profileGapBadge?profileGapBadge():''}
   <div class="card content-narrow"><h3>بياناتي</h3>
     <div class="grid g2 mtop">
       <div class="field2"><label>الاسم</label><input id="prName" value="${esc(u.name)}"></div>
       ${phoneField('prCountry','prPhone',u.phoneCountry,esc(u.phone||''),'رقم الهاتف',true)}
-      <div class="field2"><label>البريد الإلكتروني (اختياري)</label><input id="prEmail" type="email" value="${esc(u.email||'')}"></div>
+      <div class="field2"><label>البريد الإلكتروني</label>
+        <input id="prEmail" type="email" dir="ltr" value="${esc((u.email||'').endsWith('@emartna.local')?'':(u.email||''))}">
+        <p class="small" style="color:var(--muted)">
+          ${(!u.email||String(u.email).endsWith('@emartna.local'))
+            ? '<span style="color:var(--red)">⚠️ مفيش بريد مسجّل — مش هتقدر تسترجع كلمة المرور لوحدك.</span>'
+            : 'بيستخدم في استرجاع كلمة المرور.'}</p></div>
     </div>
     <button class="btn primary" onclick="saveProfile()">💾 حفظ</button></div>
   <div class="card content-narrow mtop2"><h3>تغيير كلمة المرور</h3>
@@ -10249,6 +10255,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
 <script type="module" src="emartna-cloud.js"></script>
 <script type="module" src="emartna-auth.js"></script>
+<script type="module" src="emartna-profile.js"></script>
 <script type="module" src="emartna-users.js"></script>
 <script src="emartna-contacts.js"></script>
 <script type="module" src="emartna-platform.js"></script>
