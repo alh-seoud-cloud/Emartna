@@ -2587,7 +2587,11 @@ function signupHTML(){
           ${phoneField('suCountry','suPhone','+20','','رقم الهاتف',true,'ده اللي هتدخل بيه')}
           ${visitorTypeField('suVisitorType','suVisitorOther')}
         </div>
-        <div class="field"><label>البريد الإلكتروني <span style="font-weight:400">(اختياري — تقدر تدخل بيه كمان)</span></label><input id="suEmail" type="email" placeholder="غير إلزامي"></div>
+        <div class="field"><label>البريد الإلكتروني</label>
+          <input id="suEmail" type="email" dir="ltr" placeholder="name@mail.com">
+          <p class="small" style="color:var(--muted)">
+            ده الطريق الوحيد لاسترجاع كلمة المرور لو نسيتها — المسجّل برقم موبايل
+            بس مش هيقدر يسترجع حسابه بنفسه.</p></div>
         <div class="field"><label>كلمة المرور</label>${pwField('suPass','','','new-password')}<p class="small" style="margin-top:4px">٨ خانات على الأقل</p></div>
         <div class="field"><label>تأكيد كلمة المرور</label>${pwField('suPassConfirm','','','new-password')}<p class="small" id="suPassMatchMsg" style="margin-top:4px"></p></div>
       </div>
@@ -2729,6 +2733,12 @@ async function doSignup(){
   if(!password)return showLoginError('كلمة المرور مطلوبة');
   if(!document.getElementById('suAgree').checked)return showLoginError('لازم توافق على سياسة الخصوصية وشروط الاستخدام للمتابعة');
   if(!phone)return showLoginError('رقم الهاتف مطلوب');
+  /* الإيميل إلزامي: المسجّل برقم موبايل بس بياخد إيميل داخلي وهمي
+     (@emartna.local) مش بيستقبل أي رسالة — يعني مستحيل يسترجع
+     كلمة المرور بنفسه، ويفضل معتمد على تدخّل يدوي منك. */
+  if(!email)return showLoginError('البريد الإلكتروني مطلوب — من غيره مش هتقدر تسترجع كلمة المرور لو نسيتها');
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
+    return showLoginError('البريد الإلكتروني مش مكتوب صح');
   if(!city)return showLoginError('المدينة مطلوبة');
   if(!address)return showLoginError('عنوان العمارة مطلوب');
   if(!window.__signupPhoneConfirmed){
