@@ -115,8 +115,8 @@ window.pageUsers = function(){
         if (s === 'none' && r.ap)
           return `<div class="flexrow">
             <button class="btn sm" onclick="createInvite('${r.ap.id}')">📨 ولّد دعوة</button>
-            <button class="btn sm ghost" onclick="linkExistingUser('${r.ap.id}')"
-              title="الوحدة دي لحد عنده حساب في العمارة بالفعل">🔗 اربطها بمستخدم موجود</button>
+            <button class="btn sm ghost" onclick="inviteExistingUser('${r.ap.id}')"
+              title="بيبعتله كود يأكّد بيه — مش بيربطه من غير علمه">🔗 ادعُ مستخدم موجود</button>
             <button class="btn sm ghost" onclick="openApartmentModal('${r.ap.id}')">🏠 تعديل الوحدة</button></div>`;
         if (r.u)
           return `<div class="flexrow">
@@ -181,7 +181,7 @@ window.refreshUsers = async function(){
    جديدة. الدعوة لها معنى لما الشخص لسه ما عملش حساب — بس لو عنده
    حساب، الدورة دي زيادة: كود وواتساب وتسجيل دخول عشان حاجة رئيس
    الاتحاد يقدر يعملها بضغطة. */
-window.linkExistingUser = async function(apId){
+window.inviteExistingUser = async function(apId){
   const D = window.D;
   const ap = (D.apartments || []).find(a => a.id === apId);
   if (!ap) return;
@@ -192,9 +192,10 @@ window.linkExistingUser = async function(apId){
     return showMessage('مفيش حد عنده حساب في العمارة دي لسه. استخدم "ولّد دعوة".');
 
   openModal(`
-    <h3>🔗 ربط ${esc(unitLabel(ap))} بمستخدم موجود</h3>
-    <p class="small mtop">اختار حد عنده حساب في العمارة — الوحدة هتتضاف
-      لحسابه على طول من غير دعوة، وهيلاقيها في مبدّل الوحدات.</p>
+    <h3>🔗 دعوة مستخدم موجود لـ${esc(unitLabel(ap))}</h3>
+    <p class="small mtop">اختار حد عنده حساب في العمارة — هيتولّد كود دعوة
+      تبعتهوله، وهو يأكّد بنفسه. <b>مش بنضيف الوحدة لحسابه من غير علمه</b>
+      عشان ما يحصلش ربط بالغلط.</p>
 
     <div class="field2 mtop2"><label>المستخدم</label>
       <select id="lkUser">
@@ -209,11 +210,14 @@ window.linkExistingUser = async function(apId){
       </select></div>
 
     <div class="modal-actions">
-      <button class="btn primary" onclick="doLinkExistingUser('${esc(apId)}')">🔗 اربط</button>
+      <button class="btn primary" onclick="doLinkExistingUser('${esc(apId)}')">📨 ولّد الكود</button>
       <button class="btn ghost" onclick="closeModal()">إلغاء</button>
     </div>`);
 };
 
+/* الربط المباشر اتشال: كان بيضيف وحدة لحساب حد من غير علمه ولا
+   موافقته. دلوقتي بيتولّد كود دعوة والمستخدم يأكّد بنفسه — نفس
+   السبب اللي خلّانا نمنع الانضمام التلقائي بتطابق رقم الموبايل. */
 window.doLinkExistingUser = async function(apId){
   const D = window.D;
   const uid  = (document.getElementById('lkUser') || {}).value;
@@ -229,15 +233,15 @@ window.doLinkExistingUser = async function(apId){
     if (!bUuid || !apUuid)
       return showMessage('الوحدة لسه مش متزامنة مع السحابة — حدّث الصفحة وجرّب تاني.');
 
-    const r = await sb.from('memberships').insert({
-      building_id: bUuid, user_id: u.__authId,
-      apartment_id: apUuid, role, active: true,
-    }).select('id');
-    if (r.error) throw r.error;
-
+    const inv = await window.CLOUD.invites.create(window.activeBuildingId, {
+      apartmentId: apId, phone: u.phone || null,
+      phoneCountry: u.phoneCountry || '+20', email: u.email || null,
+      role, name: u.name || '',
+    });
     closeModal();
-    showMessage(`اتربطت ${unitLabel(ap)} بحساب ${u.name || u.username}.\n` +
-      'هيلاقيها في مبدّل الوحدات عنده من غير ما يعمل حاجة.');
+    showMessage(`الكود: ${inv.invite_code}\n\n` +
+      `ابعته لـ${u.name || u.username} — يفتح البرنامج ويدخل الكود ` +
+      `عشان ${unitLabel(ap)} تتضاف لحسابه.`);
     if (window.refreshUsers) refreshUsers();
   }catch(e){
     const m = String(e.message || '');
