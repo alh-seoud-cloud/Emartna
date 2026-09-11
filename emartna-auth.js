@@ -136,7 +136,10 @@ async function establishSession(preferBuildingId){
   const list = CLOUD_AUTH.buildings;
   if (!list.length){
     __sess = null;
-    throw new Error('حسابك مش مربوط بأي عمارة. لو معاك كود دعوة، افتح رابط الدعوة. أو أنشئ عمارة جديدة.');
+    /* الداخل بجوجل لأول مرة مالوش عمارة — نوجّهه بدل رسالة جافة */
+    throw new Error('حسابك مش مربوط بأي عمارة.\n\n' +
+      'لو معاك كود دعوة من رئيس الاتحاد، افتح رابط الدعوة.\n' +
+      'ولو إنت رئيس اتحاد، أنشئ عمارة جديدة من "أنشئ حساب رئيس اتحاد".');
   }
 
   const fromUrl = urlPick();
@@ -152,6 +155,9 @@ async function establishSession(preferBuildingId){
   __sess = { type:'building', buildingId: pick.code,
                apartmentId: pick.apartment_id || null,      /* الوحدة جزء من الجلسة */
                username: user.id, authId: user.id };
+  writeUrlPick(pick.code, pick.apartment_id);
+  /* داخل بجوجل ومالوش رقم؟ نطلبه مرة واحدة — الوحدات مربوطة بالرقم */
+  if (window.askPhoneAfterOAuth) setTimeout(() => askPhoneAfterOAuth(), 1200);
   return __sess;
 }
 

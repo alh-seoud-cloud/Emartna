@@ -903,6 +903,38 @@ const CLOUD = {
     if (error) throw error;
   },
 
+  /* الدخول بجوجل: بيحل مشكلة الإيميل من جذرها — حساب جوجل معاه
+     إيميل حقيقي متحقق منه، فاسترجاع كلمة المرور بيبقى مسؤولية جوجل.
+     محتاج تفعيل المزوّد في لوحة Supabase الأول. */
+  async signInWithGoogle(redirectTo){
+    const { data, error } = await sb.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: redirectTo || (location.origin + location.pathname + location.search),
+        queryParams: { prompt: 'select_account' },
+      },
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  /* المستخدم اللي دخل بجوجل مالوش رقم موبايل — والوحدات والدعوات
+     مربوطة بالرقم، فلازم يكمّله مرة واحدة. */
+  async myProfile(){
+    const { data:{ user } } = await sb.auth.getUser();
+    if (!user) return null;
+    const { data } = await sb.from('profiles')
+      .select('id,full_name,email,phone,phone_e164,avatar_url').eq('id', user.id).single();
+    return data || null;
+  },
+
+  async setMyPhone(phone, country = '+20'){
+    const { data, error } = await sb.rpc('set_my_phone',
+      { p_phone: phone, p_country: country });
+    if (error) throw error;
+    return data;
+  },
+
   async signOut(){
     await sb.auth.signOut();
     cache.buildings = {}; cache.registry = null; cache.snapshot = {};

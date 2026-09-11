@@ -2461,6 +2461,19 @@ function loginHTML(){
       <button class="login-btn" id="lgBtn" type="submit">تسجيل الدخول</button>
       </form>
       ${(bioSupported()&&bioIndex().length)?`<button class="login-btn" style="background:var(--gold);margin-top:8px" onclick="loginWithBiometric()">🔐 دخول بالبصمة</button>`:''}
+      <button class="login-btn" type="button" onclick="loginWithGoogle()"
+        style="background:#fff;color:#3c4043;border:1.5px solid #dadce0;margin-top:8px;
+               display:flex;align-items:center;justify-content:center;gap:10px">
+        <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+          <path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-2.8-.4-4H24v7.3h12.1c-.2 2-1.6 5-4.5 7l-.1.4 6.5 5 .5.1c4.1-3.8 6.6-9.4 6.6-15.8z"/>
+          <path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.3l-6.9-5.4c-1.8 1.3-4.3 2.2-7.6 2.2-5.8 0-10.7-3.8-12.5-9.900l-.4.1-6.7 5.2-.1.4C7.9 40.9 15.3 46 24 46z"/>
+          <path fill="#FBBC05" d="M11.5 27.6c-.5-1.4-.7-2.9-.7-4.6s.3-3.2.7-4.6l-.1-.4-6.8-5.3-.2.1C2.9 15.8 2 19.4 2 23s.9 7.2 2.4 10.2l7.1-5.6z"/>
+          <path fill="#EA4335" d="M24 9.5c4.1 0 6.9 1.8 8.5 3.3l6.2-6C34.9 3.4 29.9 1 24 1 15.3 1 7.9 6.1 4.4 13.5l7.1 5.6C13.3 13.3 18.2 9.5 24 9.5z"/>
+        </svg>
+        الدخول بحساب جوجل
+      </button>
+      <p class="small" style="text-align:center;color:var(--muted);margin-top:6px">
+        أسرع، ومش محتاج تفتكر كلمة سر</p>
       <div class="mtop2" style="border-top:1px dashed var(--line);padding-top:14px">
         <p class="small" style="text-align:center;color:var(--muted)">🎬 عايز تجرّب البرنامج قبل ما تسجّل حساب؟</p>
         <div class="flexrow mtop" style="justify-content:center;gap:8px">
@@ -2772,6 +2785,52 @@ async function doSignup(){
 }
 
 /* ---------- استرداد كلمة المرور ---------- */
+/* الدخول بجوجل — الإيميل بييجي متحقق منه من جوجل، فاسترجاع كلمة
+   المرور بيبقى عند جوجل مش عندنا. */
+async function loginWithGoogle(){
+  try{
+    if(!window.CLOUD||!CLOUD.signInWithGoogle)
+      return showMessage('الدخول بجوجل مش متاح دلوقتي.');
+    await CLOUD.signInWithGoogle();
+  }catch(e){
+    showLoginError('تعذّر الدخول بجوجل: '+(e.message||''));
+  }
+}
+
+/* حساب جوجل مالوش رقم موبايل، والوحدات والدعوات مربوطة بالرقم —
+   فبنطلبه مرة واحدة بعد أول دخول. */
+window.askPhoneAfterOAuth = async function(){
+  let pr=null;
+  try{ pr = await CLOUD.myProfile(); }catch(e){ return; }
+  if(!pr || pr.phone_e164) return;
+
+  openModal(`
+    <h3>📱 خطوة أخيرة</h3>
+    <p class="small mtop">أهلًا ${esc(pr.full_name||'')} — محتاجين رقم موبايلك
+      عشان نربطك بوحدتك. رئيس الاتحاد بيضيف الوحدات بالرقم.</p>
+    <div class="grid g2 mtop2">
+      <div class="field2"><label>مفتاح الدولة</label>
+        <input id="opCC" value="+20" dir="ltr"></div>
+      <div class="field2"><label>رقم الموبايل</label>
+        <input id="opPhone" dir="ltr" inputmode="numeric" placeholder="01xxxxxxxxx"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn primary" onclick="saveOAuthPhone()">💾 حفظ</button>
+    </div>`);
+};
+
+window.saveOAuthPhone = async function(){
+  const cc=(document.getElementById('opCC').value||'+20').trim();
+  const ph=(document.getElementById('opPhone').value||'').trim();
+  if(ph.replace(/\D/g,'').length<8) return showMessage('اكتب رقم موبايل صحيح');
+  try{
+    await CLOUD.setMyPhone(ph,cc);
+    closeModal();
+    toast('اتسجّل الرقم');
+    location.reload();
+  }catch(e){ showMessage(e.message||'تعذّر حفظ الرقم'); }
+};
+
 function openRecover(){window.__viewMode='recover';window.__recoveryStep=1;window.__recoveryMatches=[];window.__recoveryTarget=null;renderRoot();try{history.pushState({viewMode:'recover'},'',location.href);}catch(e){}}
 function closeRecover(){window.__viewMode='login';renderRoot();try{history.pushState({viewMode:'login'},'',location.href);}catch(e){}}
 function findUserMatches(username){
