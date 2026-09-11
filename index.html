@@ -7180,16 +7180,84 @@ function deleteVendorPrompt(id){if(!guardAction('vendors','delete'))return;
 const MAINT_STATUS_LABELS={open:'<span class="badge r">مفتوح</span>',in_progress:'<span class="badge y">قيد المعالجة</span>',resolved:'<span class="badge g">تم الحل</span>'};
 /* ---------- التحليلات والاتجاهات ---------- */
 /* ---------- محادثة السكان (شات جماعي + خط زمني للأحداث) ---------- */
+/* حالة القراءة بقت على السيرفر لكل مستخدم لكل محادثة.
+   الكود القديم كان بيحفظها على كائن المستخدم في الذاكرة، و D.users
+   بتتقرا من memberships كل تحميل — فبتضيع مع أي refresh أو جهاز تاني،
+   والرسايل المقروءة ترجع "جديدة". */
+window.__chatUnread = { rows: [], total: 0, at: 0 };
+
+async function refreshChatUnread(){
+  try{
+    const sb = window.CLOUD && window.CLOUD._sb;
+    if(!sb || !getSession()) return;
+    const { data, error } = await sb.rpc('my_chat_unread');
+    if(error) return;
+    const rows = data || [];
+    const total = rows.reduce((n,r)=>n+(r.unread||0),0);
+    const changed = total !== __chatUnread.total;
+    __chatUnread = { rows, total, at: Date.now() };
+    if(changed && window.renderContent) renderContent();   // العدّاد يختفي فورًا
+  }catch(e){}
+}
+setInterval(refreshChatUnread, 20000);
+document.addEventListener('emartna:building-complete', ()=>setTimeout(refreshChatUnread,900));
+
+/* العدّاد للمحادثة العامة للعمارة المفتوحة */
 function unreadChatCount(u){
-  if(!u)return 0;
-  const lastRead=u.lastChatRead||'';
-  return (D.buildingChat||[]).filter(m=>m.createdAt>lastRead).length;
+  if(!u) return 0;
+  try{
+    const uuid = CLOUD._cache.buildingUuid[activeBuildingId];
+    const row = (__chatUnread.rows||[]).find(r=>r.building_id===uuid && !r.room_id);
+    return row ? (row.unread||0) : 0;
+  }catch(e){ return 0; }
 }
-function markChatRead(){
-  const u=currentUser(); if(!u)return;
-  u.lastChatRead=new Date().toISOString();
-  save();
+/* إجمالي كل المحادثات في كل العمارات — لشارة الجرس */
+function unreadChatTotal(){ return __chatUnread.total || 0; }
+
+async function markChatRead(roomId){
+  try{
+    const uuid = CLOUD._cache.buildingUuid[activeBuildingId];
+    if(!uuid) return;
+    await CLOUD._sb.rpc('mark_chat_read',
+      { p_building: uuid, p_room: roomId || null });
+    /* بنصفّر محليًا على طول عشان الشارة تختفي من غير ما نستنى الشبكة */
+    (__chatUnread.rows||[]).forEach(r=>{
+      if(r.building_id===uuid && (roomId ? r.room_id===roomId : !r.room_id)) r.unread=0;
+    });
+    __chatUnread.total = (__chatUnread.rows||[]).reduce((n,r)=>n+(r.unread||0),0);
+    if(window.renderContent) renderContent();
+    refreshChatUnread();
+  }catch(e){}
 }
+/* فحص صلاحية من غير رسالة رفض — للعرض بس */
+function guardActionSilent(page,action){
+  try{
+    const u=currentUser(); if(!u)return false;
+    if(!u.screenPerms) return isStaffRole(u.role);
+    return window.userCan?userCan(u,page,action):false;
+  }catch(e){ return false; }
+}
+
+/* الحذف بيتم على السيرفر: النص بيتشال من الصف نفسه ويتسجّل في سجل
+   الإشراف — مش إخفاء في الواجهة. */
+window.deleteChatMessage = function(localId){
+  const m=(D.buildingChat||[]).find(x=>x.id===localId);
+  if(!m) return;
+  confirmAction('هل أنت متأكد من حذف هذه الرسالة؟\n\nهيتسجّل مين حذفها وإمتى، والمحتوى مش هيرجع.', async ()=>{
+    try{
+      const uuid=m.__uuid;
+      if(!uuid) return showMessage('الرسالة لسه بتتزامن — جرّب بعد ثانية.');
+      const { error } = await CLOUD._sb.rpc('moderate_delete_chat',
+        { p_msg: uuid, p_reason: null });
+      if(error) throw error;
+      m.kind='event'; m.eventType='moderated'; m.text=''; m.icon='🚫';
+      m.title='تم حذف هذه الرسالة بواسطة الإدارة.';
+      save(); renderContent();
+      toast('اتحذفت الرسالة');
+    }catch(e){ showMessage(e.message||'تعذّر الحذف'); }
+  });
+};
+
 function pushChatEvent(eventType,icon,title,message,link){
   D.buildingChat=D.buildingChat||[];
   D.buildingChat.push({id:uid(),kind:'event',eventType,icon,title,message,link,createdAt:new Date().toISOString()});
@@ -7218,6 +7286,15 @@ function pageBuildingChat(u){
   <p class="small mtop">أي حدث جديد (استطلاع، اجتماع، إعلان، بلاغ صيانة) بيظهر هنا تلقائيًا كـ"حدث" في نفس المحادثة، بجانب رسائلك العادية.</p>`;
 }
 function chatItemHTML(m,u){
+  /* رسالة حذفتها الإدارة: بتفضل مكانها كشاهد واضح بدل اختفاء غامض،
+     ومحتواها الأصلي اتشال من القاعدة نفسها فمش هيرجع لأي مستخدم. */
+  if(m.eventType==='moderated'){
+    return `<div class="card" style="background:#F6F6F6;border:1px dashed var(--line)">
+      <div class="flexrow"><span style="font-size:16px">🚫</span>
+        <span class="small" style="flex:1;color:var(--muted)">تم حذف هذه الرسالة بواسطة الإدارة.</span>
+        <span class="small" style="color:var(--muted)">${esc(new Date(m.createdAt).toLocaleString('ar-EG'))}</span></div>
+    </div>`;
+  }
   if(m.kind==='event'){
     return `<div class="card" style="background:var(--tint-success);cursor:${m.link?'pointer':'default'}" ${m.link?`onclick="go('${m.link}')"`:''}>
       <div class="flexrow"><span style="font-size:18px">${m.icon}</span><b style="flex:1">${esc(m.title)}</b><span class="small" style="color:var(--muted)">${esc(new Date(m.createdAt).toLocaleString('ar-EG'))}</span></div>
@@ -7228,7 +7305,12 @@ function chatItemHTML(m,u){
   const subColor=isMine?'rgba(255,255,255,.85)':'var(--muted)';
   return `<div style="align-self:${isMine?'flex-start':'flex-end'};max-width:80%">
     <div class="card" style="background:${isMine?'var(--accent)':'var(--card)'};color:${isMine?'#fff':'inherit'}">
-      <div class="small" style="font-weight:700;color:${subColor}">${esc(m.authorLabel)}</div>
+      <div class="flexrow" style="gap:6px;align-items:flex-start">
+        <div class="small" style="font-weight:700;flex:1;color:${subColor}">${esc(m.authorLabel)}</div>
+        ${(window.guardAction&&guardActionSilent('chat','delete_any'))?`<span
+          style="cursor:pointer;opacity:.6;font-size:13px" title="حذف الرسالة"
+          onclick="deleteChatMessage('${esc(m.id)}')">🗑</span>`:''}
+      </div>
       <div class="mtop" style="white-space:pre-wrap">${esc(m.text)}</div>
       <div class="small mtop" style="color:${subColor}">${esc(new Date(m.createdAt).toLocaleString('ar-EG'))}</div>
     </div>
@@ -7244,8 +7326,8 @@ function sendChatMessage(){
   const __auth=(window.CLOUD_AUTH&&CLOUD_AUTH.user)?CLOUD_AUTH.user.id:null;
   D.buildingChat.push({id:uid(),kind:'message',authorUsername:u.username,authorLabel,text,
     authorId:__auth,createdAt:new Date().toISOString()});
-  u.lastChatRead=new Date().toISOString();
   save();inp.value='';renderContent();
+  markChatRead();               /* أي رسايل وصلت وهو فاتح المحادثة تتعلّم مقروءة */
   pushNotification({type:'chat',title:'رسالة جديدة في محادثة السكان',message:authorLabel+': '+text.slice(0,60),audience:'all',link:'chat'});
 }
 function pageAnalytics(){
