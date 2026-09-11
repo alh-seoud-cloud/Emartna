@@ -91,6 +91,12 @@
     </div>
 
     <div class="field">
+      <label for="email">البريد الإلكتروني</label>
+      <input id="email" type="email" dir="ltr" placeholder="name@mail.com" autocomplete="email">
+      <p class="hint">لو نسيت كلمة السر، ده الطريق الوحيد ترجّعها بنفسك</p>
+    </div>
+
+    <div class="field">
       <label for="pwd">كلمة السر</label>
       <input id="pwd" type="password" placeholder="••••••" autocomplete="new-password">
       <p class="hint">٦ حروف على الأقل — اختار حاجة تفتكرها</p>
@@ -154,8 +160,13 @@ $('btnGo').onclick = async () => {
   const phone = $('phone').value.trim();
   const pwd   = $('pwd').value;
   const name  = $('name').value.trim();
+  const email = $('email').value.trim().toLowerCase();
 
   if (!phone)       return say('اكتب رقم موبايلك.');
+  /* الإيميل إلزامي: المسجّل برقم بس بياخد إيميل داخلي وهمي مش بيستقبل
+     رسايل، فمستحيل يسترجع كلمة السر لوحده ويفضل محتاج رئيس الاتحاد. */
+  if (!email)       return say('اكتب بريدك الإلكتروني — من غيره مش هتقدر ترجّع كلمة السر لو نسيتها.');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return say('البريد الإلكتروني مش مكتوب صح.');
   if (pwd.length<6) return say('كلمة السر لازم ٦ حروف على الأقل.');
 
   $('btnGo').disabled = true;
@@ -174,6 +185,12 @@ $('btnGo').onclick = async () => {
     await CLOUD.signIn(phone, pwd);
 
     const row = await CLOUD.invites.accept(code || null);
+
+    /* نحفظ الإيميل على الملف الشخصي عشان الاسترجاع الذاتي يشتغل */
+    try{
+      const { data:{ user } } = await CLOUD._sb.auth.getUser();
+      if (user) await CLOUD._sb.from('profiles').update({ email }).eq('id', user.id);
+    }catch(e){}
 
     $('viewForm').classList.add('hidden');
     $('viewDone').classList.remove('hidden');
