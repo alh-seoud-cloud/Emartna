@@ -1384,24 +1384,26 @@ function getSession(){try{return JSON.parse(sessionStorage.getItem(SESSION_KEY))
 function setSession(o){sessionStorage.setItem(SESSION_KEY,JSON.stringify(o))}
 function clearSession(){sessionStorage.removeItem(SESSION_KEY)}
 function isSysOwner(){const s=getSession();return s&&s.type==='sysowner'}
-/* الوحدة اللي مش مفتوحة دلوقتي — بتتفتح في تاب مستقل بجلسته الخاصة */
-function openCurrentUnitInNewTab(){
+function currentUser(){const s=getSession();if(!s||s.type!=='building'||!D)return null;return D.users.find(x=>x.username===s.username&&x.active!==false)||null}
+function myApartment(){
+  const u=currentUser(); if(!u)return null;
+  /* الوحدة النشطة = اللي اختارها من المبدّل، وبنرجع لوحدة حسابه
+     لو مفيش اختيار — للساكن اللي عنده أكتر من وحدة. */
+  const sel=(window.getSession&&getSession())?getSession().apartmentId:null;
+  if(sel){
+    const a=D.apartments.find(x=>x.__uuid===sel||x.id===sel);
+    if(a)return a;
+  }
+  return D.apartments.find(a=>a.id===u.apartmentId)||null;
+}
+/* كل وحدة ليها رابط، والجلسة في الذاكرة — فالتابين مستقلين فعلًا */
+function openOtherUnitInNewTab(){
   const list=(window.myBuildings?myBuildings():[]);
   const sess=(window.getSession&&getSession())||{};
   const cur=(sess.buildingId||'')+'::'+(sess.apartmentId||'');
   const other=list.find(b=>(window.myUnitKey?myUnitKey(b):b.code)!==cur);
-  const target=other||list[0];
-  if(!target||!window.unitUrl)return showMessage('مفيش وحدة تانية تتفتح.');
-  window.open(unitUrl(target),'_blank');
-}
-function currentUser(){const s=getSession();if(!s||s.type!=='building'||!D)return null;return D.users.find(x=>x.username===s.username&&x.active!==false)||null}
-function myApartment(){
-  const u=currentUser(); if(!u)return null;
-  /* الوحدة النشطة هي اللي اختارها من المبدّل، وبنرجع لوحدة حسابه
-     لو مفيش اختيار — عشان الساكن اللي عنده وحدتين. */
-  const sel=(window.getSession&&getSession())?getSession().apartmentId:null;
-  if(sel){const a=D.apartments.find(x=>x.id===sel); if(a)return a;}
-  return D.apartments.find(a=>a.id===u.apartmentId)||D.apartments[0]||null;
+  if(!other||!window.unitUrl)return showMessage('مفيش وحدة تانية تتفتح.');
+  window.open(unitUrl(other),'_blank');
 }
 
 async function loginBuilding(buildingId,username,password){
@@ -6358,9 +6360,9 @@ function shellHTML(u){
         /* مبدّل العمارات — يظهر بس لو المستخدم له صلاحية في أكتر من عمارة */
         const list = window.myBuildings ? myBuildings() : [];
         if (list.length < 2) return '';
-        /* المفتاح "عمارة + وحدة" — الساكن ممكن يملك وحدتين في نفس
-           العمارة، وبالكود لوحده الاتنين بيبقوا نفس المفتاح فالتبديل
-           بيلاقي أول واحد دايمًا وما بيحصلش تغيير. */
+        /* المفتاح "عمارة + وحدة": الساكن ممكن يملك وحدتين في نفس
+           العمارة، وبالكود لوحده الاتنين بنفس المفتاح فالتبديل
+           بيلاقي الأول دايمًا وما بيحصلش تغيير. */
         const sess = (window.getSession && getSession()) || {};
         const curKey = (sess.buildingId || '') + '::' + (sess.apartmentId || '');
         const anyUnit = list.some(b => b.apartment_id);
@@ -6380,12 +6382,8 @@ function shellHTML(u){
               return `<option value="${esc(k)}" ${k===curKey?'selected':''}>${label(b)}</option>`;
             }).join('')}
           </select>
-          <div class="flexrow" style="gap:6px;margin-top:6px">
-            <button class="btn sm ghost" style="flex:1;font-size:12px"
-              onclick="openCurrentUnitInNewTab()"
-              title="كل وحدة ليها رابط خاص — تقدر تفتح اتنين جنب بعض">
-              ↗️ افتح في تاب جديد</button>
-          </div>
+          ${list.length>1?`<button class="btn sm ghost" style="width:100%;margin-top:6px;font-size:12px"
+            onclick="openOtherUnitInNewTab()">↗️ افتح وحدة تانية في تاب جديد</button>`:''}
           <p class="small" style="color:var(--sidebar-muted);margin-top:4px">
             ${anyUnit ? 'كل وحدة ليها رابط خاص بيها' : 'التبديل بيفتح العمارة المختارة لوحدها'}</p>
         </div>`;
@@ -9338,6 +9336,7 @@ const SETTINGS_CARDS=[
   {key:'categories',icon:'📋',title:'بنود المصروفات',sub:'إدارة تصنيفات المصروفات'},
   {key:'payment',icon:'💳',title:'طرق السداد والتواصل',sub:'بيانات تظهر لكل الملاك'},
   {key:'reminders',icon:'🔔',title:'التذكيرات التلقائية',sub:'تحكم في تذكيرات السداد والتحصيل'},
+  {key:'transparency',icon:'👁️',title:'اللي السكان يشوفوه',sub:'مصروفات العمارة وأرصدة الخزينة'},
   {key:'backup',icon:'☁️',title:'النسخ الاحتياطي',sub:'تصدير واستيراد بيانات العمارة'},
   {key:'license',icon:'🪪',title:'الرخصة والاشتراك',sub:'خطتك الحالية وحدود الاستخدام'},
   {key:'activity',icon:'📜',title:'سجل النشاط',sub:'كل التعديلات والحذف في العمارة'},
@@ -9357,8 +9356,54 @@ function openSettingsCard(key){
   if(key==='license'){go('license');return}
   if(key==='activity'){go('activity');return}
   if(key==='categories'){go('expenseCategories');return}
-  const fn={theme:openThemeModal,account:openMyAccountModal,payment:openPaymentContactModal,backup:openBackupModal,danger:openDangerZoneModal,reminders:openRemindersModal}[key];
+  const fn={theme:openThemeModal,account:openMyAccountModal,payment:openPaymentContactModal,backup:openBackupModal,danger:openDangerZoneModal,reminders:openRemindersModal,transparency:openTransparencyModal}[key];
   if(fn)fn();
+}
+/* الشفافية المالية قرار رئيس الاتحاد — فيه اتحادات بتنشر كل حاجة
+   للسكان، وفيه اللي بيعتبر رصيد الخزنة معلومة إدارية.
+   الحماية في القاعدة، فالإخفاء هنا مش شكلي. */
+async function openTransparencyModal(){
+  const b=D.building||{};
+  const ex=b.residentsSeeExpenses!==false, ba=b.residentsSeeBalances!==false;
+  openModal(`<h3>👁️ اللي السكان يشوفوه</h3>
+    <p class="small mtop">ده بيتطبّق على الخادم مش على الشاشة بس — لو قفلته،
+      البيانات ما بتوصلش لجهاز الساكن أصلًا.</p>
+
+    <label class="checkline mtop2">
+      <input type="checkbox" id="trExp" ${ex?'checked':''}>
+      <span><b>مصروفات العمارة</b>
+        <div class="small" style="color:var(--muted)">الساكن يشوف على إيه بتتصرف فلوس الاتحاد</div></span>
+    </label>
+    <label class="checkline mtop">
+      <input type="checkbox" id="trBal" ${ba?'checked':''}>
+      <span><b>أرصدة الخزينة والبنك</b>
+        <div class="small" style="color:var(--muted)">الرصيد الحالي والتحويلات بين الحسابات</div></span>
+    </label>
+
+    <p class="small mtop2" style="color:var(--muted)">
+      كشف حساب الساكن ومستحقاته بتفضل ظاهرة له في الحالتين — دي حقه.</p>
+
+    <div class="modal-actions">
+      <button class="btn primary" onclick="saveTransparency()">💾 حفظ</button>
+      <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+    </div>`);
+}
+async function saveTransparency(){
+  const ex=document.getElementById('trExp').checked;
+  const ba=document.getElementById('trBal').checked;
+  D.building.residentsSeeExpenses=ex; D.building.residentsSeeBalances=ba;
+  save();
+  try{
+    const uuid=CLOUD._cache.buildingUuid[activeBuildingId];
+    if(uuid){
+      const r=await CLOUD._sb.from('buildings')
+        .update({residents_see_expenses:ex,residents_see_balances:ba})
+        .eq('id',uuid).select('id');
+      if(r.error)throw r.error;
+      if(!r.data||!r.data.length)return showMessage('الحفظ ما أثّرش على أي صف.');
+    }
+  }catch(e){ return showMessage('الحفظ على الخادم فشل: '+(e.message||'')); }
+  closeModal(); toast('اتحفظ');
 }
 function openRemindersModal(){
   const rs=D.building.remindersSettings||{};

@@ -58,9 +58,8 @@ window.setSession   = (o) => { __sess = o; };
 window.clearSession = () => { __sess = null; };
 
 /* بعد تسجيل الدخول: نحدد المستخدم ده مين */
-/* الوحدة في الرابط: كل وحدة بقى ليها عنوان خاص بيها.
-   الجلسة في الذاكرة مش مشتركة بين التابات، فكل تاب يفتح وحدة
-   مختلفة ويشتغلوا مع بعض من غير تداخل. */
+/* الوحدة في الرابط: كل وحدة ليها عنوان خاص. الجلسة في الذاكرة مش
+   مشتركة بين التابات، فكل تاب يفتح وحدة مختلفة من غير تداخل. */
 function urlPick(){
   try{
     const q = new URLSearchParams(location.search);
@@ -143,12 +142,9 @@ async function establishSession(preferBuildingId){
   const fromUrl = urlPick();
   const wantB = preferBuildingId || fromUrl.b;
   let pick = wantB
-    ? list.find(b => b.code === wantB || b.building_id === wantB)
-    : null;
-  /* لو الرابط محدد وحدة بعينها، نفتحها هي مش أول وحدة في العمارة */
+    ? list.find(b => b.code === wantB || b.building_id === wantB) : null;
   if (pick && fromUrl.u){
-    const exact = list.find(b =>
-      (b.code === pick.code) && b.apartment_id === fromUrl.u);
+    const exact = list.find(b => b.code === pick.code && b.apartment_id === fromUrl.u);
     if (exact) pick = exact;
   }
   if (!pick) pick = list[0];
@@ -156,7 +152,6 @@ async function establishSession(preferBuildingId){
   __sess = { type:'building', buildingId: pick.code,
                apartmentId: pick.apartment_id || null,      /* الوحدة جزء من الجلسة */
                username: user.id, authId: user.id };
-  writeUrlPick(pick.code, pick.apartment_id);
   return __sess;
 }
 
@@ -176,12 +171,9 @@ window.currentUser = function(){
   // فبيدخل بحساب صاحب شقة أو محل بالغلط.
   if (uid){
     const mine = (D.users || []).filter(x => x.__authId === uid);
-    /* الساكن ممكن يملك أكتر من وحدة، فبيبقى له صف عضوية لكل وحدة.
-       لازم نرجّع صف الوحدة اللي مفتوحة في الجلسة — من غير كده
-       بنرجّع أول صف دايمًا وتبديل الوحدة مالوش أي أثر. */
+    /* صف عضوية لكل وحدة — لازم نرجّع صف الوحدة المفتوحة في الجلسة.
+       الجلسة فيها uuid والصفوف فيها الرقم المحلي، فبنترجم. */
     if (mine.length > 1 && s.apartmentId){
-      /* الجلسة فيها uuid الوحدة، وصفوف المستخدمين فيها الرقم المحلي —
-         فبنترجم الأول. المقارنة المباشرة كانت بتفشل دايمًا. */
       const ap = (D.apartments || []).find(a =>
         a.__uuid === s.apartmentId || a.id === s.apartmentId);
       const legacy = ap ? ap.id : s.apartmentId;
@@ -270,8 +262,8 @@ window.switchBuilding = async function(key){
   __sess = { type:'building', buildingId: b.code,
              apartmentId: b.apartment_id || null,
              username: CLOUD_AUTH.user.id, authId: CLOUD_AUTH.user.id };
-  window.__activeApartmentId = b.apartment_id || null;
   writeUrlPick(b.code, b.apartment_id);   /* الرابط يفضل مطابق للوحدة المفتوحة */
+  window.__activeApartmentId = b.apartment_id || null;
   /* تصفير الحالة المحلية يجبر renderRoot يحمّل بيانات العمارة الجديدة */
   window.D = null;
   window.activeBuildingId = null;
@@ -636,14 +628,44 @@ window.recoverHTML = function(){
 
       <div class="mtop2" style="border-top:1px dashed var(--line);padding-top:14px">
         <p class="small" style="color:var(--muted)">
-          مسجّل برقم موبايل من غير إيميل؟ رئيس اتحاد عمارتك يقدر يعملك
-          كلمة سر جديدة من شاشة المستخدمين. لو إنت رئيس الاتحاد، تواصل مع الدعم.
+          <b>مسجّل برقم موبايل من غير إيميل؟</b><br>
+          • <b>لو إنت ساكن:</b> رئيس اتحاد عمارتك يقدر يضيفلك إيميل
+            أو يعملك كلمة سر جديدة من شاشة المستخدمين.<br>
+          • <b>لو إنت رئيس الاتحاد:</b> تواصل مع الدعم وهنتحقق من هويتك
+            ونساعدك ترجّع حسابك.
         </p>
+        <button type="button" class="btn gold mtop" style="width:100%"
+          onclick="contactSupportForRecovery()">💬 تواصل مع الدعم لاسترجاع الحساب</button>
       </div>
 
       <div class="login-hint"><a href="javascript:void(0)" onclick="closeRecover()">← رجوع لتسجيل الدخول</a></div>
     </div>
   </div>`;
+};
+
+/* المستخدم اللي مالوش إيميل مش هيقدر يسترجع بنفسه — لازم مخرج واضح
+   بدل ما يقف عند رسالة "اكتب إيميل". */
+window.contactSupportForRecovery = function(){
+  let phone = '', name = '';
+  try{
+    const so = (window.REG && REG.sysOwner) || {};
+    phone = String(so.phone || '').replace(/^0+/, '');
+    if (phone) phone = (so.phoneCountry || '+20').replace('+','') + phone;
+    name = so.name || '';
+  }catch(e){}
+
+  const typed = (document.getElementById('rcEmail') || {}).value || '';
+  const msg = 'السلام عليكم' + (name ? ' أستاذ ' + name : '') + '،\n' +
+    'أنا مش قادر أسترجع كلمة المرور لحسابي في عمارتنا.\n' +
+    (typed ? 'الإيميل/الرقم اللي جربته: ' + typed + '\n' : '') +
+    'ممكن تساعدني؟';
+
+  if (phone){
+    window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(msg), '_blank');
+  } else {
+    showMessage('للاسترجاع، تواصل مع مسؤول البرنامج من صفحة "المساعدة والتواصل" ' +
+                'في الصفحة الرئيسية، واذكر رقم موبايلك واسم عمارتك.');
+  }
 };
 
 function bindCloudRecover(){
@@ -661,7 +683,9 @@ function bindCloudRecover(){
       if (error) throw error;
       showLoginError('');
       toast('لو الإيميل ده مسجّل عندنا، هيوصلك رابط خلال دقايق. اتفقد صندوق السبام كمان.');
-    }catch(e){ showLoginError(e.message); }
+    }catch(e){
+      showLoginError(e.message + ' — لو المشكلة مستمرة، استخدم زرار التواصل مع الدعم تحت.');
+    }
     finally{ btn.disabled = false; }
   };
 }
