@@ -230,6 +230,17 @@ const PLATFORM = {
       REG.sysOwner = Object.assign({}, REG.sysOwner || {}, docs[SYSOWNER_DOC]);
     }
 
+    /* المفاتيح من الجدول المحمي — برّه الشرط عشان تتحمّل حتى لو
+       مستند بيانات التواصل لسه مش موجود. وبترجع فاضية لأي حد غير
+       صاحب البرنامج، فمفيش تسريب. */
+    try{
+      const { data: sec } = await sb3.rpc('get_platform_secret', { p_key: 'ai' });
+      if (sec){
+        REG.sysOwner = REG.sysOwner || {};
+        REG.sysOwner.aiSettings = Object.assign({}, REG.sysOwner.aiSettings || {}, sec);
+      }
+    }catch(e){}
+
     // الجداول
     Object.keys(TABLE_COLLECTIONS).forEach((coll, i) => {
       const m = TABLE_COLLECTIONS[coll];
@@ -275,6 +286,18 @@ const PLATFORM = {
           const { error } = await sb3.rpc('save_platform_doc',
             { p_key: SYSOWNER_DOC, p_value: pickSysOwnerPublic(REG.sysOwner) });
           if (error) throw error;
+        }
+
+        /* مفاتيح الذكاء الاصطناعي: كانت على الجهاز بس فبتضيع مع
+           الخروج. ومكانش ينفع تروح مع sysOwnerPublic لأنه مقروء
+           للزوار — فجدول منفصل مقفول على صاحب البرنامج. */
+        const ai = (REG.sysOwner && REG.sysOwner.aiSettings) || null;
+        const nowAI = JSON.stringify(ai);
+        if (ai && nowAI !== prev['sec:ai']){
+          const { error } = await sb3.rpc('save_platform_secret',
+            { p_key: 'ai', p_value: ai });
+          if (error) throw error;
+          prev['sec:ai'] = nowAI;
         }
       }
 
