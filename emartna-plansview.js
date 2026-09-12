@@ -50,7 +50,9 @@
           <td>${p.durationMonths ? p.durationMonths + ' شهر' : 'بلا انتهاء'}</td>
           <td>${p.maxApartments || 'غير محدود'}</td>
           <td>${p.maxStaff == null ? 'بلا حد' : p.maxStaff}</td>
-          <td>${n ? `<b>${n}</b>` : '<span style="color:var(--muted)">0</span>'}</td>
+          <td>${n ? `<button class="btn sm ghost" style="padding:2px 8px"
+                onclick="openPlanClients('${esc2(p.key)}')"><b>${n}</b> 👁️</button>`
+              : '<span style="color:var(--muted)">0</span>'}</td>
           <td>${p.active===false?'<span class="badge r">معطلة</span>'
                                 :'<span class="badge g">مفعّلة</span>'}</td>
           <td><div class="flexrow" style="gap:4px">
@@ -209,6 +211,72 @@
     closeModal();
     showMessage(`اتحدّثت ${upd} خطة${added?` واتضافت ${added} جديدة`:''}.`);
     if (window.renderSysContent) renderSysContent();
+  };
+
+  /* بيان عملاء الباقة: الحالة وتاريخ الانتهاء ورقم رئيس الاتحاد —
+     عشان تتابع المنتهي قرب من غير ما تفتح كل عمارة. */
+  window.openPlanClients = async function(planKey){
+    const sb = window.CLOUD && window.CLOUD._sb;
+    if (!sb) return showMessage('مش متصل بالسحابة.');
+    openModal('<h3>⏳ بنجيب البيان...</h3>');
+    let rows = [];
+    try{
+      const { data, error } = await sb.rpc('plan_clients', { p_plan: planKey });
+      if (error) throw error;
+      rows = data || [];
+    }catch(e){ return showMessage('تعذّر جلب البيان: ' + (e.message||'')); }
+
+    const planName = (rows[0] && rows[0].plan_name) || planKey;
+    const wa = ph => String(ph||'').replace(/\D/g,'');
+    const urgent = r => r.days_left != null && r.days_left <= 14;
+
+    window.__planClientsRows = rows;
+    openModal(`
+      <h3>👥 عملاء: ${esc2(planName)}</h3>
+      <p class="small mtop"><b>${rows.length}</b> عميل ·
+        <b style="color:var(--red)">${rows.filter(urgent).length}</b> اشتراكهم بيخلص خلال أسبوعين</p>
+      ${!rows.length?'<p class="small mtop">مفيش عملاء على الباقة دي.</p>':`
+      <div class="flexrow mtop" style="gap:6px">
+        <button class="btn sm ghost" onclick="exportPlanClientsXlsx()">📊 تصدير إكسل</button>
+      </div>
+      <div class="table-wrap mtop" style="max-height:55vh;overflow:auto">
+        <table><thead><tr>
+          <th>العمارة</th><th>المدينة</th><th>الوحدات</th><th>الحالة</th>
+          <th>ينتهي</th><th>باقي</th><th>رئيس الاتحاد</th><th></th>
+        </tr></thead><tbody>
+        ${rows.map(r=>`<tr style="${urgent(r)?'background:var(--tint-warning)':''}">
+          <td><b>${esc2(r.building_name)}</b>
+            <div class="small" style="color:var(--muted)">${esc2(r.code||'')}</div></td>
+          <td class="small">${esc2(r.city||'—')}</td>
+          <td>${r.units}</td>
+          <td class="small">${esc2(r.status)}</td>
+          <td class="small">${esc2(r.license_end||'بلا انتهاء')}</td>
+          <td>${r.days_left==null?'—'
+            :`<b style="color:${r.days_left<=14?'var(--red)':'inherit'}">${r.days_left}</b> يوم`}</td>
+          <td class="small">${esc2(r.head_name||'—')}
+            <div style="direction:ltr">${esc2(r.head_phone||'')}</div></td>
+          <td>${r.head_phone?`<a class="btn sm" target="_blank"
+            href="https://wa.me/${wa(r.head_phone)}">واتساب</a>`:''}</td>
+        </tr>`).join('')}
+        </tbody></table></div>`}
+      <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`,
+      true);
+  };
+
+  window.exportPlanClientsXlsx = function(){
+    const rows = window.__planClientsRows || [];
+    if (!rows.length || typeof XLSX === 'undefined') return;
+    const cols = ['العمارة','الكود','المدينة','الوحدات','الحالة','ينتهي',
+                  'باقي (يوم)','رئيس الاتحاد','الهاتف','تاريخ التسجيل'];
+    const data = rows.map(r => [r.building_name, r.code||'', r.city||'', r.units,
+      r.status, r.license_end||'', r.days_left==null?'':r.days_left,
+      r.head_name||'', r.head_phone||'', r.created_at||'']);
+    const ws = XLSX.utils.aoa_to_sheet([cols, ...data]);
+    ws['!cols'] = [26,12,16,10,12,14,12,22,18,14].map(w=>({wch:w}));
+    ws['!views'] = [{ RTL:true }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'عملاء الباقة');
+    XLSX.writeFile(wb, 'عملاء الباقة - ' + (window.todayISO?todayISO():'') + '.xlsx');
   };
 
   window.togglePlanActive = function(key){
