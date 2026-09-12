@@ -208,6 +208,8 @@ const MAPS = {
       /* سياسة الحماية بتطلب author_id = المستخدم الحالي لأي رسالة.
          كان مش بيتبعت خالص، فكل رسالة بيكتبها المستخدم كان الحفظ بيترفض. */
       authorId:'author_id',
+      replyToLabel:'reply_label', replyToText:'reply_text',
+      deletedAt:'deleted_at', deletedKind:'deleted_kind', editedAt:'edited_at',
     },
   },
 
@@ -231,6 +233,8 @@ const BUILDING_FIELDS = {
   paymentMethods:'payment_methods',
   contactPhoneCountry:'contact_phone_country', contactPhone:'contact_phone',
   remindersSettings:'reminders_settings',
+  chatStatus:'chat_status', chatLockReason:'chat_lock_reason',
+  chatStaffCanWrite:'chat_staff_can_write',
   /* قرار رئيس الاتحاد: السكان يشوفوا المصروفات والأرصدة ولا لأ.
      لازم يتقرا من القاعدة عشان الشاشة تعرض الوضع الصح. */
   residentsSeeExpenses:'residents_see_expenses',

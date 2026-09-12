@@ -7339,6 +7339,97 @@ function guardActionSilent(page,action){
 
 /* الحذف بيتم على السيرفر: النص بيتشال من الصف نفسه ويتسجّل في سجل
    الإشراف — مش إخفاء في الواجهة. */
+/* خيارات الرسالة: الساكن يشوف "حذف" على رسالته هو بس.
+   إخفاء الزرار مش حماية — الخادم بيرفض أي محاولة على رسالة غيره. */
+function chatMsgMenu(m,isMine){
+  const canOwn = isMine && guardActionSilent('chat','delete_own');
+  const canAny = !isMine && guardActionSilent('chat','delete_any');
+  const canReply = guardActionSilent('chat','send');
+  if(!canOwn && !canAny && !canReply) return '';
+  const items=[];
+  if(canReply) items.push(`<button class="btn sm ghost" onclick="replyToChat('${esc(m.id)}')">↩️ رد</button>`);
+  if(canOwn)   items.push(`<button class="btn sm ghost" onclick="deleteMyChatMessage('${esc(m.id)}')">🗑 حذف رسالتي</button>`);
+  if(canAny)   items.push(`<button class="btn sm red"   onclick="deleteChatMessage('${esc(m.id)}')">🚫 حذف (إدارة)</button>`);
+  return `<span style="position:relative">
+    <span style="cursor:pointer;opacity:.55;font-size:15px;padding:0 4px"
+      onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='flex'?'none':'flex'">⋮</span>
+    <span style="display:none;position:absolute;inset-inline-end:0;top:20px;z-index:5;
+      background:var(--card);border:1px solid var(--line);border-radius:10px;padding:5px;
+      flex-direction:column;gap:4px;box-shadow:0 6px 18px rgba(0,0,0,.14);min-width:140px">
+      ${items.join('')}
+    </span></span>`;
+}
+
+/* الرد: بنحتفظ بالرسالة الأصلية ونعرضها فوق خانة الكتابة */
+window.__replyTo = null;
+window.replyToChat = function(localId){
+  const m=(D.buildingChat||[]).find(x=>x.id===localId);
+  if(!m) return;
+  window.__replyTo = { id:m.id, label:m.authorLabel, text:(m.text||'').slice(0,60) };
+  renderContent();
+  const inp=document.getElementById('chatInputMain'); if(inp) inp.focus();
+};
+window.cancelReply = function(){ window.__replyTo=null; renderContent(); };
+
+/* حذف الساكن لرسالته */
+window.deleteMyChatMessage = function(localId){
+  const m=(D.buildingChat||[]).find(x=>x.id===localId);
+  if(!m) return;
+  confirmAction('هل تريد حذف هذه الرسالة؟', async ()=>{
+    try{
+      if(!m.__uuid) return showMessage('الرسالة لسه بتتزامن — جرّب بعد ثانية.');
+      const { error } = await CLOUD._sb.rpc('delete_own_chat',{ p_msg:m.__uuid });
+      if(error) throw error;
+      m.kind='event'; m.eventType='moderated'; m.text=''; m.icon='🗑';
+      m.title='تم حذف هذه الرسالة بواسطة المرسل';
+      save(); renderContent(); toast('اتحذفت');
+    }catch(e){ showMessage(e.message||'تعذّر الحذف'); }
+  });
+};
+
+/* إيقاف / إعادة تفعيل المحادثة */
+/* سجل الإدارة — مقروء لمن له صلاحية عرضه فقط (RLS بتفرض ده كمان) */
+window.openModerationLog = async function(){
+  try{
+    const uuid = CLOUD._cache.buildingUuid[activeBuildingId];
+    const { data, error } = await CLOUD._sb.from('moderation_log')
+      .select('*').eq('building_id',uuid).order('created_at',{ascending:false}).limit(200);
+    if(error) throw error;
+    const AR={delete:'حذف رسالة (إدارة)',delete_self:'حذف رسالة (المرسل)',
+      chat_lock:'إيقاف المحادثة',chat_unlock:'إعادة تفعيل المحادثة',
+      approve:'اعتماد مقترح',reject:'رفض مقترح'};
+    openModal(`<h3>📋 سجل إدارة المحادثة</h3>
+      ${!data.length?'<p class="small mtop">مفيش عمليات إدارية لسه.</p>':`
+      <div class="table-wrap mtop" style="max-height:60vh;overflow:auto">
+      <table><thead><tr><th>العملية</th><th>مين عملها</th><th>صاحب المحتوى</th>
+        <th>المحتوى الأصلي</th><th>السبب</th><th>التاريخ</th></tr></thead><tbody>
+      ${data.map(r=>`<tr>
+        <td>${esc(AR[r.action]||r.action)}</td>
+        <td>${esc(r.actor_name||'—')}</td>
+        <td>${esc(r.author_label||'—')}</td>
+        <td class="small">${esc((r.original||'').slice(0,80))}</td>
+        <td class="small">${esc(r.reason||'—')}</td>
+        <td class="small">${esc(new Date(r.created_at).toLocaleString('ar-EG'))}</td>
+      </tr>`).join('')}</tbody></table></div>`}
+      <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`,true);
+  }catch(e){ showMessage(e.message||'تعذّر فتح السجل'); }
+};
+
+window.setChatStatus = async function(status){
+  const ask = status==='ACTIVE' ? null : prompt('سبب الإيقاف (اختياري):','');
+  if(status!=='ACTIVE' && ask===null) return;
+  try{
+    const uuid = CLOUD._cache.buildingUuid[activeBuildingId];
+    const { error } = await CLOUD._sb.rpc('set_chat_status',
+      { p_building: uuid, p_status: status, p_reason: ask||null });
+    if(error) throw error;
+    D.building.chatStatus = status;
+    D.building.chatLockReason = status==='ACTIVE' ? '' : (ask||'');
+    save(); renderContent();
+    toast(status==='ACTIVE' ? 'اتفتحت المحادثة' : 'اتوقف الإرسال مؤقتًا');
+  }catch(e){ showMessage(e.message||'تعذّر تغيير الحالة'); }
+};
+
 window.deleteChatMessage = function(localId){
   const m=(D.buildingChat||[]).find(x=>x.id===localId);
   if(!m) return;
@@ -7378,10 +7469,54 @@ function pageBuildingChat(u){
     <div id="chatFeed" style="max-height:60vh;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px">
       ${items.length?items.map(m=>chatItemHTML(m,u)).join(''):'<p class="small" style="text-align:center">لسه مفيش أي رسائل أو أحداث. ابدأ المحادثة!</p>'}
     </div>
-    <div class="flexrow" style="padding:12px;border-top:1px solid var(--line)">
-      <input id="chatInput" class="search-box" style="flex:1" placeholder="اكتب رسالة لكل سكان العمارة..." onkeydown="if(event.key==='Enter')sendChatMessage()">
-      <button class="btn primary" onclick="sendChatMessage()">إرسال</button>
-    </div>
+    ${(function(){
+      /* المحادثة موقوفة: الكل يقرا، والسكان مايكتبوش. الإدارة تقدر
+         تبعت تنبيه لو الإعداد مسموح. المنع الحقيقي على الخادم —
+         ده عرض بس عشان المستخدم يفهم ليه مش قادر يكتب. */
+      const st = D.building.chatStatus || 'ACTIVE';
+      const locked = st !== 'ACTIVE';
+      const staffMayWrite = D.building.chatStaffCanWrite !== false && isStaffRole(u.role);
+      const canWrite = (!locked || staffMayWrite) && guardActionSilent('chat','send');
+      const rep = window.__replyTo;
+
+      const banner = locked ? `<div style="padding:10px 12px;background:var(--tint-warning);
+        border-top:1px solid var(--line)">
+        <b class="small">🔒 تم إيقاف إرسال الرسائل مؤقتًا بواسطة إدارة اتحاد الملاك</b>
+        ${D.building.chatLockReason?`<div class="small" style="color:var(--muted)">${esc(D.building.chatLockReason)}</div>`:''}
+        ${staffMayWrite?`<div class="small" style="color:var(--muted)">إنت تقدر تبعت تنبيه إداري.</div>`:''}
+      </div>` : '';
+
+      const replyBar = (rep && canWrite) ? `<div class="flexrow" style="padding:8px 12px;
+        background:var(--tint);border-top:1px solid var(--line);gap:8px">
+        <div style="flex:1;min-width:0">
+          <div class="small" style="font-weight:700">↩️ رد على ${esc(rep.label||'')}</div>
+          <div class="small" style="color:var(--muted);white-space:nowrap;
+            overflow:hidden;text-overflow:ellipsis">${esc(rep.text||'')}</div>
+        </div>
+        <button class="btn sm ghost" onclick="cancelReply()">✕</button>
+      </div>` : '';
+
+      const composer = canWrite ? `<div class="flexrow" style="padding:12px;border-top:1px solid var(--line)">
+        <input id="chatInput" class="search-box" style="flex:1"
+          placeholder="اكتب رسالة لكل سكان العمارة..."
+          onkeydown="if(event.key==='Enter')sendChatMessage()">
+        <button class="btn primary" onclick="sendChatMessage()">إرسال</button>
+      </div>` : `<div style="padding:12px;border-top:1px solid var(--line);text-align:center">
+        <span class="small" style="color:var(--muted)">
+          ${locked?'مش هتقدر ترسل دلوقتي — المحادثة متوقفة مؤقتًا.'
+                 :'مالكش صلاحية إرسال رسايل في المحادثة.'}</span>
+      </div>`;
+
+      const admin = guardActionSilent('chat','moderate') ? `<div class="flexrow"
+        style="padding:8px 12px;border-top:1px solid var(--line);gap:6px;flex-wrap:wrap">
+        ${locked
+          ? `<button class="btn sm" onclick="setChatStatus('ACTIVE')">🔓 إعادة تفعيل المحادثة</button>`
+          : `<button class="btn sm gold" onclick="setChatStatus('READ_ONLY')">🔒 إيقاف إرسال السكان مؤقتًا</button>`}
+        <button class="btn sm ghost" onclick="openModerationLog()">📋 سجل الإدارة</button>
+      </div>` : '';
+
+      return banner + replyBar + composer + admin;
+    })()}
   </div>
   <p class="small mtop">أي حدث جديد (استطلاع، اجتماع، إعلان، بلاغ صيانة) بيظهر هنا تلقائيًا كـ"حدث" في نفس المحادثة، بجانب رسائلك العادية.</p>`;
 }
@@ -7390,8 +7525,8 @@ function chatItemHTML(m,u){
      ومحتواها الأصلي اتشال من القاعدة نفسها فمش هيرجع لأي مستخدم. */
   if(m.eventType==='moderated'){
     return `<div class="card" style="background:#F6F6F6;border:1px dashed var(--line)">
-      <div class="flexrow"><span style="font-size:16px">🚫</span>
-        <span class="small" style="flex:1;color:var(--muted)">تم حذف هذه الرسالة بواسطة الإدارة.</span>
+      <div class="flexrow"><span style="font-size:16px">${esc(m.icon||'🗑')}</span>
+        <span class="small" style="flex:1;color:var(--muted)">${esc(m.title||'تم حذف هذه الرسالة')}</span>
         <span class="small" style="color:var(--muted)">${esc(new Date(m.createdAt).toLocaleString('ar-EG'))}</span></div>
     </div>`;
   }
@@ -7407,10 +7542,12 @@ function chatItemHTML(m,u){
     <div class="card" style="background:${isMine?'var(--accent)':'var(--card)'};color:${isMine?'#fff':'inherit'}">
       <div class="flexrow" style="gap:6px;align-items:flex-start">
         <div class="small" style="font-weight:700;flex:1;color:${subColor}">${esc(m.authorLabel)}</div>
-        ${(window.guardAction&&guardActionSilent('chat','delete_any'))?`<span
-          style="cursor:pointer;opacity:.6;font-size:13px" title="حذف الرسالة"
-          onclick="deleteChatMessage('${esc(m.id)}')">🗑</span>`:''}
+        ${chatMsgMenu(m,isMine)}
       </div>
+      ${m.replyToText?`<div style="border-inline-start:3px solid ${isMine?'rgba(255,255,255,.5)':'var(--accent)'};
+        padding-inline-start:8px;margin:4px 0;opacity:.85">
+        <div class="small" style="font-weight:700">${esc(m.replyToLabel||'')}</div>
+        <div class="small">${esc(m.replyToText)}</div></div>`:''}
       <div class="mtop" style="white-space:pre-wrap">${esc(m.text)}</div>
       <div class="small mtop" style="color:${subColor}">${esc(new Date(m.createdAt).toLocaleString('ar-EG'))}</div>
     </div>
@@ -7424,8 +7561,11 @@ function sendChatMessage(){
   D.buildingChat=D.buildingChat||[];
   /* author_id مطلوب في سياسة الحماية — من غيره الرسالة بتترفض */
   const __auth=(window.CLOUD_AUTH&&CLOUD_AUTH.user)?CLOUD_AUTH.user.id:null;
+  const __rep = window.__replyTo;
   D.buildingChat.push({id:uid(),kind:'message',authorUsername:u.username,authorLabel,text,
-    authorId:__auth,createdAt:new Date().toISOString()});
+    authorId:__auth,replyToLabel:__rep?__rep.label:'',replyToText:__rep?__rep.text:'',
+    createdAt:new Date().toISOString()});
+  window.__replyTo=null;
   save();inp.value='';renderContent();
   markChatRead();               /* أي رسايل وصلت وهو فاتح المحادثة تتعلّم مقروءة */
   pushNotification({type:'chat',title:'رسالة جديدة في محادثة السكان',message:authorLabel+': '+text.slice(0,60),audience:'all',link:'chat'});
@@ -10401,7 +10541,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.19';
+const APP_BUILD='1.20';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -10615,61 +10755,61 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.19"></script>
-<script type="module" src="emartna-auth.js?v=1.19"></script>
-<script type="module" src="emartna-profile.js?v=1.19"></script>
-<script type="module" src="emartna-users.js?v=1.19"></script>
-<script src="emartna-contacts.js?v=1.19"></script>
-<script type="module" src="emartna-platform.js?v=1.19"></script>
-<script type="module" src="emartna-contactlog.js?v=1.19"></script>
-<script type="module" src="emartna-permreport.js?v=1.19"></script>
-<script type="module" src="emartna-finops.js?v=1.19"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.19"></script>
-<script type="module" src="emartna-planscreens.js?v=1.19"></script>
-<script type="module" src="emartna-recycle.js?v=1.19"></script>
-<script type="module" src="emartna-floors.js?v=1.19"></script>
-<script type="module" src="emartna-modal-size.js?v=1.19"></script>
-<script type="module" src="emartna-guard.js?v=1.19"></script>
-<script type="module" src="emartna-statement.js?v=1.19"></script>
-<script type="module" src="emartna-reports.js?v=1.19"></script>
-<script type="module" src="emartna-admin.js?v=1.19"></script>
-<script type="module" src="emartna-ui.js?v=1.19"></script>
-<script type="module" src="emartna-excel.js?v=1.19"></script>
-<script type="module" src="emartna-send.js?v=1.19"></script>
-<script type="module" src="emartna-pwa.js?v=1.19"></script>
-<script type="module" src="emartna-landing.js?v=1.19"></script>
-<script type="module" src="emartna-comm.js?v=1.19"></script>
-<script type="module" src="emartna-period.js?v=1.19"></script>
-<script type="module" src="emartna-fast.js?v=1.19"></script>
-<script type="module" src="emartna-ops.js?v=1.19"></script>
-<script type="module" src="emartna-onboarding.js?v=1.19"></script>
-<script type="module" src="emartna-bldcols.js?v=1.19"></script>
-<script type="module" src="emartna-reminder.js?v=1.19"></script>
-<script type="module" src="emartna-coupons.js?v=1.19"></script>
-<script type="module" src="emartna-videos.js?v=1.19"></script>
-<script type="module" src="emartna-colfit.js?v=1.19"></script>
-<script type="module" src="emartna-visits.js?v=1.19"></script>
-<script type="module" src="emartna-promo.js?v=1.19"></script>
-<script type="module" src="emartna-welcome.js?v=1.19"></script>
-<script src="emartna-idle.js?v=1.19"></script>
-<script type="module" src="emartna-offers.js?v=1.19"></script>
-<script type="module" src="emartna-dates.js?v=1.19"></script>
-<script type="module" src="emartna-paging.js?v=1.19"></script>
-<script type="module" src="emartna-leads.js?v=1.19"></script>
-<script type="module" src="emartna-live.js?v=1.19"></script>
-<script type="module" src="emartna-wa.js?v=1.19"></script>
-<script type="module" src="emartna-mobile.js?v=1.19"></script>
-<script type="module" src="emartna-numbering.js?v=1.19"></script>
-<script type="module" src="emartna-facade.js?v=1.19"></script>
-<script type="module" src="emartna-pricing.js?v=1.19"></script>
-<script type="module" src="emartna-newbld.js?v=1.19"></script>
-<script type="module" src="emartna-floorplan.js?v=1.19"></script>
-<script type="module" src="emartna-staff.js?v=1.19"></script>
-<script type="module" src="emartna-resaccess.js?v=1.19"></script>
-<script type="module" src="emartna-uitoggles.js?v=1.19"></script>
-<script type="module" src="emartna-cities.js?v=1.19"></script>
-<script type="module" src="emartna-perms.js?v=1.19"></script>
-<script type="module" src="emartna-lastlogin.js?v=1.19"></script>
+<script type="module" src="emartna-cloud.js?v=1.20"></script>
+<script type="module" src="emartna-auth.js?v=1.20"></script>
+<script type="module" src="emartna-profile.js?v=1.20"></script>
+<script type="module" src="emartna-users.js?v=1.20"></script>
+<script src="emartna-contacts.js?v=1.20"></script>
+<script type="module" src="emartna-platform.js?v=1.20"></script>
+<script type="module" src="emartna-contactlog.js?v=1.20"></script>
+<script type="module" src="emartna-permreport.js?v=1.20"></script>
+<script type="module" src="emartna-finops.js?v=1.20"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.20"></script>
+<script type="module" src="emartna-planscreens.js?v=1.20"></script>
+<script type="module" src="emartna-recycle.js?v=1.20"></script>
+<script type="module" src="emartna-floors.js?v=1.20"></script>
+<script type="module" src="emartna-modal-size.js?v=1.20"></script>
+<script type="module" src="emartna-guard.js?v=1.20"></script>
+<script type="module" src="emartna-statement.js?v=1.20"></script>
+<script type="module" src="emartna-reports.js?v=1.20"></script>
+<script type="module" src="emartna-admin.js?v=1.20"></script>
+<script type="module" src="emartna-ui.js?v=1.20"></script>
+<script type="module" src="emartna-excel.js?v=1.20"></script>
+<script type="module" src="emartna-send.js?v=1.20"></script>
+<script type="module" src="emartna-pwa.js?v=1.20"></script>
+<script type="module" src="emartna-landing.js?v=1.20"></script>
+<script type="module" src="emartna-comm.js?v=1.20"></script>
+<script type="module" src="emartna-period.js?v=1.20"></script>
+<script type="module" src="emartna-fast.js?v=1.20"></script>
+<script type="module" src="emartna-ops.js?v=1.20"></script>
+<script type="module" src="emartna-onboarding.js?v=1.20"></script>
+<script type="module" src="emartna-bldcols.js?v=1.20"></script>
+<script type="module" src="emartna-reminder.js?v=1.20"></script>
+<script type="module" src="emartna-coupons.js?v=1.20"></script>
+<script type="module" src="emartna-videos.js?v=1.20"></script>
+<script type="module" src="emartna-colfit.js?v=1.20"></script>
+<script type="module" src="emartna-visits.js?v=1.20"></script>
+<script type="module" src="emartna-promo.js?v=1.20"></script>
+<script type="module" src="emartna-welcome.js?v=1.20"></script>
+<script src="emartna-idle.js?v=1.20"></script>
+<script type="module" src="emartna-offers.js?v=1.20"></script>
+<script type="module" src="emartna-dates.js?v=1.20"></script>
+<script type="module" src="emartna-paging.js?v=1.20"></script>
+<script type="module" src="emartna-leads.js?v=1.20"></script>
+<script type="module" src="emartna-live.js?v=1.20"></script>
+<script type="module" src="emartna-wa.js?v=1.20"></script>
+<script type="module" src="emartna-mobile.js?v=1.20"></script>
+<script type="module" src="emartna-numbering.js?v=1.20"></script>
+<script type="module" src="emartna-facade.js?v=1.20"></script>
+<script type="module" src="emartna-pricing.js?v=1.20"></script>
+<script type="module" src="emartna-newbld.js?v=1.20"></script>
+<script type="module" src="emartna-floorplan.js?v=1.20"></script>
+<script type="module" src="emartna-staff.js?v=1.20"></script>
+<script type="module" src="emartna-resaccess.js?v=1.20"></script>
+<script type="module" src="emartna-uitoggles.js?v=1.20"></script>
+<script type="module" src="emartna-cities.js?v=1.20"></script>
+<script type="module" src="emartna-perms.js?v=1.20"></script>
+<script type="module" src="emartna-lastlogin.js?v=1.20"></script>
 
 
 

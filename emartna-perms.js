@@ -109,9 +109,10 @@
     // مفيش تحديد تفصيلي → نرجع لصلاحية المجموعة القديمة
     const grp = window.pageGroupKey ? pageGroupKey(screenKey, u.role !== 'admin') : null;
     if (u.permissions && grp && u.permissions[grp] === false) return false;
-    if (u.permissions && grp && u.permissions[grp] === true)
-      return action === 'view' || action === 'print' ? true : true;
-
+    /* ⚠️ كان مكتوب: return action==='view'||action==='print' ? true : true;
+       الشرط مالوش أي أثر — بيرجّع true دايمًا. فأي مستخدم عنده صلاحية
+       مجموعة كان بياخد كل الصلاحيات التفصيلية، ومنها "حذف رسائل
+       الآخرين". الصح إن صلاحية المجموعة تفتح افتراضي الدور مش كل حاجة. */
     const d = defaultsFor(u.role, grp);
     return !!d[action];
   };
