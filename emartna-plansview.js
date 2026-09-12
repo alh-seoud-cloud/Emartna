@@ -30,40 +30,70 @@
   /* ---------- الجدول ---------- */
 
   function plansTable(){
+    /* بنستخدم مكوّن الجداول الموحّد بدل جدول يدوي — فبييجي معاه
+       البحث والفرز والفلترة وإخفاء الأعمدة والتصدير زي باقي
+       جداول البرنامج، من غير ما نعيد كتابتهم. */
     const plans = ensurePlans();
     const used  = k => REG.buildings.filter(b => ensureLicense(b).plan === k).length;
-    return `<div class="table-wrap mtop">
-      <table><thead><tr>
-        <th>الخطة</th><th>قبل الخصم</th><th>الخصم</th><th>بعد الخصم</th>
-        <th>المدة</th><th>حد الشقق</th><th>المساعدين</th>
-        <th>العملاء</th><th>الحالة</th><th></th>
-      </tr></thead><tbody>
-      ${plans.map(p => {
-        const after = planPriceAfter(p);
-        const n = used(p.key);
-        return `<tr style="${p.active===false?'opacity:.6':''}">
-          <td><b>${esc2(p.icon||'')} ${esc2(p.name)}</b>
-            ${p.isTrial?'<span class="badge g">تجريبية</span>':''}</td>
-          <td>${p.priceBefore ? money(p.priceBefore) : '—'}</td>
-          <td>${p.discountPercent ? p.discountPercent + '%' : '—'}</td>
-          <td><b>${after ? money(after) : 'مجانية'}</b></td>
-          <td>${p.durationMonths ? p.durationMonths + ' شهر' : 'بلا انتهاء'}</td>
-          <td>${p.maxApartments || 'غير محدود'}</td>
-          <td>${p.maxStaff == null ? 'بلا حد' : p.maxStaff}</td>
-          <td>${n ? `<button class="btn sm ghost" style="padding:2px 8px"
-                onclick="openPlanClients('${esc2(p.key)}')"><b>${n}</b> 👁️</button>`
-              : '<span style="color:var(--muted)">0</span>'}</td>
-          <td>${p.active===false?'<span class="badge r">معطلة</span>'
-                                :'<span class="badge g">مفعّلة</span>'}</td>
-          <td><div class="flexrow" style="gap:4px">
-            <button class="btn sm ghost" onclick="openPlanModal('${esc2(p.key)}')">تعديل</button>
-            <button class="btn sm ${p.active===false?'':'gold'}"
-              onclick="togglePlanActive('${esc2(p.key)}')">
-              ${p.active===false?'تفعيل':'تعطيل'}</button>
-          </div></td>
-        </tr>`;
-      }).join('')}
-      </tbody></table></div>`;
+    const rows  = plans.map(p => Object.assign({}, p, {
+      __after: planPriceAfter(p),
+      __used:  used(p.key),
+    }));
+
+    const cols = [
+      { key:'name', label:'الخطة',
+        value:r => r.name || '',
+        cell: r => `${esc2(r.icon||'')} <b>${esc2(r.name)}</b>` +
+          (r.isTrial ? ' <span class="badge g">تجريبية</span>' : '') },
+
+      { key:'before', label:'قبل الخصم',
+        value:r => Number(r.priceBefore) || 0,
+        cell: r => r.priceBefore ? money(r.priceBefore) : '—' },
+
+      { key:'disc', label:'الخصم',
+        value:r => Number(r.discountPercent) || 0,
+        cell: r => r.discountPercent ? r.discountPercent + '%' : '—' },
+
+      { key:'after', label:'بعد الخصم',
+        value:r => Number(r.__after) || 0,
+        cell: r => r.__after ? `<b>${money(r.__after)}</b>` : 'مجانية' },
+
+      { key:'months', label:'المدة',
+        value:r => Number(r.durationMonths) || 0,
+        cell: r => r.durationMonths ? r.durationMonths + ' شهر' : 'بلا انتهاء' },
+
+      { key:'maxAp', label:'حد الشقق',
+        value:r => Number(r.maxApartments) || 0,
+        cell: r => r.maxApartments || 'غير محدود' },
+
+      { key:'maxStaff', label:'المساعدين',
+        value:r => r.maxStaff == null ? 9999 : Number(r.maxStaff),
+        cell: r => r.maxStaff == null ? 'بلا حد' : r.maxStaff },
+
+      { key:'used', label:'العملاء',
+        value:r => r.__used,
+        cell: r => r.__used
+          ? `<button class="btn sm ghost" style="padding:2px 8px"
+               onclick="openPlanClients('${esc2(r.key)}')"><b>${r.__used}</b> 👁️</button>`
+          : '<span style="color:var(--muted)">0</span>' },
+
+      { key:'status', label:'الحالة',
+        value:r => r.active === false ? 'معطلة' : 'مفعّلة',
+        cell: r => r.active === false
+          ? '<span class="badge r">معطلة</span>'
+          : '<span class="badge g">مفعّلة</span>' },
+
+      { key:'act', label:'', sortable:false, noExport:true,
+        value:() => '',
+        cell: r => `<div class="flexrow" style="gap:4px">
+          <button class="btn sm ghost" onclick="openPlanModal('${esc2(r.key)}')">تعديل</button>
+          <button class="btn sm ${r.active===false?'':'gold'}"
+            onclick="togglePlanActive('${esc2(r.key)}')">
+            ${r.active===false?'تفعيل':'تعطيل'}</button></div>` },
+    ];
+
+    return `<div class="mtop">${sortableTable('plansTable', rows, cols, null,
+      { defaultKey:'used', exportName:'خطط الاشتراك' })}</div>`;
   }
 
   /* ---------- شريط الأدوات ---------- */
@@ -76,7 +106,7 @@
       ${btn('cards','كروت','🗂️')}
       ${btn('table','جدول','📋')}
       <div class="spacer"></div>
-      <button class="btn sm ghost" onclick="exportPlansXlsx()">📊 تصدير إكسل</button>
+      ${v==='table'?'':'<button class="btn sm ghost" onclick="exportPlansXlsx()">📊 تصدير إكسل</button>'}
       <button class="btn sm ghost" onclick="openPlansImport()">📥 تحديث بالإكسل</button>
       <button class="btn primary" onclick="openPlanModal()">+ خطة جديدة</button>
     </div>`;
