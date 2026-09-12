@@ -64,7 +64,7 @@
       b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99998;background:#B58121;' +
         'color:#fff;padding:8px 14px;font:600 13px/1.6 system-ui;text-align:center;direction:rtl';
       b.innerHTML = '🛠️ الموقع تحت الصيانة للمستخدمين' + (period ? ' — ' + esc2(period) : '') +
-        ' <button onclick="openMaintenanceModal()" style="margin-inline-start:10px;background:#fff;' +
+        ' <button onclick="openSiteMaintenanceModal()" style="margin-inline-start:10px;background:#fff;' +
         'color:#B58121;border:0;border-radius:6px;padding:3px 12px;cursor:pointer;font-weight:700">إدارة</button>';
       document.body.appendChild(b);
       return;
@@ -119,7 +119,11 @@
   };
 
   /* نافذة إدارة الصيانة لصاحب البرنامج */
-  window.openMaintenanceModal = function(){
+  /* الاسم كان openMaintenanceModal، وهو نفس اسم دالة "بلاغ صيانة
+     في العمارة" في index.html. الوحدة بتتحمّل بعدها فبتدوس عليها —
+     فالساكن كان بيدوس "بلاغ صيانة جديد" وتفتحله شاشة إيقاف الموقع.
+     غيّرناه لـ openSiteMaintenanceModal: ده صيانة الموقع مش العمارة. */
+  window.openSiteMaintenanceModal = function(){
     const m = window.__maintenance || {};
     const val = v => v ? String(v).slice(0,16) : '';
     openModal(`
@@ -313,7 +317,7 @@
         ${on ? 'المستخدمين بيشوفوا شاشة صيانة — وإنت شغّال عادي.'
              : 'لما تفعّله، تقدر تحدد فترة ورسالة للمستخدمين.'}
       </p>
-      <button class="btn ${on?'red':'gold'} mtop" onclick="openMaintenanceModal()">
+      <button class="btn ${on?'red':'gold'} mtop" onclick="openSiteMaintenanceModal()">
         ${on ? '⚙️ إدارة الصيانة' : '🛠️ تفعيل وضع الصيانة'}
       </button>
     </div>
