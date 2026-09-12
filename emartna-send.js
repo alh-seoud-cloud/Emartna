@@ -21,7 +21,11 @@
     const e164 = d.startsWith('+') ? d : (cc + d.replace(/^0+/,''));
     return e164.replace(/\D/g,'');
   }
-  window.waNumber = waNumber;
+  /* ⚠️ ما بنحطّهاش على window: emartna-wa.js بيعرّف waNumber بتوقيع
+     مختلف تمامًا — (كائن) بدل (دولة، رقم) — وبيتحمّل بعدنا فبيدوس.
+     الدالة دي محلية وبتتنادى محليًا، فالتصادم مالوش أثر علينا.
+     بس نشرها على window بيخلي أي كود جديد يقع في الفخ. */
+  window.waNumberFromParts = waNumber;
 
   function isMobile(){
     return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
