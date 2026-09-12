@@ -479,16 +479,20 @@ async function paintRoom(){
     </div>`:''}
 
     ${canWrite ? `<div class="flexrow mtop">
-      <textarea id="chatInput" rows="2" style="flex:1" placeholder="اكتب رسالتك..."></textarea>
+      <textarea id="roomInput" rows="2" style="flex:1" placeholder="اكتب رسالتك..."></textarea>
       <button class="btn primary" onclick="sendMsg()">إرسال</button>
     </div>` : `<p class="small mtop" style="text-align:center;color:var(--muted)">
       مش هتقدر ترسل — ${esc2(STATUS_AR[CUR.status]||'')}.</p>`}`;
 
   /* النافذة اسمها #modalBox — التحديث في المكان عشان اللي بتكتبه
-     ما يضيعش، ومكان المؤشر يفضل زي ما هو. */
+     ما يضيعش، ومكان المؤشر يفضل زي ما هو.
+     وخانة الكتابة اسمها roomInput مش chatInput: الغرفة بتفتح فوق
+     شاشة الشات العام، والاتنين كانوا بنفس المعرّف — فـ
+     getElementById كان بيرجّع خانة الشات العام (الأولى في الصفحة)،
+     فالإرسال ياخد نص فاضي ويخرج بصمت. */
   const box = document.getElementById('modalBox');
   const shown = document.getElementById('chatBox');
-  const keep = document.getElementById('chatInput');
+  const keep = document.getElementById('roomInput');
   const draft = keep ? keep.value : '';
   const focused = keep && document.activeElement === keep;
   const atBottom = !shown ||
@@ -497,7 +501,7 @@ async function paintRoom(){
   if (box && shown) box.innerHTML = body;
   else openModal(body, true);
 
-  const inp = document.getElementById('chatInput');
+  const inp = document.getElementById('roomInput');
   if (inp){ inp.value = draft; if (focused) inp.focus(); }
   const cb = document.getElementById('chatBox');
   if (cb && atBottom) cb.scrollTop = cb.scrollHeight;
@@ -514,7 +518,7 @@ window.replyRoom = function(id){
 window.cancelRoomReply = function(){ REPLY = null; paintRoom(); };
 
 window.sendMsg = async function(){
-  const inp = document.getElementById('chatInput');
+  const inp = document.getElementById('roomInput');
   const text = (inp.value || '').trim();
   if (!text || !CUR) return;
   const me = myId();
