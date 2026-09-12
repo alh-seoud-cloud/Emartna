@@ -74,6 +74,11 @@
     treasurer:  g => g === 'finance' || g === 'reports' ? 'all' : 'none',
     board:      () => 'view',            // اطّلاع وطباعة على كل حاجة
     manager:    g => g === 'finance' ? 'none' : 'all',
+    /* الساكن ماكانش له سطر هنا، فكان بيقع على 'all' — يعني كل
+       الصلاحيات على شاشاته. بنحدّده صراحةً: يقرا ويشارك ويحذف
+       اللي يخصه، ومش بيراجع ولا يعتمد ولا يحذف حاجة لغيره. */
+    owner:      () => 'resident',
+    tenant:     () => 'resident',
   };
 
   /* بتتبني من ACTIONS مباشرة، فأي صلاحية جديدة تتضاف تتغطّى تلقائيًا */
@@ -81,6 +86,10 @@
     all:  () => true,
     none: () => false,
     view: a => a === 'view' || a === 'print' || a === 'export' || a === 'att_view',
+    /* نفس افتراضي الساكن في القاعدة (role_default_action) بالظبط —
+       أي اختلاف بين الاتنين بيعمل شاشة بتسمح وخادم بيرفض. */
+    resident: a => ['view','print','export','att_view','add','att_add',
+                    'send','delete_own'].includes(a),
   };
   function buildSet(mode){
     const out = {};
@@ -88,7 +97,29 @@
     return out;
   }
 
+  /* القاعدة هي المرجع: بنحمّل افتراضيات الأدوار منها مرة واحدة.
+     القوايم المكتوبة فوق بتفضل احتياطي لو التحميل فشل — أي اختلاف
+     بين الواجهة والقاعدة بيعمل شاشة بتسمح وخادم بيرفض (أو العكس،
+     وده اللي خلّى الساكن يشوف "مالكش صلاحية إرسال"). */
+  let SERVER_DEFAULTS = null;
+  (async function loadServerDefaults(){
+    try{
+      const sb = window.CLOUD && window.CLOUD._sb; if (!sb) return;
+      const { data, error } = await sb.rpc('role_default_matrix');
+      if (error || !data) return;
+      const map = {};
+      data.forEach(r => {
+        map[r.role] = map[r.role] || {};
+        map[r.role][r.group_key] = map[r.role][r.group_key] || {};
+        map[r.role][r.group_key][r.action_key] = r.allowed;
+      });
+      SERVER_DEFAULTS = map;
+    }catch(e){}
+  })();
+
   function defaultsFor(role, groupKey){
+    const sd = SERVER_DEFAULTS && SERVER_DEFAULTS[role] && SERVER_DEFAULTS[role][groupKey];
+    if (sd) return sd;
     const f = ROLE_DEFAULTS[role];
     const mode = f ? f(groupKey) : 'all';
     return buildSet(modeMap[mode] ? mode : 'all');
