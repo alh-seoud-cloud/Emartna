@@ -7195,8 +7195,16 @@ async function refreshChatUnread(){
     const rows = data || [];
     const total = rows.reduce((n,r)=>n+(r.unread||0),0);
     const changed = total !== __chatUnread.total;
-    __chatUnread = { rows, total, at: Date.now() };
-    if(changed && window.renderContent) renderContent();   // العدّاد يختفي فورًا
+    const done = __chatUnread.__done;
+    __chatUnread = { rows, total, at: Date.now(), __done: done };
+    /* مانعيدش رسم الصفحة وهو بيكتب — بنحدّث الشارة بس */
+    const typing = document.activeElement &&
+      /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
+    if(changed){
+      const bell = document.getElementById('bellBadge');
+      if(bell) bell.textContent = total || '';
+      if(!typing && window.renderContent) renderContent();
+    }
   }catch(e){}
 }
 setInterval(refreshChatUnread, 20000);
@@ -7214,20 +7222,35 @@ function unreadChatCount(u){
 /* إجمالي كل المحادثات في كل العمارات — لشارة الجرس */
 function unreadChatTotal(){ return __chatUnread.total || 0; }
 
+let __markingRead = false;
 async function markChatRead(roomId){
+  /* حارسين ضروريين:
+     ١) الدالة كانت بتنادي renderContent، والنداء كان جوه دالة الرسم —
+        فبقت حلقة: رسم ← تعليم قراءة ← رسم… والنتيجة إن خانة الكتابة
+        بتتولد من جديد كل لحظة فمستحيل تكتب فيها.
+     ٢) ومن غير قفل، كل رسمة بتبعت نداء شبكة جديد. */
+  if(__markingRead) return;
+  const uuid = (window.CLOUD&&CLOUD._cache)
+    ? CLOUD._cache.buildingUuid[activeBuildingId] : null;
+  if(!uuid) return;
+
+  const key = uuid + '::' + (roomId || '');
+  const row = (__chatUnread.rows||[]).find(r =>
+    r.building_id===uuid && (roomId ? r.room_id===roomId : !r.room_id));
+  /* مفيش غير مقروء؟ مفيش داعي لأي نداء */
+  if(row && !row.unread && __chatUnread.__done===key) return;
+
+  __markingRead = true;
   try{
-    const uuid = CLOUD._cache.buildingUuid[activeBuildingId];
-    if(!uuid) return;
-    await CLOUD._sb.rpc('mark_chat_read',
-      { p_building: uuid, p_room: roomId || null });
-    /* بنصفّر محليًا على طول عشان الشارة تختفي من غير ما نستنى الشبكة */
-    (__chatUnread.rows||[]).forEach(r=>{
-      if(r.building_id===uuid && (roomId ? r.room_id===roomId : !r.room_id)) r.unread=0;
-    });
+    await CLOUD._sb.rpc('mark_chat_read', { p_building: uuid, p_room: roomId || null });
+    if(row) row.unread = 0;
     __chatUnread.total = (__chatUnread.rows||[]).reduce((n,r)=>n+(r.unread||0),0);
-    if(window.renderContent) renderContent();
-    refreshChatUnread();
+    __chatUnread.__done = key;
+    /* الشارة بس هي اللي محتاجة تحديث — مش الصفحة كلها */
+    const bell = document.getElementById('bellBadge');
+    if(bell) bell.textContent = __chatUnread.total || '';
   }catch(e){}
+  finally{ __markingRead = false; }
 }
 /* فحص صلاحية من غير رسالة رفض — للعرض بس */
 function guardActionSilent(page,action){
@@ -7271,7 +7294,8 @@ function pageBuildingChat(u){
     <button class="btn" onclick="openPrivateChats()">🔒 المحادثات الخاصة</button>
     <span class="small" style="color:var(--muted)">غرف مقفولة على أعضاء محدّدين —
       مختلفة عن المحادثة العامة اللي تحت</span></div>` : '';
-  markChatRead();
+  /* بعد ما الشاشة تترسم فعلًا — النداء جوه الرسم كان بيعمل حلقة */
+  setTimeout(()=>markChatRead(), 700);
   const items=[...(D.buildingChat||[])].sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
   return `${__pc}
   <div class="card content-narrow" style="padding:0;overflow:hidden">
@@ -7610,7 +7634,9 @@ function submitMaintenanceReport(){
   if(!title)return showMessage('أدخل عنوان البلاغ');
   const u=currentUser(); const ap=myApartment();
   D.maintenanceReports=D.maintenanceReports||[];
-  D.maintenanceReports.push({id:uid(),title,description:document.getElementById('mrDesc').value.trim(),apartmentId:ap?ap.id:null,reportedByUsername:u.username,status:'open',vendorId:null,resolutionNote:'',createdAt:new Date().toISOString(),history:[{action:'تم إنشاء البلاغ',by:u.name||u.username,date:new Date().toISOString()}]});
+  /* reported_by مطلوب في سياسة الحماية للساكن */
+  const __mrAuth=(window.CLOUD_AUTH&&CLOUD_AUTH.user)?CLOUD_AUTH.user.id:null;
+  D.maintenanceReports.push({id:uid(),title,description:document.getElementById('mrDesc').value.trim(),apartmentId:ap?ap.id:null,reportedByUsername:u.username,reportedBy:__mrAuth,status:'open',vendorId:null,resolutionNote:'',createdAt:new Date().toISOString(),history:[{action:'تم إنشاء البلاغ',by:u.name||u.username,date:new Date().toISOString()}]});
   pushChatEvent('maintenance','🔧','بلاغ صيانة جديد',title,'maintenance');
   save();closeModal();toast('تم إرسال البلاغ');
   pushNotification({type:'maintenance',title:'بلاغ صيانة جديد',message:title+(ap?' - '+unitLabel(ap):''),audience:'admins',link:'maintenance'});
@@ -9117,7 +9143,11 @@ function submitSuggestion(){
   if(!title||!text)return showMessage('أدخل العنوان والتفاصيل');
   const u=currentUser(); const ap=myApartment();
   const authorLabel=ap?unitLabel(ap)+' - '+u.name:u.name;
-  D.suggestions.push({id:uid(),title,text,username:u.username,authorLabel,status:'pending',date:todayISO(),adminNote:''});
+  /* created_by مطلوب في سياسة الحماية — من غيره المقترح بيترفض ويتشال */
+  const __auth=(window.CLOUD_AUTH&&CLOUD_AUTH.user)?CLOUD_AUTH.user.id:null;
+  D.suggestions.push({id:uid(),title,text,username:u.username,authorLabel,
+    status:'pending',date:todayISO(),adminNote:'',createdBy:__auth,
+    apartmentId:ap?ap.id:null});
   save();closeModal();toast('تم إرسال المقترح للمراجعة');
   pushNotification({type:'suggestion',title:'مقترح جديد بانتظار المراجعة',message:title,audience:'admins',link:'suggestions'});
   renderContent();
@@ -9388,7 +9418,9 @@ async function submitPaymentRequest(){
     }
   }
 
-  D.paymentRequests.push({id:uid(),apartmentId:ap.id,username:u.username,paymentFor,projectName,amount,imageDataUrl:proof,method,methodId,note,status:'pending',requestedAt:new Date().toISOString()});
+  /* requested_by مطلوب في سياسة الحماية */
+  const __prAuth=(window.CLOUD_AUTH&&CLOUD_AUTH.user)?CLOUD_AUTH.user.id:null;
+  D.paymentRequests.push({id:uid(),apartmentId:ap.id,username:u.username,requestedBy:__prAuth,paymentFor,projectName,amount,imageDataUrl:proof,method,methodId,note,status:'pending',requestedAt:new Date().toISOString()});
   window.__prImageData=null;
   save();closeModal();toast('تم إرسال الدفعة للمراجعة');
   pushNotification({type:'payment',title:'طلب دفعة جديد',message:`${unitLabel(ap)} - ${money(amount)} - ${paymentForLabel({paymentFor,projectName})}`,audience:'admins',link:'paymentRequests'});
@@ -10136,7 +10168,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.09';
+const APP_BUILD='1.11';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -10350,61 +10382,61 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.09"></script>
-<script type="module" src="emartna-auth.js?v=1.09"></script>
-<script type="module" src="emartna-profile.js?v=1.09"></script>
-<script type="module" src="emartna-users.js?v=1.09"></script>
-<script src="emartna-contacts.js?v=1.09"></script>
-<script type="module" src="emartna-platform.js?v=1.09"></script>
-<script type="module" src="emartna-contactlog.js?v=1.09"></script>
-<script type="module" src="emartna-permreport.js?v=1.09"></script>
-<script type="module" src="emartna-finops.js?v=1.09"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.09"></script>
-<script type="module" src="emartna-planscreens.js?v=1.09"></script>
-<script type="module" src="emartna-recycle.js?v=1.09"></script>
-<script type="module" src="emartna-floors.js?v=1.09"></script>
-<script type="module" src="emartna-modal-size.js?v=1.09"></script>
-<script type="module" src="emartna-guard.js?v=1.09"></script>
-<script type="module" src="emartna-statement.js?v=1.09"></script>
-<script type="module" src="emartna-reports.js?v=1.09"></script>
-<script type="module" src="emartna-admin.js?v=1.09"></script>
-<script type="module" src="emartna-ui.js?v=1.09"></script>
-<script type="module" src="emartna-excel.js?v=1.09"></script>
-<script type="module" src="emartna-send.js?v=1.09"></script>
-<script type="module" src="emartna-pwa.js?v=1.09"></script>
-<script type="module" src="emartna-landing.js?v=1.09"></script>
-<script type="module" src="emartna-comm.js?v=1.09"></script>
-<script type="module" src="emartna-period.js?v=1.09"></script>
-<script type="module" src="emartna-fast.js?v=1.09"></script>
-<script type="module" src="emartna-ops.js?v=1.09"></script>
-<script type="module" src="emartna-onboarding.js?v=1.09"></script>
-<script type="module" src="emartna-bldcols.js?v=1.09"></script>
-<script type="module" src="emartna-reminder.js?v=1.09"></script>
-<script type="module" src="emartna-coupons.js?v=1.09"></script>
-<script type="module" src="emartna-videos.js?v=1.09"></script>
-<script type="module" src="emartna-colfit.js?v=1.09"></script>
-<script type="module" src="emartna-visits.js?v=1.09"></script>
-<script type="module" src="emartna-promo.js?v=1.09"></script>
-<script type="module" src="emartna-welcome.js?v=1.09"></script>
-<script src="emartna-idle.js?v=1.09"></script>
-<script type="module" src="emartna-offers.js?v=1.09"></script>
-<script type="module" src="emartna-dates.js?v=1.09"></script>
-<script type="module" src="emartna-paging.js?v=1.09"></script>
-<script type="module" src="emartna-leads.js?v=1.09"></script>
-<script type="module" src="emartna-live.js?v=1.09"></script>
-<script type="module" src="emartna-wa.js?v=1.09"></script>
-<script type="module" src="emartna-mobile.js?v=1.09"></script>
-<script type="module" src="emartna-numbering.js?v=1.09"></script>
-<script type="module" src="emartna-facade.js?v=1.09"></script>
-<script type="module" src="emartna-pricing.js?v=1.09"></script>
-<script type="module" src="emartna-newbld.js?v=1.09"></script>
-<script type="module" src="emartna-floorplan.js?v=1.09"></script>
-<script type="module" src="emartna-staff.js?v=1.09"></script>
-<script type="module" src="emartna-resaccess.js?v=1.09"></script>
-<script type="module" src="emartna-uitoggles.js?v=1.09"></script>
-<script type="module" src="emartna-cities.js?v=1.09"></script>
-<script type="module" src="emartna-perms.js?v=1.09"></script>
-<script type="module" src="emartna-lastlogin.js?v=1.09"></script>
+<script type="module" src="emartna-cloud.js?v=1.11"></script>
+<script type="module" src="emartna-auth.js?v=1.11"></script>
+<script type="module" src="emartna-profile.js?v=1.11"></script>
+<script type="module" src="emartna-users.js?v=1.11"></script>
+<script src="emartna-contacts.js?v=1.11"></script>
+<script type="module" src="emartna-platform.js?v=1.11"></script>
+<script type="module" src="emartna-contactlog.js?v=1.11"></script>
+<script type="module" src="emartna-permreport.js?v=1.11"></script>
+<script type="module" src="emartna-finops.js?v=1.11"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.11"></script>
+<script type="module" src="emartna-planscreens.js?v=1.11"></script>
+<script type="module" src="emartna-recycle.js?v=1.11"></script>
+<script type="module" src="emartna-floors.js?v=1.11"></script>
+<script type="module" src="emartna-modal-size.js?v=1.11"></script>
+<script type="module" src="emartna-guard.js?v=1.11"></script>
+<script type="module" src="emartna-statement.js?v=1.11"></script>
+<script type="module" src="emartna-reports.js?v=1.11"></script>
+<script type="module" src="emartna-admin.js?v=1.11"></script>
+<script type="module" src="emartna-ui.js?v=1.11"></script>
+<script type="module" src="emartna-excel.js?v=1.11"></script>
+<script type="module" src="emartna-send.js?v=1.11"></script>
+<script type="module" src="emartna-pwa.js?v=1.11"></script>
+<script type="module" src="emartna-landing.js?v=1.11"></script>
+<script type="module" src="emartna-comm.js?v=1.11"></script>
+<script type="module" src="emartna-period.js?v=1.11"></script>
+<script type="module" src="emartna-fast.js?v=1.11"></script>
+<script type="module" src="emartna-ops.js?v=1.11"></script>
+<script type="module" src="emartna-onboarding.js?v=1.11"></script>
+<script type="module" src="emartna-bldcols.js?v=1.11"></script>
+<script type="module" src="emartna-reminder.js?v=1.11"></script>
+<script type="module" src="emartna-coupons.js?v=1.11"></script>
+<script type="module" src="emartna-videos.js?v=1.11"></script>
+<script type="module" src="emartna-colfit.js?v=1.11"></script>
+<script type="module" src="emartna-visits.js?v=1.11"></script>
+<script type="module" src="emartna-promo.js?v=1.11"></script>
+<script type="module" src="emartna-welcome.js?v=1.11"></script>
+<script src="emartna-idle.js?v=1.11"></script>
+<script type="module" src="emartna-offers.js?v=1.11"></script>
+<script type="module" src="emartna-dates.js?v=1.11"></script>
+<script type="module" src="emartna-paging.js?v=1.11"></script>
+<script type="module" src="emartna-leads.js?v=1.11"></script>
+<script type="module" src="emartna-live.js?v=1.11"></script>
+<script type="module" src="emartna-wa.js?v=1.11"></script>
+<script type="module" src="emartna-mobile.js?v=1.11"></script>
+<script type="module" src="emartna-numbering.js?v=1.11"></script>
+<script type="module" src="emartna-facade.js?v=1.11"></script>
+<script type="module" src="emartna-pricing.js?v=1.11"></script>
+<script type="module" src="emartna-newbld.js?v=1.11"></script>
+<script type="module" src="emartna-floorplan.js?v=1.11"></script>
+<script type="module" src="emartna-staff.js?v=1.11"></script>
+<script type="module" src="emartna-resaccess.js?v=1.11"></script>
+<script type="module" src="emartna-uitoggles.js?v=1.11"></script>
+<script type="module" src="emartna-cities.js?v=1.11"></script>
+<script type="module" src="emartna-perms.js?v=1.11"></script>
+<script type="module" src="emartna-lastlogin.js?v=1.11"></script>
 
 
 

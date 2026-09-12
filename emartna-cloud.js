@@ -116,6 +116,7 @@ const MAPS = {
       reportedByUsername:'reported_by_username',
       resolutionNote:'resolution_note', resolvedAt:'resolved_at',
       createdAt:'created_at',
+      reportedBy:'reported_by',      /* مطلوب في سياسة بلاغ الساكن */
     },
     refs: {
       apartmentId:['apartment_id','apartments'],
@@ -159,6 +160,9 @@ const MAPS = {
       id:'legacy_id', title:'title', text:'text',
       authorLabel:'author_label', username:'legacy_username',
       status:'status', adminNote:'admin_note', date:'date',
+      /* سياسة الحماية بتطلب created_by = المستخدم الحالي. كان مش
+         بيتبعت، فكل مقترح من ساكن بيترفض ويتشال من الحالة المحلية. */
+      createdBy:'created_by', rejectionReason:'rejection_reason',
     },
     refs: { apartmentId:['apartment_id','apartments'] },
   },
@@ -179,6 +183,8 @@ const MAPS = {
       amount:'amount', note:'note', status:'status', method:'method',
       requestedAt:'created_at', reviewNote:'review_note',
       imageDataUrl:'proof_url', username:'legacy_username',
+      requestedBy:'requested_by',    /* مطلوب في سياسة طلب الدفع */
+      methodId:'payment_method_id',
     },
     refs: { apartmentId:['apartment_id','apartments'] },
   },
