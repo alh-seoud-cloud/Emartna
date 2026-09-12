@@ -2462,8 +2462,9 @@ function loginHTML(){
       </form>
       ${(bioSupported()&&bioIndex().length)?`<button class="login-btn" style="background:var(--gold);margin-top:8px" onclick="loginWithBiometric()">🔐 دخول بالبصمة</button>`:''}
       <button class="login-btn" type="button" onclick="loginWithGoogle()"
-        style="background:#fff;color:#3c4043;border:1.5px solid #dadce0;margin-top:8px;
-               display:flex;align-items:center;justify-content:center;gap:10px">
+        id="googleBtn"
+        style="display:none;background:#fff;color:#3c4043;border:1.5px solid #dadce0;
+               margin-top:8px;align-items:center;justify-content:center;gap:10px">
         <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
           <path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-2.8-.4-4H24v7.3h12.1c-.2 2-1.6 5-4.5 7l-.1.4 6.5 5 .5.1c4.1-3.8 6.6-9.4 6.6-15.8z"/>
           <path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.3l-6.9-5.4c-1.8 1.3-4.3 2.2-7.6 2.2-5.8 0-10.7-3.8-12.5-9.900l-.4.1-6.7 5.2-.1.4C7.9 40.9 15.3 46 24 46z"/>
@@ -2472,8 +2473,8 @@ function loginHTML(){
         </svg>
         الدخول بحساب جوجل
       </button>
-      <p class="small" style="text-align:center;color:var(--muted);margin-top:6px">
-        أسرع، ومش محتاج تفتكر كلمة سر</p>
+      <p class="small" id="googleHint" style="display:none;text-align:center;
+        color:var(--muted);margin-top:6px">أسرع، ومش محتاج تفتكر كلمة سر</p>
       <div class="mtop2" style="border-top:1px dashed var(--line);padding-top:14px">
         <p class="small" style="text-align:center;color:var(--muted)">🎬 عايز تجرّب البرنامج قبل ما تسجّل حساب؟</p>
         <div class="flexrow mtop" style="justify-content:center;gap:8px">
@@ -2787,6 +2788,24 @@ async function doSignup(){
 /* ---------- استرداد كلمة المرور ---------- */
 /* الدخول بجوجل — الإيميل بييجي متحقق منه من جوجل، فاسترجاع كلمة
    المرور بيبقى عند جوجل مش عندنا. */
+/* الزرار مخفي لحد ما مزوّد جوجل يتفعّل في لوحة Supabase — من غير
+   كده الضغط عليه بيدي رسالة إنجليزي "provider is not enabled".
+   بنسأل الخادم مرة واحدة ونظهره لو شغّال. */
+async function checkGoogleProvider(){
+  try{
+    const r = await fetch(CLOUD._sb.supabaseUrl + '/auth/v1/settings',
+      { headers:{ apikey: CLOUD._sb.supabaseKey } });
+    if(!r.ok) return;
+    const d = await r.json();
+    const on = !!(d && d.external && d.external.google);
+    if(!on) return;
+    const btn = document.getElementById('googleBtn');
+    const hint = document.getElementById('googleHint');
+    if(btn){ btn.style.display='flex'; }
+    if(hint){ hint.style.display='block'; }
+  }catch(e){}
+}
+
 async function loginWithGoogle(){
   try{
     if(!window.CLOUD||!CLOUD.signInWithGoogle)
@@ -2942,6 +2961,8 @@ async function doContactPasswordReset(){
 }
 
 function bindLogin(){
+  /* نظهر زرار جوجل بس لو المزوّد مفعّل فعلًا على الخادم */
+  if(window.checkGoogleProvider) setTimeout(checkGoogleProvider, 400);
   if(window.__viewMode==='signup'){
     const form=document.getElementById('signupForm');
     if(form)form.addEventListener('submit',e=>{e.preventDefault();doSignup();});
@@ -10325,7 +10346,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.17';
+const APP_BUILD='1.18';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -10539,61 +10560,61 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.17"></script>
-<script type="module" src="emartna-auth.js?v=1.17"></script>
-<script type="module" src="emartna-profile.js?v=1.17"></script>
-<script type="module" src="emartna-users.js?v=1.17"></script>
-<script src="emartna-contacts.js?v=1.17"></script>
-<script type="module" src="emartna-platform.js?v=1.17"></script>
-<script type="module" src="emartna-contactlog.js?v=1.17"></script>
-<script type="module" src="emartna-permreport.js?v=1.17"></script>
-<script type="module" src="emartna-finops.js?v=1.17"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.17"></script>
-<script type="module" src="emartna-planscreens.js?v=1.17"></script>
-<script type="module" src="emartna-recycle.js?v=1.17"></script>
-<script type="module" src="emartna-floors.js?v=1.17"></script>
-<script type="module" src="emartna-modal-size.js?v=1.17"></script>
-<script type="module" src="emartna-guard.js?v=1.17"></script>
-<script type="module" src="emartna-statement.js?v=1.17"></script>
-<script type="module" src="emartna-reports.js?v=1.17"></script>
-<script type="module" src="emartna-admin.js?v=1.17"></script>
-<script type="module" src="emartna-ui.js?v=1.17"></script>
-<script type="module" src="emartna-excel.js?v=1.17"></script>
-<script type="module" src="emartna-send.js?v=1.17"></script>
-<script type="module" src="emartna-pwa.js?v=1.17"></script>
-<script type="module" src="emartna-landing.js?v=1.17"></script>
-<script type="module" src="emartna-comm.js?v=1.17"></script>
-<script type="module" src="emartna-period.js?v=1.17"></script>
-<script type="module" src="emartna-fast.js?v=1.17"></script>
-<script type="module" src="emartna-ops.js?v=1.17"></script>
-<script type="module" src="emartna-onboarding.js?v=1.17"></script>
-<script type="module" src="emartna-bldcols.js?v=1.17"></script>
-<script type="module" src="emartna-reminder.js?v=1.17"></script>
-<script type="module" src="emartna-coupons.js?v=1.17"></script>
-<script type="module" src="emartna-videos.js?v=1.17"></script>
-<script type="module" src="emartna-colfit.js?v=1.17"></script>
-<script type="module" src="emartna-visits.js?v=1.17"></script>
-<script type="module" src="emartna-promo.js?v=1.17"></script>
-<script type="module" src="emartna-welcome.js?v=1.17"></script>
-<script src="emartna-idle.js?v=1.17"></script>
-<script type="module" src="emartna-offers.js?v=1.17"></script>
-<script type="module" src="emartna-dates.js?v=1.17"></script>
-<script type="module" src="emartna-paging.js?v=1.17"></script>
-<script type="module" src="emartna-leads.js?v=1.17"></script>
-<script type="module" src="emartna-live.js?v=1.17"></script>
-<script type="module" src="emartna-wa.js?v=1.17"></script>
-<script type="module" src="emartna-mobile.js?v=1.17"></script>
-<script type="module" src="emartna-numbering.js?v=1.17"></script>
-<script type="module" src="emartna-facade.js?v=1.17"></script>
-<script type="module" src="emartna-pricing.js?v=1.17"></script>
-<script type="module" src="emartna-newbld.js?v=1.17"></script>
-<script type="module" src="emartna-floorplan.js?v=1.17"></script>
-<script type="module" src="emartna-staff.js?v=1.17"></script>
-<script type="module" src="emartna-resaccess.js?v=1.17"></script>
-<script type="module" src="emartna-uitoggles.js?v=1.17"></script>
-<script type="module" src="emartna-cities.js?v=1.17"></script>
-<script type="module" src="emartna-perms.js?v=1.17"></script>
-<script type="module" src="emartna-lastlogin.js?v=1.17"></script>
+<script type="module" src="emartna-cloud.js?v=1.18"></script>
+<script type="module" src="emartna-auth.js?v=1.18"></script>
+<script type="module" src="emartna-profile.js?v=1.18"></script>
+<script type="module" src="emartna-users.js?v=1.18"></script>
+<script src="emartna-contacts.js?v=1.18"></script>
+<script type="module" src="emartna-platform.js?v=1.18"></script>
+<script type="module" src="emartna-contactlog.js?v=1.18"></script>
+<script type="module" src="emartna-permreport.js?v=1.18"></script>
+<script type="module" src="emartna-finops.js?v=1.18"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.18"></script>
+<script type="module" src="emartna-planscreens.js?v=1.18"></script>
+<script type="module" src="emartna-recycle.js?v=1.18"></script>
+<script type="module" src="emartna-floors.js?v=1.18"></script>
+<script type="module" src="emartna-modal-size.js?v=1.18"></script>
+<script type="module" src="emartna-guard.js?v=1.18"></script>
+<script type="module" src="emartna-statement.js?v=1.18"></script>
+<script type="module" src="emartna-reports.js?v=1.18"></script>
+<script type="module" src="emartna-admin.js?v=1.18"></script>
+<script type="module" src="emartna-ui.js?v=1.18"></script>
+<script type="module" src="emartna-excel.js?v=1.18"></script>
+<script type="module" src="emartna-send.js?v=1.18"></script>
+<script type="module" src="emartna-pwa.js?v=1.18"></script>
+<script type="module" src="emartna-landing.js?v=1.18"></script>
+<script type="module" src="emartna-comm.js?v=1.18"></script>
+<script type="module" src="emartna-period.js?v=1.18"></script>
+<script type="module" src="emartna-fast.js?v=1.18"></script>
+<script type="module" src="emartna-ops.js?v=1.18"></script>
+<script type="module" src="emartna-onboarding.js?v=1.18"></script>
+<script type="module" src="emartna-bldcols.js?v=1.18"></script>
+<script type="module" src="emartna-reminder.js?v=1.18"></script>
+<script type="module" src="emartna-coupons.js?v=1.18"></script>
+<script type="module" src="emartna-videos.js?v=1.18"></script>
+<script type="module" src="emartna-colfit.js?v=1.18"></script>
+<script type="module" src="emartna-visits.js?v=1.18"></script>
+<script type="module" src="emartna-promo.js?v=1.18"></script>
+<script type="module" src="emartna-welcome.js?v=1.18"></script>
+<script src="emartna-idle.js?v=1.18"></script>
+<script type="module" src="emartna-offers.js?v=1.18"></script>
+<script type="module" src="emartna-dates.js?v=1.18"></script>
+<script type="module" src="emartna-paging.js?v=1.18"></script>
+<script type="module" src="emartna-leads.js?v=1.18"></script>
+<script type="module" src="emartna-live.js?v=1.18"></script>
+<script type="module" src="emartna-wa.js?v=1.18"></script>
+<script type="module" src="emartna-mobile.js?v=1.18"></script>
+<script type="module" src="emartna-numbering.js?v=1.18"></script>
+<script type="module" src="emartna-facade.js?v=1.18"></script>
+<script type="module" src="emartna-pricing.js?v=1.18"></script>
+<script type="module" src="emartna-newbld.js?v=1.18"></script>
+<script type="module" src="emartna-floorplan.js?v=1.18"></script>
+<script type="module" src="emartna-staff.js?v=1.18"></script>
+<script type="module" src="emartna-resaccess.js?v=1.18"></script>
+<script type="module" src="emartna-uitoggles.js?v=1.18"></script>
+<script type="module" src="emartna-cities.js?v=1.18"></script>
+<script type="module" src="emartna-perms.js?v=1.18"></script>
+<script type="module" src="emartna-lastlogin.js?v=1.18"></script>
 
 
 
