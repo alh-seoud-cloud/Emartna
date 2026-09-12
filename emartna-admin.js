@@ -328,10 +328,22 @@
   if (origImpersonate) window.impersonateBuilding = function(buildingId){
     if (window.loadBuildingData(buildingId)) return origImpersonate(buildingId);
     if (window.toast) toast('بيحمّل بيانات العمارة…');
+    /* لو التحميل وقف من غير خطأ (شبكة بطيئة أو رد ناقص)، الرسالة
+       كانت بتفضل معلّقة والمستخدم مش عارف حصل إيه. */
+    let done = false;
+    const late = setTimeout(() => {
+      if (!done && window.showMessage)
+        showMessage('التحميل واخد وقت أطول من المتوقع.\n\n' +
+          'لو الرسالة فضلت، حدّث الصفحة وجرّب تاني — ولو استمرت ابعتلي كود العمارة.');
+    }, 12000);
+
     window.CLOUD.loadBuilding(buildingId)
-      .then(() => origImpersonate(buildingId))
+      .then(() => { done = true; clearTimeout(late); origImpersonate(buildingId); })
       .catch(e => {
-        if (window.showMessage) showMessage('تعذّر تحميل العمارة: ' + (e.message || ''));
+        done = true; clearTimeout(late);
+        console.error('[عمارتنا] فشل تحميل العمارة', buildingId, e);
+        if (window.showMessage)
+          showMessage('تعذّر تحميل العمارة: ' + (e.message || e.code || 'سبب غير معروف'));
       });
   };
 
