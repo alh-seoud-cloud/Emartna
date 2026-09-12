@@ -195,6 +195,10 @@ const MAPS = {
       id:'legacy_id', type:'type', title:'title', message:'message',
       audience:'audience', link:'link', createdAt:'created_at',
       readBy:'read_by',
+      /* ربط الإشعار بمصدره عشان يتحذف معاه. المصدر ممكن يكون من
+         أي جدول، فمفيش ref واحد ينفع — الكنس على السيرفر بيطابق
+         بالعنوان للإشعارات اللي مالهاش معرّف. */
+      sourceTable:'source_table',
     },
   },
 
