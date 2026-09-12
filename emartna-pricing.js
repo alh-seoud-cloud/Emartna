@@ -81,10 +81,19 @@
 
   /* ---------- حاسبة السعر ---------- */
 
-  window.calcPrice = function(){
-    const el = document.getElementById('calcUnits');
-    const n = Math.max(0, Number(el && el.value) || 0);
-    const out = document.getElementById('calcOut');
+  /* النافذة بتفتح فوق قسم الحاسبة اللي في الصفحة الرئيسية، والاتنين
+     كانوا بنفس المعرّف — فـ getElementById بيرجّع بتاع الصفحة،
+     والنتيجة تتكتب هناك بدل النافذة فالمستخدم ما يشوفش حاجة.
+     دلوقتي بنمرّر العنصر نفسه، وبنلاقي مخرجه اللي جنبه. */
+  window.calcPrice = function(srcEl){
+    const el = (srcEl && srcEl.tagName) ? srcEl
+             : document.getElementById('calcUnitsModal')
+            || document.getElementById('calcUnits');
+    if (!el) return;
+    const n = Math.max(0, Number(el.value) || 0);
+    const scope = el.closest('.modal') || document;
+    const out = scope.querySelector('[data-calc-out]')
+             || document.getElementById('calcOut');
     if (!out) return;
 
     if (!n){
@@ -130,9 +139,9 @@
     <div class="card" style="max-width:460px;margin:0 auto">
       <div class="field2"><label>عدد وحدات عمارتك</label>
         <input id="calcUnits" type="number" min="1" max="500" placeholder="مثال: 40"
-          oninput="calcPrice()" style="font-size:18px;text-align:center"></div>
+          oninput="calcPrice(this)" style="font-size:18px;text-align:center"></div>
 
-      <div id="calcOut" class="mtop">
+      <div id="calcOut" data-calc-out class="mtop">
         <p class="small" style="color:var(--muted);text-align:center">اكتب عدد الوحدات فوق</p>
       </div>
 
@@ -194,10 +203,10 @@
       </div>
 
       <div class="field2 mtop2"><label>عدد وحدات عمارتك</label>
-        <input id="calcUnits" type="number" min="1" max="500" placeholder="مثال: 40"
-          oninput="calcPrice()" style="font-size:20px;text-align:center;padding:12px"></div>
+        <input id="calcUnitsModal" type="number" min="1" max="500" placeholder="مثال: 40"
+          oninput="calcPrice(this)" style="font-size:20px;text-align:center;padding:12px"></div>
 
-      <div id="calcOut" class="mtop">
+      <div data-calc-out class="mtop">
         <p class="small" style="color:var(--muted);text-align:center">اكتب عدد الوحدات فوق</p>
       </div>
 
@@ -215,7 +224,7 @@
 
       <button class="btn primary mtop" style="width:100%;padding:13px;font-size:15px"
         onclick="closeModal();setTimeout(()=>openSignup(),150)">ابدأ مجانًا دلوقتي</button>`, true);
-    setTimeout(() => { const el = document.getElementById('calcUnits'); if (el) el.focus(); }, 200);
+    setTimeout(() => { const el = document.getElementById('calcUnitsModal'); if (el) el.focus(); }, 200);
   };
 
   /* الزرار العائم بقى واحد في emartna-welcome.js وبيفتح
