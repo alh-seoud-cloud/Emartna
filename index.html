@@ -7404,11 +7404,20 @@ async function markChatRead(roomId){
   finally{ __markingRead = false; }
 }
 /* فحص صلاحية من غير رسالة رفض — للعرض بس */
+/* فحص صلاحية من غير رسالة رفض — للعرض بس.
+   ⚠️ كان: لو مفيش صلاحيات مخصّصة، ارجع isStaffRole — يعني الساكن
+   العادي (واللي في الوضع التجريبي) بيترفض على طول حتى في الأفعال
+   اللي من حقه بالافتراضي زي إرسال رسالة. الصح إننا نرجع لافتراضي
+   الدور زي ما القاعدة بتعمل بالظبط. */
 function guardActionSilent(page,action){
   try{
     const u=currentUser(); if(!u)return false;
-    if(!u.screenPerms) return isStaffRole(u.role);
-    return window.userCan?userCan(u,page,action):false;
+    if(window.userCan) return !!userCan(u,page,action);
+    /* الوحدة لسه ما اتحمّلتش: الإدارة تعدّي، والساكن يعدّي على
+       الأفعال الأساسية بس */
+    if(isStaffRole(u.role)) return true;
+    return ['view','print','export','att_view','add','att_add',
+            'send','delete_own'].includes(action);
   }catch(e){ return false; }
 }
 
@@ -10616,7 +10625,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.31';
+const APP_BUILD='1.32';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -10830,63 +10839,63 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.31"></script>
-<script type="module" src="emartna-auth.js?v=1.31"></script>
-<script type="module" src="emartna-profile.js?v=1.31"></script>
-<script type="module" src="emartna-users.js?v=1.31"></script>
-<script src="emartna-contacts.js?v=1.31"></script>
-<script type="module" src="emartna-platform.js?v=1.31"></script>
-<script type="module" src="emartna-contactlog.js?v=1.31"></script>
-<script type="module" src="emartna-permreport.js?v=1.31"></script>
-<script type="module" src="emartna-finops.js?v=1.31"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.31"></script>
-<script src="emartna-plansview.js?v=1.31"></script>
-<script src="emartna-versionsxls.js?v=1.31"></script>
-<script type="module" src="emartna-planscreens.js?v=1.31"></script>
-<script type="module" src="emartna-recycle.js?v=1.31"></script>
-<script type="module" src="emartna-floors.js?v=1.31"></script>
-<script type="module" src="emartna-modal-size.js?v=1.31"></script>
-<script type="module" src="emartna-guard.js?v=1.31"></script>
-<script type="module" src="emartna-statement.js?v=1.31"></script>
-<script type="module" src="emartna-reports.js?v=1.31"></script>
-<script type="module" src="emartna-admin.js?v=1.31"></script>
-<script type="module" src="emartna-ui.js?v=1.31"></script>
-<script type="module" src="emartna-excel.js?v=1.31"></script>
-<script type="module" src="emartna-send.js?v=1.31"></script>
-<script type="module" src="emartna-pwa.js?v=1.31"></script>
-<script type="module" src="emartna-landing.js?v=1.31"></script>
-<script type="module" src="emartna-comm.js?v=1.31"></script>
-<script type="module" src="emartna-period.js?v=1.31"></script>
-<script type="module" src="emartna-fast.js?v=1.31"></script>
-<script type="module" src="emartna-ops.js?v=1.31"></script>
-<script type="module" src="emartna-onboarding.js?v=1.31"></script>
-<script type="module" src="emartna-bldcols.js?v=1.31"></script>
-<script type="module" src="emartna-reminder.js?v=1.31"></script>
-<script type="module" src="emartna-coupons.js?v=1.31"></script>
-<script type="module" src="emartna-videos.js?v=1.31"></script>
-<script type="module" src="emartna-colfit.js?v=1.31"></script>
-<script type="module" src="emartna-visits.js?v=1.31"></script>
-<script type="module" src="emartna-promo.js?v=1.31"></script>
-<script type="module" src="emartna-welcome.js?v=1.31"></script>
-<script src="emartna-idle.js?v=1.31"></script>
-<script type="module" src="emartna-offers.js?v=1.31"></script>
-<script type="module" src="emartna-dates.js?v=1.31"></script>
-<script type="module" src="emartna-paging.js?v=1.31"></script>
-<script type="module" src="emartna-leads.js?v=1.31"></script>
-<script type="module" src="emartna-live.js?v=1.31"></script>
-<script type="module" src="emartna-wa.js?v=1.31"></script>
-<script type="module" src="emartna-mobile.js?v=1.31"></script>
-<script type="module" src="emartna-numbering.js?v=1.31"></script>
-<script type="module" src="emartna-facade.js?v=1.31"></script>
-<script type="module" src="emartna-pricing.js?v=1.31"></script>
-<script type="module" src="emartna-newbld.js?v=1.31"></script>
-<script type="module" src="emartna-floorplan.js?v=1.31"></script>
-<script type="module" src="emartna-staff.js?v=1.31"></script>
-<script type="module" src="emartna-resaccess.js?v=1.31"></script>
-<script type="module" src="emartna-uitoggles.js?v=1.31"></script>
-<script type="module" src="emartna-cities.js?v=1.31"></script>
-<script type="module" src="emartna-perms.js?v=1.31"></script>
-<script type="module" src="emartna-lastlogin.js?v=1.31"></script>
+<script type="module" src="emartna-cloud.js?v=1.32"></script>
+<script type="module" src="emartna-auth.js?v=1.32"></script>
+<script type="module" src="emartna-profile.js?v=1.32"></script>
+<script type="module" src="emartna-users.js?v=1.32"></script>
+<script src="emartna-contacts.js?v=1.32"></script>
+<script type="module" src="emartna-platform.js?v=1.32"></script>
+<script type="module" src="emartna-contactlog.js?v=1.32"></script>
+<script type="module" src="emartna-permreport.js?v=1.32"></script>
+<script type="module" src="emartna-finops.js?v=1.32"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.32"></script>
+<script src="emartna-plansview.js?v=1.32"></script>
+<script src="emartna-versionsxls.js?v=1.32"></script>
+<script type="module" src="emartna-planscreens.js?v=1.32"></script>
+<script type="module" src="emartna-recycle.js?v=1.32"></script>
+<script type="module" src="emartna-floors.js?v=1.32"></script>
+<script type="module" src="emartna-modal-size.js?v=1.32"></script>
+<script type="module" src="emartna-guard.js?v=1.32"></script>
+<script type="module" src="emartna-statement.js?v=1.32"></script>
+<script type="module" src="emartna-reports.js?v=1.32"></script>
+<script type="module" src="emartna-admin.js?v=1.32"></script>
+<script type="module" src="emartna-ui.js?v=1.32"></script>
+<script type="module" src="emartna-excel.js?v=1.32"></script>
+<script type="module" src="emartna-send.js?v=1.32"></script>
+<script type="module" src="emartna-pwa.js?v=1.32"></script>
+<script type="module" src="emartna-landing.js?v=1.32"></script>
+<script type="module" src="emartna-comm.js?v=1.32"></script>
+<script type="module" src="emartna-period.js?v=1.32"></script>
+<script type="module" src="emartna-fast.js?v=1.32"></script>
+<script type="module" src="emartna-ops.js?v=1.32"></script>
+<script type="module" src="emartna-onboarding.js?v=1.32"></script>
+<script type="module" src="emartna-bldcols.js?v=1.32"></script>
+<script type="module" src="emartna-reminder.js?v=1.32"></script>
+<script type="module" src="emartna-coupons.js?v=1.32"></script>
+<script type="module" src="emartna-videos.js?v=1.32"></script>
+<script type="module" src="emartna-colfit.js?v=1.32"></script>
+<script type="module" src="emartna-visits.js?v=1.32"></script>
+<script type="module" src="emartna-promo.js?v=1.32"></script>
+<script type="module" src="emartna-welcome.js?v=1.32"></script>
+<script src="emartna-idle.js?v=1.32"></script>
+<script type="module" src="emartna-offers.js?v=1.32"></script>
+<script type="module" src="emartna-dates.js?v=1.32"></script>
+<script type="module" src="emartna-paging.js?v=1.32"></script>
+<script type="module" src="emartna-leads.js?v=1.32"></script>
+<script type="module" src="emartna-live.js?v=1.32"></script>
+<script type="module" src="emartna-wa.js?v=1.32"></script>
+<script type="module" src="emartna-mobile.js?v=1.32"></script>
+<script type="module" src="emartna-numbering.js?v=1.32"></script>
+<script type="module" src="emartna-facade.js?v=1.32"></script>
+<script type="module" src="emartna-pricing.js?v=1.32"></script>
+<script type="module" src="emartna-newbld.js?v=1.32"></script>
+<script type="module" src="emartna-floorplan.js?v=1.32"></script>
+<script type="module" src="emartna-staff.js?v=1.32"></script>
+<script type="module" src="emartna-resaccess.js?v=1.32"></script>
+<script type="module" src="emartna-uitoggles.js?v=1.32"></script>
+<script type="module" src="emartna-cities.js?v=1.32"></script>
+<script type="module" src="emartna-perms.js?v=1.32"></script>
+<script type="module" src="emartna-lastlogin.js?v=1.32"></script>
 
 
 
