@@ -889,9 +889,23 @@ const CLOUD = {
 
   /* تسجيل الدخول */
   async signIn(idOrEmail, password, country='+20'){
-    const email = toLoginEmail(idOrEmail, country);
-    const { error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    /* الدخول بالرقم كان بيحوّله لإيميل وهمي ثابت (رقم@emartna.local).
+       أول ما المستخدم يسجّل إيميل حقيقي، إيميل الدخول بيتغيّر —
+       فالدخول بالرقم كان بيفشل رغم إن الرقم وكلمة السر صح.
+       دلوقتي بنسأل السيرفر عن إيميل الدخول الفعلي المرتبط بالرقم. */
+    let email = toLoginEmail(idOrEmail, country);
+    try{
+      const { data } = await sb.rpc('login_email_for', { p_id: String(idOrEmail || '') });
+      if (data) email = data;
+    }catch(e){}
+
+    let r = await sb.auth.signInWithPassword({ email, password });
+    /* احتياطي: لو الاستعلام فشل لأي سبب، نجرّب الشكل القديم */
+    if (r.error){
+      const legacy = toLoginEmail(idOrEmail, country);
+      if (legacy !== email) r = await sb.auth.signInWithPassword({ email: legacy, password });
+    }
+    if (r.error) throw r.error;
     await CLOUD.bootstrap();
   },
 

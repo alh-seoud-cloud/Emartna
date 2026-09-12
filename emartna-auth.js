@@ -623,12 +623,14 @@ window.recoverHTML = function(){
     <div class="skyline-bg">${heroSkylineSVG(true)}</div>
     <div class="login-card">
       <div class="login-logo"><div class="mark">${appLogoSVG(92)}</div>
-        <h1>استرداد الدخول</h1><p>نبعتلك رابط على إيميلك</p></div>
+        <h1>استرداد الدخول</h1><p>نبعتلك رابط على الإيميل المسجّل في حسابك</p></div>
       <div class="login-error" id="loginErr"></div>
 
       <div class="field">
-        <label>الإيميل المسجّل</label>
-        <input id="rcEmail" type="email" placeholder="name@example.com" autocomplete="email">
+        <label>الإيميل أو رقم الموبايل</label>
+        <input id="rcEmail" type="text" dir="ltr"
+          placeholder="name@example.com أو 01xxxxxxxxx" autocomplete="username">
+        <p class="hint">لو دخلت برقم موبايلك، اكتبه هنا وهنلاقي إيميلك المسجّل.</p>
       </div>
       <button class="login-btn" id="rcSendBtn">ابعت رابط الاسترداد</button>
 
@@ -678,11 +680,23 @@ function bindCloudRecover(){
   const btn = document.getElementById('rcSendBtn');
   if (!btn) return;
   btn.onclick = async () => {
-    const email = (document.getElementById('rcEmail').value || '').trim();
-    if (!email || !email.includes('@')) return showLoginError('اكتب إيميل صحيح');
+    const typed = (document.getElementById('rcEmail').value || '').trim();
+    if (!typed) return showLoginError('اكتب إيميلك أو رقم موبايلك');
     btn.disabled = true;
     try{
       const sb = window.CLOUD._sb;
+      /* بنقبل الرقم كمان: بنحوّله لإيميل الدخول الفعلي. الشاشة كانت
+         بتطلب إيميل بالظبط، والمستخدم غالبًا فاكر رقمه مش إيميله. */
+      let email = typed;
+      try{
+        const { data } = await sb.rpc('login_email_for', { p_id: typed });
+        if (data) email = data;
+      }catch(e){}
+      if (!email.includes('@'))
+        return showLoginError('مالقيناش حساب بالبيانات دي. جرّب الإيميل، أو استخدم زرار التواصل مع الدعم تحت.');
+      if (/@emartna\.local$/i.test(email))
+        return showLoginError('الحساب ده مالوش بريد إلكتروني مسجّل، فمش هينفع نبعتله رابط. استخدم زرار التواصل مع الدعم تحت.');
+
       const { error } = await sb.auth.resetPasswordForEmail(email, {
         redirectTo: location.origin + location.pathname,
       });
