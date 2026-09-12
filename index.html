@@ -998,19 +998,94 @@ function generateYearOfTestData(data){
       date:months[Math.max(0,months.length-1-an[2])]+'-20',comments:[]});
   });
 
+  /* ---- طرق سداد مربوطة بالخزائن ---- */
+  data.building.paymentMethods=[
+    {id:uid(),type:'فودافون كاش',details:'0100 123 4567',accountId:cashAcc,active:true},
+    {id:uid(),type:'إنستاباي',   details:'omaretna@instapay',accountId:bankAcc,active:true},
+    {id:uid(),type:'تحويل بنكي', details:'EG38 0003 0000 1234 5678',accountId:bankAcc,active:true},
+    {id:uid(),type:'فوري',       details:'كود 8877',accountId:cashAcc,active:false},
+  ];
+
+  /* ---- تخصيص الدفعات على المستحقات ----
+     من غيره أعمار الديون وكشف حساب الوحدة بيطلعوا تقريبيين. */
+  data.ledgerAllocations=[];
+  const chargesByAp={};
+  data.ledger.filter(l=>l.type==='شهري'&&!l.reversalOf).forEach(c=>{
+    (chargesByAp[c.apartmentId]=chargesByAp[c.apartmentId]||[]).push(c);
+  });
+  Object.values(chargesByAp).forEach(list=>list.sort((a,b)=>String(a.month).localeCompare(b.month)));
+  data.ledger.filter(l=>l.type==='دفعة'&&!l.reversalOf&&!l.projectId).forEach(pay=>{
+    let left=Number(pay.amount)||0;
+    const list=chargesByAp[pay.apartmentId]||[];
+    for(const c of list){
+      if(left<=0.004)break;
+      const already=data.ledgerAllocations.filter(a=>a.chargeId===c.id)
+        .reduce((s2,a)=>s2+Number(a.amount||0),0);
+      const remain=Number(c.amount)-already;
+      if(remain<=0.004)continue;
+      const take=Math.min(left,remain);
+      data.ledgerAllocations.push({id:uid(),paymentId:pay.id,chargeId:c.id,amount:take});
+      left-=take;
+    }
+  });
+
+  /* ---- قيود عكسية: دفعة اتسجلت غلط، ومصروف مكرر ---- */
+  (function(){
+    const pay=data.ledger.find(l=>l.type==='دفعة'&&!l.projectId
+      && !data.ledgerAllocations.some(a=>a.paymentId===l.id));
+    if(pay)data.ledger.push({id:uid(),apartmentId:pay.apartmentId,type:'دفعة',
+      amount:-Number(pay.amount),accountId:pay.accountId,month:pay.month,
+      date:pay.date,note:'عكس: اتسجلت على الوحدة الغلط',reversalOf:pay.id,
+      createdAt:pay.date+'T13:00:00.000Z'});
+    const ex=data.expenses[Math.floor(data.expenses.length/2)];
+    if(ex)data.expenses.push({id:uid(),date:ex.date,category:ex.category,
+      categoryId:ex.categoryId,amount:-Math.abs(ex.amount),accountId:ex.accountId,
+      description:'عكس مصروف: فاتورة مكررة',reversalOf:ex.id,attachments:[]});
+  })();
+
+  /* ---- محادثة السكان: كلام واقعي بين الإدارة والسكان ---- */
+  data.buildingChat=data.buildingChat||[];
+  (function(){
+    const ap=n=>data.apartments[n%data.apartments.length];
+    const lbl=a=>(a.type==='shop'?'🏪 محل ':'🏠 شقة ')+a.number+' - '+(a.ownerName||'');
+    const day=(d,h)=>addDaysToDate(months[months.length-1]+'-01',d)+'T'+h+':00.000Z';
+    const CHAT=[
+      [null,'👔 رئيس الاتحاد','مساء الخير. فاتورة الكهرباء الشهر ده زادت ١٨٪ عن اللي قبله، وهنشوف السبب مع المهندس.',2,'09:10'],
+      [3,null,'الإضاءة في جراج الدور الأرضي شغالة طول الليل، ممكن دي السبب؟',2,'10:02'],
+      [null,'👔 رئيس الاتحاد','ملاحظة في محلها. هنركّب حساس حركة ونشوف الفرق الشهر الجاي.',2,'10:25'],
+      [7,null,'تمام، وممكن كمان نغيّر لمبات السلم لليد؟ بتفرق كتير.',3,'18:40'],
+      [12,null,'أنا مع الاقتراح ده. والتكلفة بتترد في شهرين.',4,'09:15'],
+      [null,'👔 رئيس الاتحاد','هنعمل استطلاع رأي عليه الأسبوع الجاي عشان نقرر سوا.',4,'11:00'],
+      [5,null,'شكرًا على المتابعة 👍',5,'20:12'],
+    ];
+    CHAT.forEach(([apIdx,fixedLabel,text,d,h])=>{
+      const a=apIdx==null?null:ap(apIdx);
+      data.buildingChat.push({id:uid(),kind:'message',
+        authorUsername:a?a.username:'admin',
+        authorLabel:fixedLabel||lbl(a),
+        text,createdAt:day(d,h)});
+    });
+  })();
+
   /* مقترحات من الملاك بحالات مختلفة */
   data.suggestions=data.suggestions||[];
+  /* الحالات الأربعة: تحت المراجعة · معتمد · مرفوض بسبب · محذوف */
   const SUGG=[
     ['تركيب إنتركم لكل الشقق','يوفر أمان أكتر ويريح الحارس','approved',16,4],
     ['زراعة نباتات في المدخل','منظر المدخل محتاج تحسين','approved',12,7],
     ['تخصيص أماكن ركن مرقّمة','فيه خلافات متكررة على أماكن الركن','pending',21,11],
-    ['تركيب سخان مركزي للمياه','مقترح للأدوار العليا','rejected',9,15],
+    ['تركيب سخان مركزي للمياه','مقترح للأدوار العليا','rejected',9,15,
+     'التكلفة أعلى من ميزانية السنة — نعيد دراسته السنة الجاية'],
     ['إضافة كشاف على باب الجراج','الباب مظلم بالليل','pending',23,19],
+    ['مقترح اتحذف','','deleted',20,6],
   ];
   SUGG.forEach(sg=>{
     const ap=data.apartments[sg[4]%data.apartments.length];
-    data.suggestions.push({id:genId(),title:sg[0],body:sg[1],status:sg[2],
+    data.suggestions.push({id:genId(),title:sg[0],
+      body:sg[2]==='deleted'?'':sg[1], text:sg[2]==='deleted'?'':sg[1],
+      status:sg[2], rejectionReason:sg[5]||'',
       apartmentId:ap.id,createdByUsername:ap.username,
+      authorLabel:(ap.type==='shop'?'🏪 محل ':'🏠 شقة ')+ap.number,
       createdAt:months[Math.min(sg[3],months.length-1)]+'-08T10:00:00.000Z',comments:[]});
   });
   return data;
@@ -10541,7 +10616,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.30';
+const APP_BUILD='1.31';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -10755,63 +10830,63 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.30"></script>
-<script type="module" src="emartna-auth.js?v=1.30"></script>
-<script type="module" src="emartna-profile.js?v=1.30"></script>
-<script type="module" src="emartna-users.js?v=1.30"></script>
-<script src="emartna-contacts.js?v=1.30"></script>
-<script type="module" src="emartna-platform.js?v=1.30"></script>
-<script type="module" src="emartna-contactlog.js?v=1.30"></script>
-<script type="module" src="emartna-permreport.js?v=1.30"></script>
-<script type="module" src="emartna-finops.js?v=1.30"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.30"></script>
-<script src="emartna-plansview.js?v=1.30"></script>
-<script src="emartna-versionsxls.js?v=1.30"></script>
-<script type="module" src="emartna-planscreens.js?v=1.30"></script>
-<script type="module" src="emartna-recycle.js?v=1.30"></script>
-<script type="module" src="emartna-floors.js?v=1.30"></script>
-<script type="module" src="emartna-modal-size.js?v=1.30"></script>
-<script type="module" src="emartna-guard.js?v=1.30"></script>
-<script type="module" src="emartna-statement.js?v=1.30"></script>
-<script type="module" src="emartna-reports.js?v=1.30"></script>
-<script type="module" src="emartna-admin.js?v=1.30"></script>
-<script type="module" src="emartna-ui.js?v=1.30"></script>
-<script type="module" src="emartna-excel.js?v=1.30"></script>
-<script type="module" src="emartna-send.js?v=1.30"></script>
-<script type="module" src="emartna-pwa.js?v=1.30"></script>
-<script type="module" src="emartna-landing.js?v=1.30"></script>
-<script type="module" src="emartna-comm.js?v=1.30"></script>
-<script type="module" src="emartna-period.js?v=1.30"></script>
-<script type="module" src="emartna-fast.js?v=1.30"></script>
-<script type="module" src="emartna-ops.js?v=1.30"></script>
-<script type="module" src="emartna-onboarding.js?v=1.30"></script>
-<script type="module" src="emartna-bldcols.js?v=1.30"></script>
-<script type="module" src="emartna-reminder.js?v=1.30"></script>
-<script type="module" src="emartna-coupons.js?v=1.30"></script>
-<script type="module" src="emartna-videos.js?v=1.30"></script>
-<script type="module" src="emartna-colfit.js?v=1.30"></script>
-<script type="module" src="emartna-visits.js?v=1.30"></script>
-<script type="module" src="emartna-promo.js?v=1.30"></script>
-<script type="module" src="emartna-welcome.js?v=1.30"></script>
-<script src="emartna-idle.js?v=1.30"></script>
-<script type="module" src="emartna-offers.js?v=1.30"></script>
-<script type="module" src="emartna-dates.js?v=1.30"></script>
-<script type="module" src="emartna-paging.js?v=1.30"></script>
-<script type="module" src="emartna-leads.js?v=1.30"></script>
-<script type="module" src="emartna-live.js?v=1.30"></script>
-<script type="module" src="emartna-wa.js?v=1.30"></script>
-<script type="module" src="emartna-mobile.js?v=1.30"></script>
-<script type="module" src="emartna-numbering.js?v=1.30"></script>
-<script type="module" src="emartna-facade.js?v=1.30"></script>
-<script type="module" src="emartna-pricing.js?v=1.30"></script>
-<script type="module" src="emartna-newbld.js?v=1.30"></script>
-<script type="module" src="emartna-floorplan.js?v=1.30"></script>
-<script type="module" src="emartna-staff.js?v=1.30"></script>
-<script type="module" src="emartna-resaccess.js?v=1.30"></script>
-<script type="module" src="emartna-uitoggles.js?v=1.30"></script>
-<script type="module" src="emartna-cities.js?v=1.30"></script>
-<script type="module" src="emartna-perms.js?v=1.30"></script>
-<script type="module" src="emartna-lastlogin.js?v=1.30"></script>
+<script type="module" src="emartna-cloud.js?v=1.31"></script>
+<script type="module" src="emartna-auth.js?v=1.31"></script>
+<script type="module" src="emartna-profile.js?v=1.31"></script>
+<script type="module" src="emartna-users.js?v=1.31"></script>
+<script src="emartna-contacts.js?v=1.31"></script>
+<script type="module" src="emartna-platform.js?v=1.31"></script>
+<script type="module" src="emartna-contactlog.js?v=1.31"></script>
+<script type="module" src="emartna-permreport.js?v=1.31"></script>
+<script type="module" src="emartna-finops.js?v=1.31"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.31"></script>
+<script src="emartna-plansview.js?v=1.31"></script>
+<script src="emartna-versionsxls.js?v=1.31"></script>
+<script type="module" src="emartna-planscreens.js?v=1.31"></script>
+<script type="module" src="emartna-recycle.js?v=1.31"></script>
+<script type="module" src="emartna-floors.js?v=1.31"></script>
+<script type="module" src="emartna-modal-size.js?v=1.31"></script>
+<script type="module" src="emartna-guard.js?v=1.31"></script>
+<script type="module" src="emartna-statement.js?v=1.31"></script>
+<script type="module" src="emartna-reports.js?v=1.31"></script>
+<script type="module" src="emartna-admin.js?v=1.31"></script>
+<script type="module" src="emartna-ui.js?v=1.31"></script>
+<script type="module" src="emartna-excel.js?v=1.31"></script>
+<script type="module" src="emartna-send.js?v=1.31"></script>
+<script type="module" src="emartna-pwa.js?v=1.31"></script>
+<script type="module" src="emartna-landing.js?v=1.31"></script>
+<script type="module" src="emartna-comm.js?v=1.31"></script>
+<script type="module" src="emartna-period.js?v=1.31"></script>
+<script type="module" src="emartna-fast.js?v=1.31"></script>
+<script type="module" src="emartna-ops.js?v=1.31"></script>
+<script type="module" src="emartna-onboarding.js?v=1.31"></script>
+<script type="module" src="emartna-bldcols.js?v=1.31"></script>
+<script type="module" src="emartna-reminder.js?v=1.31"></script>
+<script type="module" src="emartna-coupons.js?v=1.31"></script>
+<script type="module" src="emartna-videos.js?v=1.31"></script>
+<script type="module" src="emartna-colfit.js?v=1.31"></script>
+<script type="module" src="emartna-visits.js?v=1.31"></script>
+<script type="module" src="emartna-promo.js?v=1.31"></script>
+<script type="module" src="emartna-welcome.js?v=1.31"></script>
+<script src="emartna-idle.js?v=1.31"></script>
+<script type="module" src="emartna-offers.js?v=1.31"></script>
+<script type="module" src="emartna-dates.js?v=1.31"></script>
+<script type="module" src="emartna-paging.js?v=1.31"></script>
+<script type="module" src="emartna-leads.js?v=1.31"></script>
+<script type="module" src="emartna-live.js?v=1.31"></script>
+<script type="module" src="emartna-wa.js?v=1.31"></script>
+<script type="module" src="emartna-mobile.js?v=1.31"></script>
+<script type="module" src="emartna-numbering.js?v=1.31"></script>
+<script type="module" src="emartna-facade.js?v=1.31"></script>
+<script type="module" src="emartna-pricing.js?v=1.31"></script>
+<script type="module" src="emartna-newbld.js?v=1.31"></script>
+<script type="module" src="emartna-floorplan.js?v=1.31"></script>
+<script type="module" src="emartna-staff.js?v=1.31"></script>
+<script type="module" src="emartna-resaccess.js?v=1.31"></script>
+<script type="module" src="emartna-uitoggles.js?v=1.31"></script>
+<script type="module" src="emartna-cities.js?v=1.31"></script>
+<script type="module" src="emartna-perms.js?v=1.31"></script>
+<script type="module" src="emartna-lastlogin.js?v=1.31"></script>
 
 
 
