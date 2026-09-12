@@ -2460,7 +2460,7 @@ function loginHTML(){
       <div class="field"><label>كلمة المرور</label>${pwField('lgPass','','','current-password')}</div>
       <button class="login-btn" id="lgBtn" type="submit">تسجيل الدخول</button>
       </form>
-      ${(bioSupported()&&bioIndex().length)?`<button class="login-btn" style="background:var(--gold);margin-top:8px" onclick="loginWithBiometric()">🔐 دخول بالبصمة</button>`:''}
+      ${(loginMethodOn('biometric')&&bioSupported()&&bioIndex().length)?`<button class="login-btn" style="background:var(--gold);margin-top:8px" onclick="loginWithBiometric()">🔐 دخول بالبصمة</button>`:''}
       <button class="login-btn" type="button" onclick="loginWithGoogle()"
         id="googleBtn"
         style="display:none;background:#fff;color:#3c4043;border:1.5px solid #dadce0;
@@ -2475,7 +2475,7 @@ function loginHTML(){
       </button>
       <p class="small" id="googleHint" style="display:none;text-align:center;
         color:var(--muted);margin-top:6px">أسرع، ومش محتاج تفتكر كلمة سر</p>
-      <div class="mtop2" style="border-top:1px dashed var(--line);padding-top:14px">
+      <div class="mtop2" style="${loginMethodOn('demo')?'':'display:none'};border-top:1px dashed var(--line);padding-top:14px">
         <p class="small" style="text-align:center;color:var(--muted)">🎬 عايز تجرّب البرنامج قبل ما تسجّل حساب؟</p>
         <div class="flexrow mtop" style="justify-content:center;gap:8px">
           <button class="btn sm gold" onclick="loginAsDemo('admin')">👔 دخول كرئيس اتحاد (تجريبي)</button>
@@ -2485,7 +2485,7 @@ function loginHTML(){
       </div>
       <div class="login-hint">
         <a href="javascript:void(0)" onclick="openRecover()">نسيت كلمة المرور؟</a><br>
-        <a href="javascript:void(0)" onclick="openSignup()">اتحاد عمارتك مش مسجّل؟ أنشئ حساب رئيس اتحاد جديد</a>
+        ${loginMethodOn('signup')?`<a href="javascript:void(0)" onclick="openSignup()">اتحاد عمارتك مش مسجّل؟ أنشئ حساب رئيس اتحاد جديد</a>`:''}
       </div>
       <div class="login-hint" style="color:#b98a2b">⚠️ البيانات تُحفظ داخل هذا المتصفح فقط على هذا الجهاز. لتسجيل دخول أسرع، اختر "حفظ كلمة المرور" لو المتصفح اقترحها عليك.</div>
       <div class="login-hint"><a href="javascript:void(0)" onclick="openPrivacyPolicyModal()">سياسة الخصوصية</a> · <a href="javascript:void(0)" onclick="openHelpContactModal()">المساعدة والتواصل</a></div>
@@ -2798,7 +2798,7 @@ async function checkGoogleProvider(){
     if(!r.ok) return;
     const d = await r.json();
     const on = !!(d && d.external && d.external.google);
-    if(!on) return;
+    if(!on || !loginMethodOn('google')) return;   /* المزوّد شغّال + مفعّل عندك */
     const btn = document.getElementById('googleBtn');
     const hint = document.getElementById('googleHint');
     if(btn){ btn.style.display='flex'; }
@@ -2961,8 +2961,12 @@ async function doContactPasswordReset(){
 }
 
 function bindLogin(){
-  /* نظهر زرار جوجل بس لو المزوّد مفعّل فعلًا على الخادم */
+  /* نظهر زرار جوجل بس لو المزوّد مفعّل على الخادم ومسموح من الإعدادات */
   if(window.checkGoogleProvider) setTimeout(checkGoogleProvider, 400);
+  /* طرق الدخول المقفولة بتختفي — بنعيد الرسم لو الإعداد اتغيّر */
+  if(window.loadLoginMethods) loadLoginMethods().then(()=>{
+    if(window.__viewMode==='login'&&window.renderRoot) renderRoot();
+  });
   if(window.__viewMode==='signup'){
     const form=document.getElementById('signupForm');
     if(form)form.addEventListener('submit',e=>{e.preventDefault();doSignup();});
@@ -3582,9 +3586,60 @@ function resetBrandColors(){
     saveRegistry();applyBrandColors();toast('تم استعادة الألوان الافتراضية');renderSysContent();
   });
 }
+/* طرق الدخول المتاحة — صاحب البرنامج بيفعّل ويعطّل.
+   المفتاح تحت public: عشان شاشة الدخول تقراه قبل تسجيل الدخول. */
+window.__loginMethods = { password:true, google:false, demo:true, biometric:true, signup:true };
+
+async function loadLoginMethods(){
+  try{
+    const sb = window.CLOUD && window.CLOUD._sb; if(!sb) return;
+    const { data } = await sb.from('platform_settings')
+      .select('value').eq('key','public:login_methods').maybeSingle();
+    if(data && data.value) window.__loginMethods =
+      Object.assign({}, window.__loginMethods, data.value);
+  }catch(e){}
+}
+function loginMethodOn(k){ return window.__loginMethods[k] !== false; }
+
+window.saveLoginMethods = async function(){
+  const g = id => !!(document.getElementById(id)||{}).checked;
+  const value = { password:g('lmPassword'), google:g('lmGoogle'), demo:g('lmDemo'),
+                  biometric:g('lmBiometric'), signup:g('lmSignup') };
+  if(!value.password && !value.google)
+    return showMessage('لازم تسيب طريقة دخول واحدة على الأقل شغالة — غير كده محدش هيقدر يدخل.');
+  try{
+    const { error } = await CLOUD._sb.rpc('save_platform_doc',
+      { p_key:'public:login_methods', p_value: value });
+    if(error) throw error;
+    window.__loginMethods = value;
+    toast('اتحفظت طرق الدخول');
+    renderSysContent();
+  }catch(e){ showMessage(e.message||'تعذّر الحفظ'); }
+};
+
 function pageSysSettings(){
   const so=REG.sysOwner;
-  return `<div class="card content-narrow"><h3>تغيير بيانات مسؤول النظام</h3>
+  const lm=window.__loginMethods;
+  const row=(id,key,title,desc)=>`
+    <label class="checkline mtop" style="align-items:flex-start">
+      <input type="checkbox" id="${id}" ${lm[key]!==false?'checked':''}>
+      <span><b>${title}</b>
+        <div class="small" style="color:var(--muted)">${desc}</div></span>
+    </label>`;
+  return `<div class="card content-narrow"><h3>🔑 طرق الدخول المتاحة</h3>
+    <p class="small mtop">اللي تقفله هنا بيختفي من شاشة الدخول لكل المستخدمين.</p>
+    ${row('lmPassword','password','رقم موبايل أو إيميل + كلمة سر','الطريقة الأساسية.')}
+    ${row('lmGoogle','google','الدخول بحساب جوجل',
+      'محتاج تفعيل المزوّد في لوحة Supabase الأول — الزرار مش هيظهر من غيره.')}
+    ${row('lmSignup','signup','إنشاء حساب رئيس اتحاد جديد',
+      'اقفله لو عايز التسجيل يبقى بدعوة منك بس.')}
+    ${row('lmDemo','demo','التجربة من غير تسجيل',
+      'زراير "دخول تجريبي" في شاشة الدخول ونافذة الترحيب.')}
+    ${row('lmBiometric','biometric','الدخول بالبصمة','على نفس الجهاز بعد أول دخول.')}
+    <button class="btn primary mtop2" onclick="saveLoginMethods()">💾 حفظ</button>
+  </div>
+
+  <div class="card content-narrow mtop2"><h3>تغيير بيانات مسؤول النظام</h3>
     <div class="field2 mtop"><label>اسم المستخدم</label><input id="soUser" value="${esc(so.username)}"></div>
     <div class="field2"><label>كلمة مرور جديدة (اتركها فارغة لعدم التغيير)</label>${pwField('soPass')}</div>
     <div class="field2"><label>سؤال الاسترداد</label><input id="soRQ" value="${esc(so.recoveryQ||'')}" placeholder="مثال: ما اسم أول عمارة أنشأتها؟"></div>
@@ -10346,7 +10401,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.18';
+const APP_BUILD='1.19';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -10560,61 +10615,61 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.18"></script>
-<script type="module" src="emartna-auth.js?v=1.18"></script>
-<script type="module" src="emartna-profile.js?v=1.18"></script>
-<script type="module" src="emartna-users.js?v=1.18"></script>
-<script src="emartna-contacts.js?v=1.18"></script>
-<script type="module" src="emartna-platform.js?v=1.18"></script>
-<script type="module" src="emartna-contactlog.js?v=1.18"></script>
-<script type="module" src="emartna-permreport.js?v=1.18"></script>
-<script type="module" src="emartna-finops.js?v=1.18"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.18"></script>
-<script type="module" src="emartna-planscreens.js?v=1.18"></script>
-<script type="module" src="emartna-recycle.js?v=1.18"></script>
-<script type="module" src="emartna-floors.js?v=1.18"></script>
-<script type="module" src="emartna-modal-size.js?v=1.18"></script>
-<script type="module" src="emartna-guard.js?v=1.18"></script>
-<script type="module" src="emartna-statement.js?v=1.18"></script>
-<script type="module" src="emartna-reports.js?v=1.18"></script>
-<script type="module" src="emartna-admin.js?v=1.18"></script>
-<script type="module" src="emartna-ui.js?v=1.18"></script>
-<script type="module" src="emartna-excel.js?v=1.18"></script>
-<script type="module" src="emartna-send.js?v=1.18"></script>
-<script type="module" src="emartna-pwa.js?v=1.18"></script>
-<script type="module" src="emartna-landing.js?v=1.18"></script>
-<script type="module" src="emartna-comm.js?v=1.18"></script>
-<script type="module" src="emartna-period.js?v=1.18"></script>
-<script type="module" src="emartna-fast.js?v=1.18"></script>
-<script type="module" src="emartna-ops.js?v=1.18"></script>
-<script type="module" src="emartna-onboarding.js?v=1.18"></script>
-<script type="module" src="emartna-bldcols.js?v=1.18"></script>
-<script type="module" src="emartna-reminder.js?v=1.18"></script>
-<script type="module" src="emartna-coupons.js?v=1.18"></script>
-<script type="module" src="emartna-videos.js?v=1.18"></script>
-<script type="module" src="emartna-colfit.js?v=1.18"></script>
-<script type="module" src="emartna-visits.js?v=1.18"></script>
-<script type="module" src="emartna-promo.js?v=1.18"></script>
-<script type="module" src="emartna-welcome.js?v=1.18"></script>
-<script src="emartna-idle.js?v=1.18"></script>
-<script type="module" src="emartna-offers.js?v=1.18"></script>
-<script type="module" src="emartna-dates.js?v=1.18"></script>
-<script type="module" src="emartna-paging.js?v=1.18"></script>
-<script type="module" src="emartna-leads.js?v=1.18"></script>
-<script type="module" src="emartna-live.js?v=1.18"></script>
-<script type="module" src="emartna-wa.js?v=1.18"></script>
-<script type="module" src="emartna-mobile.js?v=1.18"></script>
-<script type="module" src="emartna-numbering.js?v=1.18"></script>
-<script type="module" src="emartna-facade.js?v=1.18"></script>
-<script type="module" src="emartna-pricing.js?v=1.18"></script>
-<script type="module" src="emartna-newbld.js?v=1.18"></script>
-<script type="module" src="emartna-floorplan.js?v=1.18"></script>
-<script type="module" src="emartna-staff.js?v=1.18"></script>
-<script type="module" src="emartna-resaccess.js?v=1.18"></script>
-<script type="module" src="emartna-uitoggles.js?v=1.18"></script>
-<script type="module" src="emartna-cities.js?v=1.18"></script>
-<script type="module" src="emartna-perms.js?v=1.18"></script>
-<script type="module" src="emartna-lastlogin.js?v=1.18"></script>
+<script type="module" src="emartna-cloud.js?v=1.19"></script>
+<script type="module" src="emartna-auth.js?v=1.19"></script>
+<script type="module" src="emartna-profile.js?v=1.19"></script>
+<script type="module" src="emartna-users.js?v=1.19"></script>
+<script src="emartna-contacts.js?v=1.19"></script>
+<script type="module" src="emartna-platform.js?v=1.19"></script>
+<script type="module" src="emartna-contactlog.js?v=1.19"></script>
+<script type="module" src="emartna-permreport.js?v=1.19"></script>
+<script type="module" src="emartna-finops.js?v=1.19"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.19"></script>
+<script type="module" src="emartna-planscreens.js?v=1.19"></script>
+<script type="module" src="emartna-recycle.js?v=1.19"></script>
+<script type="module" src="emartna-floors.js?v=1.19"></script>
+<script type="module" src="emartna-modal-size.js?v=1.19"></script>
+<script type="module" src="emartna-guard.js?v=1.19"></script>
+<script type="module" src="emartna-statement.js?v=1.19"></script>
+<script type="module" src="emartna-reports.js?v=1.19"></script>
+<script type="module" src="emartna-admin.js?v=1.19"></script>
+<script type="module" src="emartna-ui.js?v=1.19"></script>
+<script type="module" src="emartna-excel.js?v=1.19"></script>
+<script type="module" src="emartna-send.js?v=1.19"></script>
+<script type="module" src="emartna-pwa.js?v=1.19"></script>
+<script type="module" src="emartna-landing.js?v=1.19"></script>
+<script type="module" src="emartna-comm.js?v=1.19"></script>
+<script type="module" src="emartna-period.js?v=1.19"></script>
+<script type="module" src="emartna-fast.js?v=1.19"></script>
+<script type="module" src="emartna-ops.js?v=1.19"></script>
+<script type="module" src="emartna-onboarding.js?v=1.19"></script>
+<script type="module" src="emartna-bldcols.js?v=1.19"></script>
+<script type="module" src="emartna-reminder.js?v=1.19"></script>
+<script type="module" src="emartna-coupons.js?v=1.19"></script>
+<script type="module" src="emartna-videos.js?v=1.19"></script>
+<script type="module" src="emartna-colfit.js?v=1.19"></script>
+<script type="module" src="emartna-visits.js?v=1.19"></script>
+<script type="module" src="emartna-promo.js?v=1.19"></script>
+<script type="module" src="emartna-welcome.js?v=1.19"></script>
+<script src="emartna-idle.js?v=1.19"></script>
+<script type="module" src="emartna-offers.js?v=1.19"></script>
+<script type="module" src="emartna-dates.js?v=1.19"></script>
+<script type="module" src="emartna-paging.js?v=1.19"></script>
+<script type="module" src="emartna-leads.js?v=1.19"></script>
+<script type="module" src="emartna-live.js?v=1.19"></script>
+<script type="module" src="emartna-wa.js?v=1.19"></script>
+<script type="module" src="emartna-mobile.js?v=1.19"></script>
+<script type="module" src="emartna-numbering.js?v=1.19"></script>
+<script type="module" src="emartna-facade.js?v=1.19"></script>
+<script type="module" src="emartna-pricing.js?v=1.19"></script>
+<script type="module" src="emartna-newbld.js?v=1.19"></script>
+<script type="module" src="emartna-floorplan.js?v=1.19"></script>
+<script type="module" src="emartna-staff.js?v=1.19"></script>
+<script type="module" src="emartna-resaccess.js?v=1.19"></script>
+<script type="module" src="emartna-uitoggles.js?v=1.19"></script>
+<script type="module" src="emartna-cities.js?v=1.19"></script>
+<script type="module" src="emartna-perms.js?v=1.19"></script>
+<script type="module" src="emartna-lastlogin.js?v=1.19"></script>
 
 
 
