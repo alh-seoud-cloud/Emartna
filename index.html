@@ -9719,6 +9719,22 @@ function aiSettingsFormHTML(scope,ai){
     <div class="field2"><label>مفتاح Gemini API</label><input id="aiGeminiKey" value="${esc(ai.geminiKey||'')}" placeholder="AIzaSy..."></div>
     <div class="field2"><label>مفتاح OpenAI API</label><input id="aiOpenaiKey" value="${esc(ai.openaiKey||'')}" placeholder="sk-..."></div>
     <div class="field2"><label>مفتاح Claude API</label><input id="aiClaudeKey" value="${esc(ai.claudeKey||'')}" placeholder="sk-ant-..."></div>
+    <details class="card mtop" style="background:var(--tint)">
+      <summary style="cursor:pointer"><b class="small">🔧 إصدارات الموديلات</b>
+        <span class="small" style="color:var(--muted)"> — غيّرها لو المزوّد أوقف إصدار</span></summary>
+      <p class="small mtop">المزوّدين بيوقفوا الإصدارات القديمة كل فترة، ووقتها بيفشل
+        الاتصال برسالة زي <span dir="ltr">"is no longer available"</span>. غيّر الاسم هنا
+        من غير ما تستنى تحديث للبرنامج. سيبها فاضية عشان تستخدم الافتراضي.</p>
+      <div class="field2"><label>Gemini</label>
+        <input id="aiModelGemini" dir="ltr" value="${esc((ai.models&&ai.models.gemini)||'')}"
+          placeholder="${esc(AI_MODELS.gemini)}"></div>
+      <div class="field2"><label>OpenAI</label>
+        <input id="aiModelOpenai" dir="ltr" value="${esc((ai.models&&ai.models.openai)||'')}"
+          placeholder="${esc(AI_MODELS.openai)}"></div>
+      <div class="field2"><label>Claude</label>
+        <input id="aiModelClaude" dir="ltr" value="${esc((ai.models&&ai.models.claude)||'')}"
+          placeholder="${esc(AI_MODELS.claude)}"></div>
+    </details>
     <p class="small" style="color:var(--gold-dark)">⚠️ الاتصال بيتم مباشرة من المتصفح (مفيش سيرفر وسيط). Gemini بيدعم ده بشكل مضمون. ChatGPT وClaude ممكن يرفضوا الاتصال المباشر من بعض المتصفحات لأسباب أمان (CORS).</p>
     <div class="flexrow mtop">
       <button class="btn primary" onclick="saveAISettings('${scope}')">💾 حفظ</button>
@@ -9737,6 +9753,10 @@ function saveAISettings(scope){
   ai.geminiKey=document.getElementById('aiGeminiKey').value.trim();
   ai.openaiKey=document.getElementById('aiOpenaiKey').value.trim();
   ai.claudeKey=document.getElementById('aiClaudeKey').value.trim();
+  /* الإصدارات: الفاضي معناه "استخدم الافتراضي" */
+  const mv=id=>((document.getElementById(id)||{}).value||'').trim();
+  ai.models={gemini:mv('aiModelGemini'),openai:mv('aiModelOpenai'),claude:mv('aiModelClaude')};
+  Object.keys(ai.models).forEach(k=>{ if(!ai.models[k]) delete ai.models[k]; });
   if(scope==='sysowner')saveRegistry();else save();
   toast('تم حفظ إعدادات الذكاء الاصطناعي');
 }
@@ -9753,9 +9773,20 @@ async function testAIConnection(scope){
     box.innerHTML='<p class="small" style="color:var(--red)">❌ فشل الاتصال: '+esc(e.message||'خطأ غير معروف')+'</p>';
   }
 }
+/* موديلات المزوّدين في مكان واحد. جوجل بتوقف الإصدارات القديمة كل
+   فترة، والاسم كان مكتوب جوه الاستدعاء — فلما اتوقف gemini-2.0-flash
+   فشل الاتصال ومحدش يقدر يغيّره من غير ما يفتح الكود. */
+const AI_MODELS={gemini:'gemini-3.6-flash',openai:'gpt-4o-mini',claude:'claude-sonnet-4-6'};
+function aiModel(provider){
+  try{
+    const b=(window.D&&D.building&&D.building.aiSettings)||{};
+    const o=(window.REG&&REG.sysOwner&&REG.sysOwner.aiSettings)||{};
+    return (b.models&&b.models[provider])||(o.models&&o.models[provider])||AI_MODELS[provider];
+  }catch(e){ return AI_MODELS[provider]; }
+}
 async function callAIProvider(provider,key,prompt){
   if(provider==='gemini'){
-    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`,{
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(aiModel('gemini'))}:generateContent?key=${encodeURIComponent(key)}`,{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})
     });
@@ -9766,7 +9797,7 @@ async function callAIProvider(provider,key,prompt){
   if(provider==='openai'){
     const res=await fetch('https://api.openai.com/v1/chat/completions',{
       method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({model:'gpt-4o-mini',messages:[{role:'user',content:prompt}]})
+      body:JSON.stringify({model:aiModel('openai'),messages:[{role:'user',content:prompt}]})
     });
     const j=await res.json();
     if(!res.ok)throw new Error((j.error&&j.error.message)||'خطأ من ChatGPT');
@@ -9775,7 +9806,7 @@ async function callAIProvider(provider,key,prompt){
   if(provider==='claude'){
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:2000,messages:[{role:'user',content:prompt}]})
+      body:JSON.stringify({model:aiModel('claude'),max_tokens:2000,messages:[{role:'user',content:prompt}]})
     });
     const j=await res.json();
     if(!res.ok)throw new Error((j.error&&j.error.message)||'خطأ من Claude');
@@ -10168,7 +10199,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.12';
+const APP_BUILD='1.13';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -10382,61 +10413,61 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.12"></script>
-<script type="module" src="emartna-auth.js?v=1.12"></script>
-<script type="module" src="emartna-profile.js?v=1.12"></script>
-<script type="module" src="emartna-users.js?v=1.12"></script>
-<script src="emartna-contacts.js?v=1.12"></script>
-<script type="module" src="emartna-platform.js?v=1.12"></script>
-<script type="module" src="emartna-contactlog.js?v=1.12"></script>
-<script type="module" src="emartna-permreport.js?v=1.12"></script>
-<script type="module" src="emartna-finops.js?v=1.12"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.12"></script>
-<script type="module" src="emartna-planscreens.js?v=1.12"></script>
-<script type="module" src="emartna-recycle.js?v=1.12"></script>
-<script type="module" src="emartna-floors.js?v=1.12"></script>
-<script type="module" src="emartna-modal-size.js?v=1.12"></script>
-<script type="module" src="emartna-guard.js?v=1.12"></script>
-<script type="module" src="emartna-statement.js?v=1.12"></script>
-<script type="module" src="emartna-reports.js?v=1.12"></script>
-<script type="module" src="emartna-admin.js?v=1.12"></script>
-<script type="module" src="emartna-ui.js?v=1.12"></script>
-<script type="module" src="emartna-excel.js?v=1.12"></script>
-<script type="module" src="emartna-send.js?v=1.12"></script>
-<script type="module" src="emartna-pwa.js?v=1.12"></script>
-<script type="module" src="emartna-landing.js?v=1.12"></script>
-<script type="module" src="emartna-comm.js?v=1.12"></script>
-<script type="module" src="emartna-period.js?v=1.12"></script>
-<script type="module" src="emartna-fast.js?v=1.12"></script>
-<script type="module" src="emartna-ops.js?v=1.12"></script>
-<script type="module" src="emartna-onboarding.js?v=1.12"></script>
-<script type="module" src="emartna-bldcols.js?v=1.12"></script>
-<script type="module" src="emartna-reminder.js?v=1.12"></script>
-<script type="module" src="emartna-coupons.js?v=1.12"></script>
-<script type="module" src="emartna-videos.js?v=1.12"></script>
-<script type="module" src="emartna-colfit.js?v=1.12"></script>
-<script type="module" src="emartna-visits.js?v=1.12"></script>
-<script type="module" src="emartna-promo.js?v=1.12"></script>
-<script type="module" src="emartna-welcome.js?v=1.12"></script>
-<script src="emartna-idle.js?v=1.12"></script>
-<script type="module" src="emartna-offers.js?v=1.12"></script>
-<script type="module" src="emartna-dates.js?v=1.12"></script>
-<script type="module" src="emartna-paging.js?v=1.12"></script>
-<script type="module" src="emartna-leads.js?v=1.12"></script>
-<script type="module" src="emartna-live.js?v=1.12"></script>
-<script type="module" src="emartna-wa.js?v=1.12"></script>
-<script type="module" src="emartna-mobile.js?v=1.12"></script>
-<script type="module" src="emartna-numbering.js?v=1.12"></script>
-<script type="module" src="emartna-facade.js?v=1.12"></script>
-<script type="module" src="emartna-pricing.js?v=1.12"></script>
-<script type="module" src="emartna-newbld.js?v=1.12"></script>
-<script type="module" src="emartna-floorplan.js?v=1.12"></script>
-<script type="module" src="emartna-staff.js?v=1.12"></script>
-<script type="module" src="emartna-resaccess.js?v=1.12"></script>
-<script type="module" src="emartna-uitoggles.js?v=1.12"></script>
-<script type="module" src="emartna-cities.js?v=1.12"></script>
-<script type="module" src="emartna-perms.js?v=1.12"></script>
-<script type="module" src="emartna-lastlogin.js?v=1.12"></script>
+<script type="module" src="emartna-cloud.js?v=1.13"></script>
+<script type="module" src="emartna-auth.js?v=1.13"></script>
+<script type="module" src="emartna-profile.js?v=1.13"></script>
+<script type="module" src="emartna-users.js?v=1.13"></script>
+<script src="emartna-contacts.js?v=1.13"></script>
+<script type="module" src="emartna-platform.js?v=1.13"></script>
+<script type="module" src="emartna-contactlog.js?v=1.13"></script>
+<script type="module" src="emartna-permreport.js?v=1.13"></script>
+<script type="module" src="emartna-finops.js?v=1.13"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.13"></script>
+<script type="module" src="emartna-planscreens.js?v=1.13"></script>
+<script type="module" src="emartna-recycle.js?v=1.13"></script>
+<script type="module" src="emartna-floors.js?v=1.13"></script>
+<script type="module" src="emartna-modal-size.js?v=1.13"></script>
+<script type="module" src="emartna-guard.js?v=1.13"></script>
+<script type="module" src="emartna-statement.js?v=1.13"></script>
+<script type="module" src="emartna-reports.js?v=1.13"></script>
+<script type="module" src="emartna-admin.js?v=1.13"></script>
+<script type="module" src="emartna-ui.js?v=1.13"></script>
+<script type="module" src="emartna-excel.js?v=1.13"></script>
+<script type="module" src="emartna-send.js?v=1.13"></script>
+<script type="module" src="emartna-pwa.js?v=1.13"></script>
+<script type="module" src="emartna-landing.js?v=1.13"></script>
+<script type="module" src="emartna-comm.js?v=1.13"></script>
+<script type="module" src="emartna-period.js?v=1.13"></script>
+<script type="module" src="emartna-fast.js?v=1.13"></script>
+<script type="module" src="emartna-ops.js?v=1.13"></script>
+<script type="module" src="emartna-onboarding.js?v=1.13"></script>
+<script type="module" src="emartna-bldcols.js?v=1.13"></script>
+<script type="module" src="emartna-reminder.js?v=1.13"></script>
+<script type="module" src="emartna-coupons.js?v=1.13"></script>
+<script type="module" src="emartna-videos.js?v=1.13"></script>
+<script type="module" src="emartna-colfit.js?v=1.13"></script>
+<script type="module" src="emartna-visits.js?v=1.13"></script>
+<script type="module" src="emartna-promo.js?v=1.13"></script>
+<script type="module" src="emartna-welcome.js?v=1.13"></script>
+<script src="emartna-idle.js?v=1.13"></script>
+<script type="module" src="emartna-offers.js?v=1.13"></script>
+<script type="module" src="emartna-dates.js?v=1.13"></script>
+<script type="module" src="emartna-paging.js?v=1.13"></script>
+<script type="module" src="emartna-leads.js?v=1.13"></script>
+<script type="module" src="emartna-live.js?v=1.13"></script>
+<script type="module" src="emartna-wa.js?v=1.13"></script>
+<script type="module" src="emartna-mobile.js?v=1.13"></script>
+<script type="module" src="emartna-numbering.js?v=1.13"></script>
+<script type="module" src="emartna-facade.js?v=1.13"></script>
+<script type="module" src="emartna-pricing.js?v=1.13"></script>
+<script type="module" src="emartna-newbld.js?v=1.13"></script>
+<script type="module" src="emartna-floorplan.js?v=1.13"></script>
+<script type="module" src="emartna-staff.js?v=1.13"></script>
+<script type="module" src="emartna-resaccess.js?v=1.13"></script>
+<script type="module" src="emartna-uitoggles.js?v=1.13"></script>
+<script type="module" src="emartna-cities.js?v=1.13"></script>
+<script type="module" src="emartna-perms.js?v=1.13"></script>
+<script type="module" src="emartna-lastlogin.js?v=1.13"></script>
 
 
 
