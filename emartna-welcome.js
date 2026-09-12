@@ -204,6 +204,10 @@
         .wp-offer span{font-size:12.5px;color:#6E7F7B}
         .wp-offer button{border:0;background:var(--wp-gold);color:#fff;border-radius:9px;
           padding:9px 14px;font:600 13.5px inherit;cursor:pointer;white-space:nowrap}
+        .wp-calc{display:block;width:100%;margin-top:10px;padding:10px;
+          border:1px dashed var(--wp-green);border-radius:11px;background:#F4FAF9;
+          color:var(--wp-green);font:600 13.5px inherit;cursor:pointer}
+        .wp-calc:hover{background:#EAF5F3}
         .wp-skip{display:block;width:100%;margin-top:11px;background:none;border:0;
           color:#8A9A96;font:inherit;font-size:12.5px;cursor:pointer}
       </style>
@@ -247,6 +251,11 @@
           </div>
           <button onclick="welcomeSignup()">${esc2((off && off.ctaText) || 'سجّل')}</button>
         </div>
+
+        ${window.openPriceCalc ? `<button class="wp-calc"
+          onclick="welcomeClose(false);setTimeout(()=>openPriceCalc(),200)">
+          💰 عمارتك كام وحدة؟ احسب اشتراكك في ثانية
+        </button>` : ''}
 
         <button class="wp-skip" onclick="welcomeClose(true)">مش دلوقتي</button>
       </div>`;
