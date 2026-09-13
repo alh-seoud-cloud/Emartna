@@ -46,9 +46,20 @@
   window.toggleNavCompact = function(){
     const on = !navCompact();
     try{ localStorage.setItem(NAV_KEY, on ? '1' : '0'); }catch(e){}
-    document.body.classList.toggle('nav-compact', on);
+    syncNav();
     if (window.toast) toast(on ? 'قائمة مضغوطة' : 'قائمة عادية');
   };
+
+  /* الشيل بيتبني من جديد مع كل تبديل شاشة، فالكلاس لازم يتحط تاني.
+     مراقب بسيط أضمن من إننا نفتكر ننادي بعد كل رسم. */
+  function syncNav(){
+    try{ document.body.classList.toggle('nav-compact', navCompact()); }catch(e){}
+  }
+  try{
+    new MutationObserver(syncNav).observe(document.body,
+      { childList:true, subtree:false });
+  }catch(e){}
+  setInterval(syncNav, 1500);
 
   /* ---------- الأنماط ---------- */
 
@@ -82,14 +93,24 @@
         .filter-chips > *, .tab-row > *, .chip-row > *{flex:0 0 auto}
       }
 
-      /* قائمة جانبية مضغوطة */
-      body.nav-compact .sidebar .nav-group > button,
-      body.nav-compact .sidebar .nav-item{
-        padding-top:7px; padding-bottom:7px; font-size:13.5px}
-      body.nav-compact .sidebar .nav-group{margin-bottom:4px}
-      body.nav-compact .sidebar .brand{padding:10px 12px}
-      body.nav-compact .sidebar .brand .sub{display:none}
+      /* قائمة جانبية مضغوطة — الفئات الحقيقية في القائمة:
+         nav-btn (البند) · nav-group-header (المجموعة) ·
+         nav-sec (عنوان القسم) · brand (الشعار فوق). */
+      body.nav-compact .sidebar .nav-btn{
+        padding:6px 12px !important; font-size:12.5px !important; gap:7px !important}
+      body.nav-compact .sidebar .nav-group-header{
+        padding:6px 10px !important; font-size:12.5px !important}
+      body.nav-compact .sidebar .nav-group{margin:2px 6px !important}
+      body.nav-compact .sidebar .nav-sec{
+        padding:7px 10px 1px !important; font-size:9.5px !important}
+      body.nav-compact .sidebar .brand{padding:10px 12px !important}
+      body.nav-compact .sidebar .brand h1{font-size:14px !important}
+      body.nav-compact .sidebar .brand p{display:none !important}
+      body.nav-compact .sidebar .brand .mark{
+        width:30px !important; height:30px !important}
+      body.nav-compact .sidebar-foot{padding:9px !important; font-size:10.5px !important}
     `;
+    /* آخر حاجة في head عشان تكسب أنماط البرنامج */
     document.head.appendChild(st);
   }
 
@@ -111,7 +132,8 @@
       </div>
 
       <label class="checkline mtop2">
-        <input type="checkbox" ${navCompact()?'checked':''} onchange="toggleNavCompact()">
+        <input type="checkbox" ${navCompact()?'checked':''}
+          onchange="toggleNavCompact();openDisplayPrefs()">
         <span><b>قائمة جانبية مضغوطة</b>
           <div class="small" style="color:var(--muted)">
             بتصغّر المسافات فتشوف بنود أكتر من غير تمرير — مفيدة على الموبايل.</div></span>
