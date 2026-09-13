@@ -23,19 +23,55 @@
 
   const getScale = () => { try{ return localStorage.getItem(FONT_KEY) || 'md'; }
                            catch(e){ return 'md'; } };
-  const navCompact = () => { try{ return localStorage.getItem(NAV_KEY) === '1'; }
-                             catch(e){ return false; } };
+  const NAV_SIZES = [
+    { key:'narrow', label:'ضيقة',  w:180 },
+    { key:'normal', label:'عادية', w:250 },
+    { key:'wide',   label:'واسعة', w:300 },
+  ];
+  const navSize = () => { try{ return localStorage.getItem(NAV_KEY) || 'normal'; }
+                          catch(e){ return 'normal'; } };
+  const navCompact = () => navSize() === 'narrow';
 
   /* ---------- تطبيق حجم الخط ---------- */
 
   function applyFont(){
     const s = SCALES.find(x => x.key === getScale()) || SCALES[2];
-    /* ⚠️ تغيير html.fontSize مالوش أثر هنا: البرنامج محدد
-       body{font-size:14px} بالبكسل، وكل العناصر بتورّث من body.
-       فبنغيّر body مباشرة بالنسبة للأساس ١٤. */
-    const px = (14 * s.v).toFixed(2) + 'px';
-    document.body.style.setProperty('font-size', px, 'important');
-    document.documentElement.style.fontSize = (16 * s.v) + 'px';
+    /* ⚠️ تغيير font-size لوحده مالوش أثر: البرنامج فيه ١٢٢ قاعدة
+       بمقاسات ثابتة بالبكسل بتدوس على الوراثة.
+       الحل: قاعدة واحدة بتضرب كل المقاسات النسبية — بنحقن
+       ورقة أنماط بتعيد تعريف الأحجام الشائعة بالنسبة للمعامل. */
+    const v = s.v;
+    let st = document.getElementById('emartnaFontScale');
+    if (!st){
+      st = document.createElement('style');
+      st.id = 'emartnaFontScale';
+      document.head.appendChild(st);           // آخر حاجة = بتكسب
+    }
+    if (v === 1){ st.textContent = ''; document.documentElement
+      .setAttribute('data-font', s.key); return; }
+
+    const px = n => (n * v).toFixed(2) + 'px';
+    st.textContent = `
+      body{font-size:${px(14)} !important}
+      .small,.hint{font-size:${px(11.5)} !important}
+      .btn{font-size:${px(13)} !important}
+      .btn.sm{font-size:${px(12)} !important}
+      h1{font-size:${px(20)} !important}
+      h2{font-size:${px(18)} !important}
+      h3{font-size:${px(16)} !important}
+      table th,table td{font-size:${px(13)} !important}
+      input,select,textarea,.search-box{font-size:${px(13.5)} !important}
+      .kpi .val{font-size:${px(22)} !important}
+      .kpi .lbl{font-size:${px(12)} !important}
+      .badge{font-size:${px(11)} !important}
+      .card{font-size:${px(14)} !important}
+      .nav-btn{font-size:${px(13.5)} !important}
+      .nav-group-header{font-size:${px(13)} !important}
+      .nav-sec{font-size:${px(10.5)} !important}
+      .sidebar .brand h1{font-size:${px(16)} !important}
+      .sidebar-foot{font-size:${px(11.5)} !important}
+      label{font-size:${px(13)} !important}
+    `;
     document.documentElement.setAttribute('data-font', s.key);
   }
 
@@ -46,23 +82,38 @@
     if (window.renderContent) { try{ renderContent(); }catch(e){} }
   };
 
-  window.toggleNavCompact = function(){
-    const on = !navCompact();
-    try{ localStorage.setItem(NAV_KEY, on ? '1' : '0'); }catch(e){}
-    syncNav();
-    if (window.toast) toast(on ? 'قائمة مضغوطة' : 'قائمة عادية');
+  window.setNavSize = function(k){
+    try{ localStorage.setItem(NAV_KEY, k); }catch(e){}
+    applyNav(); injectNavButtons(true);
+    if (window.toast) toast('القائمة: ' + (NAV_SIZES.find(x=>x.key===k)||{}).label);
   };
+  window.toggleNavCompact = function(){
+    const i = NAV_SIZES.findIndex(x => x.key === navSize());
+    setNavSize(NAV_SIZES[(i + 1) % NAV_SIZES.length].key);
+  };
+
+  /* عرض القائمة بيتحط كنمط مباشر — بيكسب أنماط البرنامج */
+  function applyNav(){
+    const n = NAV_SIZES.find(x => x.key === navSize()) || NAV_SIZES[1];
+    let st = document.getElementById('emartnaNavWidth');
+    if (!st){
+      st = document.createElement('style');
+      st.id = 'emartnaNavWidth';
+      document.head.appendChild(st);
+    }
+    /* على الموبايل القائمة بتفتح فوق الشاشة بعرض ثابت — مانلمسهاش */
+    st.textContent = `@media (min-width: 861px){
+      .sidebar{width:${n.w}px !important}}`;
+    document.body.classList.toggle('nav-compact', n.key === 'narrow');
+  }
 
   /* الشيل بيتبني من جديد مع كل تبديل شاشة، فالكلاس لازم يتحط تاني.
      مراقب بسيط أضمن من إننا نفتكر ننادي بعد كل رسم. */
   function syncNav(){
     try{
-      document.body.classList.toggle('nav-compact', navCompact());
-      /* الحجم كمان: لو حاجة مسحت style من body بيرجع للافتراضي */
-      const s = SCALES.find(x => x.key === getScale()) || SCALES[2];
-      const px = (14 * s.v).toFixed(2) + 'px';
-      if (document.body.style.fontSize !== px)
-        document.body.style.setProperty('font-size', px, 'important');
+      if (!document.getElementById('emartnaNavWidth')) applyNav();
+      else document.body.classList.toggle('nav-compact', navCompact());
+      if (!document.getElementById('emartnaFontScale')) applyFont();
       injectNavButtons();
     }catch(e){}
   }
@@ -107,6 +158,8 @@
       /* قائمة جانبية مضغوطة — الفئات الحقيقية في القائمة:
          nav-btn (البند) · nav-group-header (المجموعة) ·
          nav-sec (عنوان القسم) · brand (الشعار فوق). */
+      /* تصغير حقيقي لعرض القائمة — مش ضغط المسافات بس */
+      body.nav-compact .sidebar{width:186px !important}
       body.nav-compact .sidebar .nav-btn{
         padding:6px 12px !important; font-size:12.5px !important; gap:7px !important}
       body.nav-compact .sidebar .nav-group-header{
@@ -142,13 +195,14 @@
           معاينة: <span style="font-size:1rem">النص هيبان بالحجم ده</span></p>
       </div>
 
-      <label class="checkline mtop2">
-        <input type="checkbox" ${navCompact()?'checked':''}
-          onchange="toggleNavCompact();openDisplayPrefs()">
-        <span><b>قائمة جانبية مضغوطة</b>
-          <div class="small" style="color:var(--muted)">
-            بتصغّر المسافات فتشوف بنود أكتر من غير تمرير — مفيدة على الموبايل.</div></span>
-      </label>
+      <div class="field2 mtop2"><label>عرض القائمة الجانبية</label>
+        <div class="flexrow" style="gap:6px;flex-wrap:wrap">
+          ${NAV_SIZES.map(n => `<button class="btn sm ${navSize()===n.key?'':'ghost'}"
+            onclick="setNavSize('${n.key}');openDisplayPrefs()">${n.label} (${n.w}px)</button>`).join('')}
+        </div>
+        <p class="small" style="color:var(--muted)">
+          الضيقة بتصغّر العرض والخط والمسافات — بتدي مساحة أكبر للمحتوى.</p>
+      </div>
 
       <div class="modal-actions">
         <button class="btn primary" onclick="closeModal()">تمام</button>
@@ -231,11 +285,9 @@
   /* ---------- التشغيل ---------- */
 
   styles();
-  applyFont();
-  if (navCompact()) document.body.classList.add('nav-compact');
+  applyFont(); applyNav(); injectNavButtons(true);
   document.addEventListener('emartna:building-complete', () => {
-    styles(); applyFont();
-    if (navCompact()) document.body.classList.add('nav-compact');
+    styles(); applyFont(); applyNav(); injectNavButtons(true);
   });
 
   console.log('[عمارتنا] تفضيلات العرض جاهزة');
