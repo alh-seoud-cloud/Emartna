@@ -20,7 +20,8 @@
                       return isFinite(n) ? n : 0; };
 
   const COLS = ['مفتاح الخطة','اسم الخطة','السعر قبل الخصم','نسبة الخصم %',
-                'مدة الاشتراك بالشهور','حد الشقق','حد المساعدين','مفعّلة'];
+                'مدة الاشتراك بالشهور','حد الشقق','حد المساعدين',
+                'مساحة المرفقات (ميجا)','مفعّلة'];
 
   window.setPlansView = function(v){
     try{ localStorage.setItem(VIEW_KEY, v); }catch(e){}
@@ -66,6 +67,11 @@
         value:r => Number(r.maxApartments) || 0,
         cell: r => r.maxApartments || 'غير محدود' },
 
+      { key:'storage', label:'المساحة',
+        value:r => Number(r.storageMb) || 0,
+        cell: r => r.storageMb ? (r.storageMb >= 1000
+          ? (r.storageMb/1000).toFixed(1) + ' ج.ب' : r.storageMb + ' م.ب') : '—' },
+
       { key:'maxStaff', label:'المساعدين',
         value:r => r.maxStaff == null ? 9999 : Number(r.maxStaff),
         cell: r => r.maxStaff == null ? 'بلا حد' : r.maxStaff },
@@ -108,6 +114,7 @@
       <div class="spacer"></div>
       ${v==='table'?'':'<button class="btn sm ghost" onclick="exportPlansXlsx()">📊 تصدير إكسل</button>'}
       <button class="btn sm ghost" onclick="openPlansImport()">📥 تحديث بالإكسل</button>
+      <button class="btn sm ghost" onclick="openStorageOverview()">💾 المساحة</button>
       <button class="btn primary" onclick="openPlanModal()">+ خطة جديدة</button>
     </div>`;
   }
@@ -121,10 +128,11 @@
       p.key, p.name, p.priceBefore || 0, p.discountPercent || 0,
       p.durationMonths || 0, p.maxApartments || 0,
       p.maxStaff == null ? '' : p.maxStaff,
+      p.storageMb || '',
       p.active === false ? 'لا' : 'نعم',
     ]);
     const ws = XLSX.utils.aoa_to_sheet([COLS, ...rows]);
-    ws['!cols'] = [18,26,16,14,20,14,14,10].map(w => ({ wch:w }));
+    ws['!cols'] = [18,26,16,14,20,14,14,20,10].map(w => ({ wch:w }));
     ws['!views'] = [{ RTL: true }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'الخطط');
@@ -195,7 +203,8 @@
         key, name, priceBefore: before, discountPercent: disc,
         durationMonths: num(r[4]), maxApartments: num(r[5]),
         maxStaff: String(r[6]||'').trim()==='' ? null : num(r[6]),
-        active: !['لا','no','false','0'].includes(String(r[7]||'').trim().toLowerCase()),
+        storageMb: String(r[7]||'').trim()==='' ? null : num(r[7]),
+        active: !['لا','no','false','0'].includes(String(r[8]||'').trim().toLowerCase()),
         __new: !cur,
         __changed: cur ? (cur.name!==name || (cur.priceBefore||0)!==before
           || (cur.discountPercent||0)!==disc) : false,
@@ -232,7 +241,7 @@
       const data = {
         name:r.name, priceBefore:r.priceBefore, discountPercent:r.discountPercent,
         durationMonths:r.durationMonths, maxApartments:r.maxApartments,
-        maxStaff:r.maxStaff, active:r.active,
+        maxStaff:r.maxStaff, storageMb:r.storageMb, active:r.active,
       };
       if (p){ Object.assign(p, data); upd++; }
       else { plans.push(Object.assign({ key:r.key, icon:'💳', isTrial:false }, data)); added++; }
@@ -307,6 +316,52 @@
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'عملاء الباقة');
     XLSX.writeFile(wb, 'عملاء الباقة - ' + (window.todayISO?todayISO():'') + '.xlsx');
+  };
+
+  /* استهلاك المساحة لكل عميل — عشان تعرف مين قرب على الحد قبل
+     ما يكلّمك، ومين ممكن تعرض عليه ترقية. */
+  window.openStorageOverview = async function(){
+    const sb = window.CLOUD && window.CLOUD._sb;
+    if (!sb) return showMessage('مش متصل بالسحابة.');
+    openModal('<h3>⏳ بنحسب المساحة...</h3>');
+    let rows = [];
+    try{
+      const { data, error } = await sb.rpc('storage_overview');
+      if (error) throw error;
+      rows = data || [];
+    }catch(e){ return showMessage('تعذّر الحساب: ' + (e.message||'')); }
+
+    const near = rows.filter(r => Number(r.pct) >= 70);
+    const tot  = rows.reduce((n,r) => n + Number(r.used_mb||0), 0);
+
+    openModal(`
+      <h3>💾 استهلاك المساحة</h3>
+      <p class="small mtop"><b>${rows.length}</b> عميل ·
+        الإجمالي <b>${tot.toFixed(1)} ميجا</b> ·
+        <b style="color:${near.length?'var(--red)':'inherit'}">${near.length}</b>
+        قربوا على الحد</p>
+      ${!rows.length ? '<p class="small mtop">مفيش بيانات.</p>' : `
+      <div class="table-wrap mtop" style="max-height:55vh;overflow:auto">
+        <table><thead><tr><th>العمارة</th><th>الباقة</th>
+          <th>المستهلك</th><th>الحصة</th><th>النسبة</th><th>ملفات</th>
+        </tr></thead><tbody>
+        ${rows.map(r => {
+          const p = Number(r.pct) || 0;
+          const c = p >= 90 ? 'var(--red)' : p >= 70 ? 'var(--gold)' : 'inherit';
+          return `<tr style="${p>=70?'background:var(--tint-warning)':''}">
+            <td><b>${esc2(r.building_name)}</b></td>
+            <td class="small">${esc2(r.plan)}</td>
+            <td>${Number(r.used_mb).toFixed(1)} م.ب</td>
+            <td>${r.quota_mb} م.ب</td>
+            <td><b style="color:${c}">${p}%</b></td>
+            <td>${r.files}</td></tr>`;
+        }).join('')}
+        </tbody></table></div>`}
+      <p class="small mtop" style="color:var(--muted)">
+        الحصة بتتحدد من الباقة. تقدر تزوّد عميل بعينه من بيانات عمارته.</p>
+      <div class="modal-actions">
+        <button class="btn ghost" onclick="closeModal()">إغلاق</button>
+      </div>`, true);
   };
 
   window.togglePlanActive = function(key){

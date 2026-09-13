@@ -461,7 +461,8 @@ async function paintRoom(){
                 margin:4px 0;opacity:.85">
                 <div class="small" style="font-weight:700">${esc2(m.reply_label||'')}</div>
                 <div class="small">${esc2(m.reply_text)}</div></div>`:''}
-              <div style="white-space:pre-wrap">${esc2(m.body)}</div>
+              ${m.body&&m.body!=='📎 مرفق'?`<div style="white-space:pre-wrap">${esc2(m.body)}</div>`:''}
+              ${window.attachmentHTML?attachmentHTML(m):''}
               <div class="small" style="opacity:.7">${
                 esc2(new Date(m.created_at).toLocaleString('ar-EG'))}</div>
             </div></div>`;
@@ -478,7 +479,12 @@ async function paintRoom(){
       <button class="btn sm ghost" onclick="cancelRoomReply()">✕</button>
     </div>`:''}
 
-    ${canWrite ? `<div class="flexrow mtop">
+    ${canWrite ? `
+    <div id="attBar" class="flexrow mtop" style="display:none;gap:8px;align-items:center;
+      padding:8px;background:var(--tint);border-radius:9px"></div>
+    <div class="flexrow mtop" style="gap:6px">
+      ${can('attach')?`<button class="btn ghost" onclick="pickChatAttachment('room')"
+        title="إرفاق صورة أو PDF" style="padding:8px 11px">📎</button>`:''}
       <textarea id="roomInput" rows="2" style="flex:1" placeholder="اكتب رسالتك..."></textarea>
       <button class="btn primary" onclick="sendMsg()">إرسال</button>
     </div>` : `<p class="small mtop" style="text-align:center;color:var(--muted)">
@@ -520,19 +526,23 @@ window.cancelRoomReply = function(){ REPLY = null; paintRoom(); };
 window.sendMsg = async function(){
   const inp = document.getElementById('roomInput');
   const text = (inp.value || '').trim();
-  if (!text || !CUR) return;
+  const att = window.__chatAtt;
+  if ((!text && !att) || !CUR) return;   /* المرفق لوحده رسالة */
   const me = myId();
   const u = window.currentUser ? currentUser() : null;
   try{
     const { error } = await sb.from('chat_messages').insert({
       room_id: CUR.id, sender_id: me,
       sender_name: (u && (u.name || u.username)) || 'مستخدم',
-      body: text,
+      body: text || '📎 مرفق',
       reply_label: REPLY ? REPLY.label : null,
       reply_text:  REPLY ? REPLY.text  : null,
+      att_path: att ? att.path : null, att_kind: att ? att.kind : null,
+      att_name: att ? att.name : null, att_size: att ? att.size : null,
     });
     if (error) throw error;
     inp.value = ''; REPLY = null;
+    window.__chatAtt = null; if (window.paintAttBar) paintAttBar();
     await paintRoom();
   }catch(e){ showMessage(e.message || 'تعذّر الإرسال'); }
 };

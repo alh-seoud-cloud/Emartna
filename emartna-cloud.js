@@ -213,6 +213,7 @@ const MAPS = {
          كان مش بيتبعت خالص، فكل رسالة بيكتبها المستخدم كان الحفظ بيترفض. */
       authorId:'author_id',
       replyToLabel:'reply_label', replyToText:'reply_text',
+      attPath:'att_path', attKind:'att_kind', attName:'att_name', attSize:'att_size',
       deletedAt:'deleted_at', deletedKind:'deleted_kind', editedAt:'edited_at',
     },
   },
@@ -1009,6 +1010,7 @@ const CLOUD = {
       maxApartments: p.max_apartments,
       maxTransactions: p.max_transactions,
       maxStaff: p.max_staff,
+      storageMb: p.storage_mb,          /* حصة المرفقات */
       isTrial: !!p.is_trial, active: p.active !== false,
     }));
 
@@ -1460,6 +1462,7 @@ async function pushRegistry(){
         discount_percent: Number(p.discountPercent) || 0,
         duration_months: p.durationMonths || null,
         max_apartments: p.maxApartments || null,
+        storage_mb: p.storageMb || null,          /* حصة المرفقات */
         max_transactions: p.maxTransactions || null,
         max_staff: p.maxStaff ?? null,
         is_trial: !!p.isTrial,
