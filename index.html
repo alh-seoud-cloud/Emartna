@@ -195,7 +195,10 @@ tr:hover td{background:#faf8f2}
 }
 .table-wrap table{border:0}
 .table-wrap tr:last-child td{border-bottom:0}
-.table-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.table-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:nowrap}
+.table-toolbar>.search-box{flex:1 1 auto;min-width:0}
+.table-toolbar>button{flex:0 0 auto}
+.tbl-menu-btn{font-size:17px;line-height:1;padding:5px 11px;letter-spacing:1px}
 .col-quick-menu{position:absolute;z-index:600;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.15);min-width:220px;padding:4px;display:flex;flex-direction:column}
 .var-autocomplete{position:absolute;z-index:700;top:100%;right:0;left:0;background:var(--panel);border:1px solid var(--accent);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-height:220px;overflow-y:auto;margin-top:2px}
 .var-item{padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--line)}
@@ -1799,10 +1802,39 @@ function sortableTable(tableId,rows,columns,rowRenderer,opts){
   if(!window[tableId+'_widths'])window[tableId+'_widths']={};
   if(!window[tableId+'_filters'])window[tableId+'_filters']={};
   return `
-  <div class="table-toolbar"><input class="search-box" placeholder="🔍 بحث..." value="${esc(window.__sortState[tableId].q)}" oninput="tableSearchInput('${tableId}',this.value)"><span id="${tableId}_filterIndicator">${renderFilterIndicator(tableId)}</span><button class="btn sm ghost" onclick="openTableColumnCustomizer('${tableId}')" title="ترتيب الأعمدة وإظهارها">☰ ترتيب وإظهار</button><button class="btn sm ghost" onclick="exportSortableTableToExcel('${tableId}')" title="تصدير الجدول الحالي لملف إكسيل">📤 Excel</button><button class="btn sm ghost" onclick="printSortableTable('${tableId}')" title="طباعة الجدول الحالي">🖨️ طباعة</button></div>
-  <p class="small" style="color:var(--muted);margin:2px 0 6px">💡 دوس على اسم أي عمود لفرزه، فلترته، أو تغيير حجمه، أو اسحب حافته بالماوس مباشرة.</p>
+  <div class="table-toolbar"><input class="search-box" placeholder="🔍 بحث..." value="${esc(window.__sortState[tableId].q)}" oninput="tableSearchInput('${tableId}',this.value)"><span id="${tableId}_filterIndicator">${renderFilterIndicator(tableId)}</span><button class="btn sm ghost tbl-menu-btn" onclick="openTableMenu(event,'${tableId}')" title="أدوات الجدول">⋯</button></div>
   <div id="${tableId}_wrap">${renderSortableInner(tableId)}</div>`;
 }
+/* أدوات الجدول اتجمّعت في زرار واحد: رؤساء الاتحادات قالوا إن
+   الشريط كان مزدحم (٤ أزرار + سطر تلميح فوق كل جدول). دلوقتي
+   البحث ظاهر بس، والباقي جوه ⋯ — نفس الوظايف بشكل أهدى. */
+function openTableMenu(evt,tableId){
+  evt.stopPropagation();
+  const old=document.getElementById('tblMenu'); if(old)old.remove();
+  const r=evt.currentTarget.getBoundingClientRect();
+  const m=document.createElement('div');
+  m.id='tblMenu'; m.className='col-quick-menu';
+  m.style.cssText=`position:fixed;top:${r.bottom+6}px;
+    inset-inline-end:${Math.max(8,window.innerWidth-r.right)}px;min-width:210px`;
+  const item=(ic,label,fn,sub)=>`<button class="btn ghost" style="width:100%;
+    text-align:right;display:flex;gap:9px;align-items:flex-start;padding:9px 11px"
+    onclick="closeTableMenu();${fn}">
+    <span style="font-size:15px;flex:0 0 auto">${ic}</span>
+    <span style="flex:1"><b style="font-size:13px">${label}</b>
+    ${sub?`<div class="small" style="color:var(--muted)">${sub}</div>`:''}</span></button>`;
+  m.innerHTML =
+    item('📤','تصدير Excel',`exportSortableTableToExcel('${tableId}')`,'الجدول بفلترته الحالية') +
+    item('🖨️','طباعة',`printSortableTable('${tableId}')`) +
+    item('☰','ترتيب وإظهار الأعمدة',`openTableColumnCustomizer('${tableId}')`,
+         'اختار الأعمدة وترتيبها') +
+    `<div style="border-top:1px solid var(--line);margin:4px 0"></div>
+     <p class="small" style="color:var(--muted);padding:6px 11px;margin:0">
+       💡 دوس على اسم أي عمود لفرزه أو فلترته، واسحب حافته لتغيير عرضه.</p>`;
+  document.body.appendChild(m);
+  setTimeout(()=>document.addEventListener('click',closeTableMenu,{once:true}),0);
+}
+function closeTableMenu(){const m=document.getElementById('tblMenu');if(m)m.remove();}
+
 const COL_WIDTH_PRESETS={narrow:80,normal:160,wide:260};
 function openColumnQuickMenu(evt,tableId,colKey){
   evt.stopPropagation();
@@ -10670,7 +10702,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.40';
+const APP_BUILD='1.41';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -10884,64 +10916,64 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.40"></script>
-<script type="module" src="emartna-auth.js?v=1.40"></script>
-<script type="module" src="emartna-profile.js?v=1.40"></script>
-<script type="module" src="emartna-users.js?v=1.40"></script>
-<script src="emartna-contacts.js?v=1.40"></script>
-<script type="module" src="emartna-platform.js?v=1.40"></script>
-<script type="module" src="emartna-contactlog.js?v=1.40"></script>
-<script type="module" src="emartna-permreport.js?v=1.40"></script>
-<script type="module" src="emartna-finops.js?v=1.40"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.40"></script>
-<script src="emartna-plansview.js?v=1.40"></script>
-<script src="emartna-uiprefs.js?v=1.40"></script>
-<script src="emartna-versionsxls.js?v=1.40"></script>
-<script type="module" src="emartna-planscreens.js?v=1.40"></script>
-<script type="module" src="emartna-recycle.js?v=1.40"></script>
-<script type="module" src="emartna-floors.js?v=1.40"></script>
-<script type="module" src="emartna-modal-size.js?v=1.40"></script>
-<script type="module" src="emartna-guard.js?v=1.40"></script>
-<script type="module" src="emartna-statement.js?v=1.40"></script>
-<script type="module" src="emartna-reports.js?v=1.40"></script>
-<script type="module" src="emartna-admin.js?v=1.40"></script>
-<script type="module" src="emartna-ui.js?v=1.40"></script>
-<script type="module" src="emartna-excel.js?v=1.40"></script>
-<script type="module" src="emartna-send.js?v=1.40"></script>
-<script type="module" src="emartna-pwa.js?v=1.40"></script>
-<script type="module" src="emartna-landing.js?v=1.40"></script>
-<script type="module" src="emartna-comm.js?v=1.40"></script>
-<script type="module" src="emartna-period.js?v=1.40"></script>
-<script type="module" src="emartna-fast.js?v=1.40"></script>
-<script type="module" src="emartna-ops.js?v=1.40"></script>
-<script type="module" src="emartna-onboarding.js?v=1.40"></script>
-<script type="module" src="emartna-bldcols.js?v=1.40"></script>
-<script type="module" src="emartna-reminder.js?v=1.40"></script>
-<script type="module" src="emartna-coupons.js?v=1.40"></script>
-<script type="module" src="emartna-videos.js?v=1.40"></script>
-<script type="module" src="emartna-colfit.js?v=1.40"></script>
-<script type="module" src="emartna-visits.js?v=1.40"></script>
-<script type="module" src="emartna-promo.js?v=1.40"></script>
-<script type="module" src="emartna-welcome.js?v=1.40"></script>
-<script src="emartna-idle.js?v=1.40"></script>
-<script type="module" src="emartna-offers.js?v=1.40"></script>
-<script type="module" src="emartna-dates.js?v=1.40"></script>
-<script type="module" src="emartna-paging.js?v=1.40"></script>
-<script type="module" src="emartna-leads.js?v=1.40"></script>
-<script type="module" src="emartna-live.js?v=1.40"></script>
-<script type="module" src="emartna-wa.js?v=1.40"></script>
-<script type="module" src="emartna-mobile.js?v=1.40"></script>
-<script type="module" src="emartna-numbering.js?v=1.40"></script>
-<script type="module" src="emartna-facade.js?v=1.40"></script>
-<script type="module" src="emartna-pricing.js?v=1.40"></script>
-<script type="module" src="emartna-newbld.js?v=1.40"></script>
-<script type="module" src="emartna-floorplan.js?v=1.40"></script>
-<script type="module" src="emartna-staff.js?v=1.40"></script>
-<script type="module" src="emartna-resaccess.js?v=1.40"></script>
-<script type="module" src="emartna-uitoggles.js?v=1.40"></script>
-<script type="module" src="emartna-cities.js?v=1.40"></script>
-<script type="module" src="emartna-perms.js?v=1.40"></script>
-<script type="module" src="emartna-lastlogin.js?v=1.40"></script>
+<script type="module" src="emartna-cloud.js?v=1.41"></script>
+<script type="module" src="emartna-auth.js?v=1.41"></script>
+<script type="module" src="emartna-profile.js?v=1.41"></script>
+<script type="module" src="emartna-users.js?v=1.41"></script>
+<script src="emartna-contacts.js?v=1.41"></script>
+<script type="module" src="emartna-platform.js?v=1.41"></script>
+<script type="module" src="emartna-contactlog.js?v=1.41"></script>
+<script type="module" src="emartna-permreport.js?v=1.41"></script>
+<script type="module" src="emartna-finops.js?v=1.41"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.41"></script>
+<script src="emartna-plansview.js?v=1.41"></script>
+<script src="emartna-uiprefs.js?v=1.41"></script>
+<script src="emartna-versionsxls.js?v=1.41"></script>
+<script type="module" src="emartna-planscreens.js?v=1.41"></script>
+<script type="module" src="emartna-recycle.js?v=1.41"></script>
+<script type="module" src="emartna-floors.js?v=1.41"></script>
+<script type="module" src="emartna-modal-size.js?v=1.41"></script>
+<script type="module" src="emartna-guard.js?v=1.41"></script>
+<script type="module" src="emartna-statement.js?v=1.41"></script>
+<script type="module" src="emartna-reports.js?v=1.41"></script>
+<script type="module" src="emartna-admin.js?v=1.41"></script>
+<script type="module" src="emartna-ui.js?v=1.41"></script>
+<script type="module" src="emartna-excel.js?v=1.41"></script>
+<script type="module" src="emartna-send.js?v=1.41"></script>
+<script type="module" src="emartna-pwa.js?v=1.41"></script>
+<script type="module" src="emartna-landing.js?v=1.41"></script>
+<script type="module" src="emartna-comm.js?v=1.41"></script>
+<script type="module" src="emartna-period.js?v=1.41"></script>
+<script type="module" src="emartna-fast.js?v=1.41"></script>
+<script type="module" src="emartna-ops.js?v=1.41"></script>
+<script type="module" src="emartna-onboarding.js?v=1.41"></script>
+<script type="module" src="emartna-bldcols.js?v=1.41"></script>
+<script type="module" src="emartna-reminder.js?v=1.41"></script>
+<script type="module" src="emartna-coupons.js?v=1.41"></script>
+<script type="module" src="emartna-videos.js?v=1.41"></script>
+<script type="module" src="emartna-colfit.js?v=1.41"></script>
+<script type="module" src="emartna-visits.js?v=1.41"></script>
+<script type="module" src="emartna-promo.js?v=1.41"></script>
+<script type="module" src="emartna-welcome.js?v=1.41"></script>
+<script src="emartna-idle.js?v=1.41"></script>
+<script type="module" src="emartna-offers.js?v=1.41"></script>
+<script type="module" src="emartna-dates.js?v=1.41"></script>
+<script type="module" src="emartna-paging.js?v=1.41"></script>
+<script type="module" src="emartna-leads.js?v=1.41"></script>
+<script type="module" src="emartna-live.js?v=1.41"></script>
+<script type="module" src="emartna-wa.js?v=1.41"></script>
+<script type="module" src="emartna-mobile.js?v=1.41"></script>
+<script type="module" src="emartna-numbering.js?v=1.41"></script>
+<script type="module" src="emartna-facade.js?v=1.41"></script>
+<script type="module" src="emartna-pricing.js?v=1.41"></script>
+<script type="module" src="emartna-newbld.js?v=1.41"></script>
+<script type="module" src="emartna-floorplan.js?v=1.41"></script>
+<script type="module" src="emartna-staff.js?v=1.41"></script>
+<script type="module" src="emartna-resaccess.js?v=1.41"></script>
+<script type="module" src="emartna-uitoggles.js?v=1.41"></script>
+<script type="module" src="emartna-cities.js?v=1.41"></script>
+<script type="module" src="emartna-perms.js?v=1.41"></script>
+<script type="module" src="emartna-lastlogin.js?v=1.41"></script>
 
 
 

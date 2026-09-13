@@ -45,6 +45,9 @@
       const btn = `<button class="btn sm ghost" data-mob-toggle
         onclick="toggleMobileCards()" title="تبديل بين الكروت والجدول">${
         cardsOn() ? '📋 جدول' : '🔲 كروت'}</button>`;
+      /* الشريط اتغيّر: الأزرار اتجمّعت في زرار ⋯ — بنحط زرارنا قبله */
+      const anchor = '<button class="btn sm ghost tbl-menu-btn"';
+      if (html.indexOf(anchor) >= 0) return html.replace(anchor, btn + anchor);
       return html.replace('طباعة</button>', 'طباعة</button>' + btn);
     };
     wrapped.__mobBtn = true;
