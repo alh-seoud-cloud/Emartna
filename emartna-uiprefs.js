@@ -23,14 +23,25 @@
 
   const getScale = () => { try{ return localStorage.getItem(FONT_KEY) || 'md'; }
                            catch(e){ return 'md'; } };
+  const NAV_W_KEY  = 'emartna_nav_width';
+  const NAV_HIDE   = 'emartna_nav_hidden';
+  const NAV_MIN = 150, NAV_MAX = 380, NAV_DEF = 250;
+
   const NAV_SIZES = [
     { key:'narrow', label:'ضيقة',  w:180 },
     { key:'normal', label:'عادية', w:250 },
     { key:'wide',   label:'واسعة', w:300 },
   ];
-  const navSize = () => { try{ return localStorage.getItem(NAV_KEY) || 'normal'; }
-                          catch(e){ return 'normal'; } };
-  const navCompact = () => navSize() === 'narrow';
+  const navWidth = () => {
+    try{ const v = parseInt(localStorage.getItem(NAV_W_KEY),10);
+         return (v >= NAV_MIN && v <= NAV_MAX) ? v : NAV_DEF; }
+    catch(e){ return NAV_DEF; }
+  };
+  const navHidden = () => { try{ return localStorage.getItem(NAV_HIDE) === '1'; }
+                            catch(e){ return false; } };
+  const navSize = () => { const w = navWidth();
+    return w <= 200 ? 'narrow' : w >= 285 ? 'wide' : 'normal'; };
+  const navCompact = () => navWidth() <= 200;
 
   /* ---------- تطبيق حجم الخط ---------- */
 
@@ -82,10 +93,23 @@
     if (window.renderContent) { try{ renderContent(); }catch(e){} }
   };
 
+  window.setNavWidth = function(px, quiet){
+    const w = Math.max(NAV_MIN, Math.min(NAV_MAX, Math.round(px)));
+    try{ localStorage.setItem(NAV_W_KEY, String(w)); }catch(e){}
+    applyNav();
+    if (!quiet) injectNavButtons(true);
+    return w;
+  };
   window.setNavSize = function(k){
-    try{ localStorage.setItem(NAV_KEY, k); }catch(e){}
+    const n = NAV_SIZES.find(x => x.key === k) || NAV_SIZES[1];
+    setNavWidth(n.w);
+    if (window.toast) toast('القائمة: ' + n.label);
+  };
+  /* إخفاء وإظهار زي محرّرات الكود — بيدي المحتوى الشاشة كلها */
+  window.toggleNavHidden = function(){
+    const on = !navHidden();
+    try{ localStorage.setItem(NAV_HIDE, on ? '1' : '0'); }catch(e){}
     applyNav(); injectNavButtons(true);
-    if (window.toast) toast('القائمة: ' + (NAV_SIZES.find(x=>x.key===k)||{}).label);
   };
   window.toggleNavCompact = function(){
     const i = NAV_SIZES.findIndex(x => x.key === navSize());
@@ -94,7 +118,7 @@
 
   /* عرض القائمة بيتحط كنمط مباشر — بيكسب أنماط البرنامج */
   function applyNav(){
-    const n = NAV_SIZES.find(x => x.key === navSize()) || NAV_SIZES[1];
+    const w = navWidth(), hid = navHidden();
     let st = document.getElementById('emartnaNavWidth');
     if (!st){
       st = document.createElement('style');
@@ -103,9 +127,105 @@
     }
     /* على الموبايل القائمة بتفتح فوق الشاشة بعرض ثابت — مانلمسهاش */
     st.textContent = `@media (min-width: 861px){
-      .sidebar{width:${n.w}px !important}}`;
-    document.body.classList.toggle('nav-compact', n.key === 'narrow');
+      .sidebar{width:${hid ? 0 : w}px !important;
+        ${hid ? 'min-width:0 !important;overflow:hidden !important;' +
+                'border:0 !important;' : ''}}
+      #navGrip{inset-inline-end:${hid ? 0 : w}px}
+    }`;
+    document.body.classList.toggle('nav-compact', !hid && w <= 200);
+    document.body.classList.toggle('nav-hidden', hid);
+    installGrip();
   }
+
+  /* ---------- الحافة القابلة للسحب ---------- */
+
+  function installGrip(){
+    if (window.innerWidth < 861){
+      const g = document.getElementById('navGrip');
+      if (g) g.style.display = 'none';
+      return;
+    }
+    let g = document.getElementById('navGrip');
+    if (!g){
+      g = document.createElement('div');
+      g.id = 'navGrip';
+      g.title = 'اسحب لتغيير العرض · دوس مرتين للإخفاء';
+      g.style.cssText =
+        'position:fixed;top:0;bottom:0;width:10px;z-index:520;' +
+        'cursor:col-resize;display:flex;align-items:center;' +
+        'justify-content:center;user-select:none';
+      g.innerHTML = '<span style="width:3px;height:42px;border-radius:2px;' +
+        'background:var(--line);transition:background .15s"></span>';
+      g.addEventListener('mouseenter', () => {
+        g.firstChild.style.background = 'var(--accent)'; });
+      g.addEventListener('mouseleave', () => {
+        if (!g.__dragging) g.firstChild.style.background = 'var(--line)'; });
+      g.addEventListener('dblclick', () => toggleNavHidden());
+      g.addEventListener('mousedown', startDrag);
+      g.addEventListener('touchstart', startDrag, { passive:false });
+      document.body.appendChild(g);
+    }
+    g.style.display = 'flex';
+
+    /* القائمة مخفية = لازم طريقة ترجّعها، وإلا المستخدم يتوه */
+    let back = document.getElementById('navShow');
+    if (navHidden()){
+      if (!back){
+        back = document.createElement('button');
+        back.id = 'navShow';
+        back.title = 'إظهار القائمة (Ctrl+B)';
+        back.onclick = () => toggleNavHidden();
+        back.style.cssText =
+          'position:fixed;top:12px;inset-inline-end:12px;z-index:530;' +
+          'width:38px;height:38px;border:1px solid var(--line);border-radius:10px;' +
+          'background:var(--card);color:var(--text);font-size:17px;cursor:pointer;' +
+          'box-shadow:0 3px 10px rgba(0,0,0,.12)';
+        back.textContent = '☰';
+        document.body.appendChild(back);
+      }
+      back.style.display = 'block';
+    } else if (back) back.style.display = 'none';
+  }
+
+  function startDrag(e){
+    e.preventDefault();
+    const g = document.getElementById('navGrip');
+    g.__dragging = true;
+    g.firstChild.style.background = 'var(--accent)';
+    document.body.style.cursor = 'col-resize';
+
+    const move = ev => {
+      const x = (ev.touches ? ev.touches[0].clientX : ev.clientX);
+      /* القائمة على اليمين (RTL): العرض = المسافة من حافة الشاشة */
+      const w = window.innerWidth - x;
+      if (navHidden() && w > NAV_MIN){
+        try{ localStorage.setItem(NAV_HIDE,'0'); }catch(e){}
+      }
+      setNavWidth(w, true);
+    };
+    const up = () => {
+      g.__dragging = false;
+      g.firstChild.style.background = 'var(--line)';
+      document.body.style.cursor = '';
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      document.removeEventListener('touchmove', move);
+      document.removeEventListener('touchend', up);
+      injectNavButtons(true);
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+    document.addEventListener('touchmove', move, { passive:false });
+    document.addEventListener('touchend', up);
+  }
+
+  /* اختصار زي محرّرات الكود */
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')){
+      e.preventDefault(); toggleNavHidden();
+    }
+  });
+  window.addEventListener('resize', () => { installGrip(); applyNav(); });
 
   /* الشيل بيتبني من جديد مع كل تبديل شاشة، فالكلاس لازم يتحط تاني.
      مراقب بسيط أضمن من إننا نفتكر ننادي بعد كل رسم. */
@@ -198,10 +318,16 @@
       <div class="field2 mtop2"><label>عرض القائمة الجانبية</label>
         <div class="flexrow" style="gap:6px;flex-wrap:wrap">
           ${NAV_SIZES.map(n => `<button class="btn sm ${navSize()===n.key?'':'ghost'}"
-            onclick="setNavSize('${n.key}');openDisplayPrefs()">${n.label} (${n.w}px)</button>`).join('')}
+            onclick="setNavSize('${n.key}');openDisplayPrefs()">${n.label}</button>`).join('')}
         </div>
+        <input type="range" min="${NAV_MIN}" max="${NAV_MAX}" value="${navWidth()}"
+          class="mtop" style="width:100%"
+          oninput="setNavWidth(this.value,true);
+                   document.getElementById('navWv').textContent=this.value+'px'">
         <p class="small" style="color:var(--muted)">
-          الضيقة بتصغّر العرض والخط والمسافات — بتدي مساحة أكبر للمحتوى.</p>
+          العرض: <b id="navWv">${navWidth()}px</b> —
+          أو <b>اسحب حافة القائمة</b> بالماوس، ودوس عليها مرتين للإخفاء
+          (أو <b>Ctrl+B</b>).</p>
       </div>
 
       <div class="modal-actions">
