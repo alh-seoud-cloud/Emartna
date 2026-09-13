@@ -29,34 +29,29 @@
     if (window.toast) toast(cardsOn() ? 'عرض كروت' : 'عرض جدول');
   };
 
-  /* زرار التبديل بين الكروت والجدول — في شريط أدوات كل جدول */
-  (function addToggle(){
+  /* زرار التبديل بين الكروت والجدول — في شريط أدوات كل جدول.
+     ⚠️ كان بيتغلّف مرتين (فورًا + بعد ٢.٥ ثانية)، وكل نسخة بتحط
+     العلامة على نفسها مش على الأصلية — فالحارس مابيمنعش التكرار
+     والزرار كان بيتضاعف ٣ مرات في الشريط. */
+  function installToggle(){
     const orig = window.sortableTable;
-    if (typeof orig !== 'function' || orig.__mobBtn) return;
+    if (typeof orig !== 'function') return false;
+    if (orig.__mobBtn) return true;                 // اتغلّفت خلاص
+
     const wrapped = function(){
       const html = orig.apply(this, arguments);
-      if (!isNarrow()) return html;
-      const btn = `<button class="btn sm ghost" onclick="toggleMobileCards()"
-        title="تبديل بين الكروت والجدول">${cardsOn() ? '📋 جدول' : '🔲 كروت'}</button>`;
+      if (!isNarrow() || typeof html !== 'string') return html;
+      if (html.indexOf('data-mob-toggle') >= 0) return html;   // موجود بالفعل
+      const btn = `<button class="btn sm ghost" data-mob-toggle
+        onclick="toggleMobileCards()" title="تبديل بين الكروت والجدول">${
+        cardsOn() ? '📋 جدول' : '🔲 كروت'}</button>`;
       return html.replace('طباعة</button>', 'طباعة</button>' + btn);
     };
     wrapped.__mobBtn = true;
     window.sortableTable = wrapped;
-  })();
-  setTimeout(() => {
-    const orig = window.sortableTable;
-    if (typeof orig === 'function' && !orig.__mobBtn){
-      const wrapped = function(){
-        const html = orig.apply(this, arguments);
-        if (!isNarrow()) return html;
-        const btn = `<button class="btn sm ghost" onclick="toggleMobileCards()"
-          title="تبديل بين الكروت والجدول">${cardsOn() ? '📋 جدول' : '🔲 كروت'}</button>`;
-        return html.replace('طباعة</button>', 'طباعة</button>' + btn);
-      };
-      wrapped.__mobBtn = true;
-      window.sortableTable = wrapped;
-    }
-  }, 2500);
+    return true;
+  }
+  if (!installToggle()) setTimeout(installToggle, 2500);
 
   /* ---------- التحويل ---------- */
 
