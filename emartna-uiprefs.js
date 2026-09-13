@@ -30,8 +30,11 @@
 
   function applyFont(){
     const s = SCALES.find(x => x.key === getScale()) || SCALES[2];
-    /* بنغيّر أساس الصفحة — كل المقاسات النسبية بتتبعه، والمقاسات
-       الثابتة بالبكسل بتفضل زي ما هي فالتصميم مابيتكسرش. */
+    /* ⚠️ تغيير html.fontSize مالوش أثر هنا: البرنامج محدد
+       body{font-size:14px} بالبكسل، وكل العناصر بتورّث من body.
+       فبنغيّر body مباشرة بالنسبة للأساس ١٤. */
+    const px = (14 * s.v).toFixed(2) + 'px';
+    document.body.style.setProperty('font-size', px, 'important');
     document.documentElement.style.fontSize = (16 * s.v) + 'px';
     document.documentElement.setAttribute('data-font', s.key);
   }
@@ -53,7 +56,15 @@
   /* الشيل بيتبني من جديد مع كل تبديل شاشة، فالكلاس لازم يتحط تاني.
      مراقب بسيط أضمن من إننا نفتكر ننادي بعد كل رسم. */
   function syncNav(){
-    try{ document.body.classList.toggle('nav-compact', navCompact()); }catch(e){}
+    try{
+      document.body.classList.toggle('nav-compact', navCompact());
+      /* الحجم كمان: لو حاجة مسحت style من body بيرجع للافتراضي */
+      const s = SCALES.find(x => x.key === getScale()) || SCALES[2];
+      const px = (14 * s.v).toFixed(2) + 'px';
+      if (document.body.style.fontSize !== px)
+        document.body.style.setProperty('font-size', px, 'important');
+      injectNavButtons();
+    }catch(e){}
   }
   try{
     new MutationObserver(syncNav).observe(document.body,
@@ -167,6 +178,55 @@
     }catch(e){ return false; }
   }
   if (!addCard()) setTimeout(addCard, 2000);
+
+  /* ---------- أزرار الحجم في القائمة الجانبية ---------- */
+
+  window.stepFont = function(dir){
+    const i = SCALES.findIndex(x => x.key === getScale());
+    const n = Math.max(0, Math.min(SCALES.length - 1, (i < 0 ? 2 : i) + dir));
+    try{ localStorage.setItem(FONT_KEY, SCALES[n].key); }catch(e){}
+    applyFont(); injectNavButtons(true);
+    if (window.toast) toast('حجم الخط: ' + SCALES[n].label);
+  };
+
+  function injectNavButtons(force){
+    const foot = document.querySelector('.sidebar-foot')
+              || document.querySelector('.sidebar');
+    if (!foot) return;
+    let box = document.getElementById('fontBar');
+    if (box && !force) { paintBar(box); return; }
+    if (!box){
+      box = document.createElement('div');
+      box.id = 'fontBar';
+      box.style.cssText =
+        'display:flex;gap:5px;align-items:center;justify-content:center;' +
+        'padding:7px 8px;margin:6px 8px;border-radius:9px;' +
+        'background:rgba(255,255,255,.06)';
+      /* فوق زرار الخروج مباشرة */
+      foot.insertBefore(box, foot.firstChild);
+    }
+    paintBar(box);
+  }
+
+  function paintBar(box){
+    const s = SCALES.find(x => x.key === getScale()) || SCALES[2];
+    const b = (t, d, dis) => `<button onclick="stepFont(${d})" ${dis?'disabled':''}
+      title="${d<0?'تصغير':'تكبير'} الخط"
+      style="flex:0 0 auto;width:28px;height:28px;border:0;border-radius:7px;
+        cursor:${dis?'default':'pointer'};opacity:${dis?'.35':'1'};
+        background:rgba(255,255,255,.12);color:var(--sidebar-text);
+        font-size:15px;font-weight:700;line-height:1">${t}</button>`;
+    const i = SCALES.indexOf(s);
+    box.innerHTML =
+      b('−', -1, i === 0) +
+      `<span style="flex:1;text-align:center;font-size:11px;
+        color:var(--sidebar-muted)">${s.label}</span>` +
+      b('+', 1, i === SCALES.length - 1) +
+      `<button onclick="toggleNavCompact()" title="تصغير/تكبير القائمة"
+        style="flex:0 0 auto;width:28px;height:28px;border:0;border-radius:7px;
+        cursor:pointer;background:rgba(255,255,255,.12);
+        color:var(--sidebar-text);font-size:13px">${navCompact()?'▣':'▢'}</button>`;
+  }
 
   /* ---------- التشغيل ---------- */
 
