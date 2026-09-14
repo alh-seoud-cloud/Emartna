@@ -3188,6 +3188,8 @@ function renderSysContent(){
     c.innerHTML=supportStaffPageContent(curPage);
     return;
   }
+  /* الشاشات اللي محتواها نافذة */
+  if(SYS_MODAL_PAGES[curPage]){ c.innerHTML=pageSysModalHost(curPage); return; }
   const fn={sysdash:pageSysDashboard,syslocations:(window.pageSysLocations||(()=>'<p class="small">جاري التحميل…</p>')),syspipeline:(window.pageSysPipeline||pageSysPipeline),sysleads:pageSysMarketingLeads,sysvisits:(window.pageSysVisits||(()=>'<p class="small">جاري التحميل…</p>')),sysoffers:pageSysOffers,syscoupons:pageSysCoupons,sysmessages:pageSysMessageTemplates,sysusers:pageSysUsers,syslicenses:pageSysLicenses,syslicensehistory:pageSysLicenseHistory,sysplans:pageSysPlans,sysrevenue:pageSysRevenue,syslanding:pageSysLandingSettings,sysrenewals:pageSysRenewals,sysproposals:pageSysProposals,systickets:pageSysSupportTickets,sysstaff:pageSupportStaff,systasks:pageSysTasks,sysdailysummary:pageSysDailySummary,sysreports:pageSysReports,sysactivitylog:pageSysActivityLog,sysreferrals:pageSysReferrals,sysversions:pageSysVersions,sysmarketing:pageMarketingCard,systrash:pageSysTrash,sysaisettings:pageSysAISettings,sysaireports:pageSysAIReports,syssettings:pageSysSettings}[curPage]||pageSysDashboard;
   c.innerHTML=fn();
   if(curPage==='sysmarketing')renderMarketingQr();
@@ -3514,16 +3516,37 @@ function pageSysDashboard(){
     <button class="btn ${window.__sysDashFilter==='expiringSoon'?'gold':'ghost'}" onclick="setSysDashFilter('expiringSoon')">⏰ هينتهي خلال 7 أيام (${expiringSoon.length})</button>
     ${window.__sysDashFilter!=='all'?`<button class="btn ghost" onclick="setSysDashFilter('all')">✕ مسح الفلتر (${filterMap[window.__sysDashFilter].label})</button>`:''}
     <div class="spacer"></div>
-    <button class="btn ghost" onclick="openPlanScreens()">🎚️ شاشات الاشتراك</button>
-    <button class="btn ghost" onclick="openIdlePolicy()">⏳ سياسة إقفال الجلسة</button>
-    <button class="btn ghost" onclick="openAllContacts()">📇 سجل التواصل</button>
-    <button class="btn ghost" onclick="openFollowups()">📅 متابعات مستحقة</button>
-    <button class="btn ghost" onclick="openImportBuildingsModal()">📥 استيراد عمارات بالجملة</button>
-    <button class="btn primary" onclick="openNewBuildingModal()">+ إنشاء عمارة جديدة</button>
+    <button class="btn ghost" onclick="openImportBuildingsModal()">📥 استيراد بالجملة</button>
+    <button class="btn primary" onclick="openNewBuildingModal()">+ عمارة جديدة</button>
   </div>
   <div class="mtop">${sortableTable('sysBldTable',shownRows,cols,null,{defaultKey:'name',emptyText:'لا توجد عمارات مطابقة لهذا الفلتر',exportName:filterMap[window.__sysDashFilter].label})}</div>`;
 }
 function setSysDashFilter(key){window.__sysDashFilter=key;renderSysContent()}
+
+/* بنود القائمة الجديدة: بتفتح النوافذ اللي كانت أزرار متناثرة فوق
+   شاشة العمارات. الأدوات بقت في مجموعتها المنطقية بدل ما تبقى
+   مكدّسة في شاشة مالهاش علاقة بيها. */
+const SYS_MODAL_PAGES = {
+  sysplanscreens:{ fn:'openPlanScreens',  title:'شاشات كل باقة',
+    desc:'حدّد الشاشات المتاحة لكل باقة، واستثناءات لعمارات بعينها.' },
+  syscontactlog: { fn:'openAllContacts',  title:'سجل التواصل',
+    desc:'كل اتصال أو رسالة مع رؤساء الاتحادات، ونتيجتها.' },
+  sysfollowups:  { fn:'openFollowups',    title:'متابعات مستحقة',
+    desc:'العملاء اللي محتاجين متابعة النهاردة أو فات ميعادهم.' },
+  sysidle:       { fn:'openIdlePolicy',   title:'سياسة إقفال الجلسة',
+    desc:'مدة الخمول قبل ما البرنامج يقفل الجلسة للإدارة والسكان.' },
+};
+function pageSysModalHost(page){
+  const m = SYS_MODAL_PAGES[page]; if(!m) return '';
+  /* بنفتحها تلقائيًا، والصفحة ورا بتفضل فيها زرار يرجّعها لو قفلها */
+  setTimeout(()=>{ try{ window[m.fn] && window[m.fn](); }catch(e){} }, 60);
+  return `<div class="card content-narrow" style="text-align:center;padding:34px 20px">
+    <div style="font-size:34px">🪟</div>
+    <h3 class="mtop">${esc(m.title)}</h3>
+    <p class="small mtop">${esc(m.desc)}</p>
+    <button class="btn primary mtop2" onclick="window.${m.fn}()">فتح</button>
+  </div>`;
+}
 function renewalWhatsAppLink(b){
   const msg=`عزيزي رئيس اتحاد "${b.name}"،\nاشتراكك في نظام عمارتنا (${planName(b.plan)}) ${b.endDateRaw?'هينتهي بتاريخ '+b.endDateRaw:'يحتاج مراجعة'}. برجاء التواصل لتجديد الاشتراك أو الترقية.`;
   return `https://wa.me/${(b.adminPhoneCountryRaw||'').replace('+','')}${b.adminPhoneRaw}?text=${encodeURIComponent(msg)}`;
@@ -6526,11 +6549,11 @@ var OWNER_NAV_GROUPS=[
 var SYS_NAV_GROUPS=[
   {key:'overview',icon:'🏙️',label:'نظرة عامة',items:[['sysdash','🏙️','كل العمارات'],['sysusers','👥','كل المستخدمين'],['sysdailysummary','📊','الملخص اليومي'],['sysreports','📈','تقارير الفترات'],['sysactivitylog','📜','سجل نشاطي']]},
   {key:'marketing',icon:'📣',label:'التسويق والمبيعات',items:[['syspipeline','🎯','قمع المبيعات'],['sysleads','📋','أرقام تسويقية'],['sysvisits','📈','مصادر الزيارات'],['sysoffers','🎉','عروض العملاء الجدد'],['sysreferrals','🎁','برنامج الإحالة'],['syscoupons','🎟️','أكواد الخصم'],['sysmessages','💬','قوالب الرسائل']]},
-  {key:'subscriptions',icon:'🪪',label:'الاشتراكات والتراخيص',items:[['syslicenses','🪪','التراخيص والاشتراكات'],['sysrenewals','📥','طلبات التجديد'],['sysplans','💲','خطط الاشتراك والأسعار'],['syslicensehistory','📜','سجل حركات الاشتراكات'],['sysrevenue','💰','كشف حساب التحصيلات']]},
+  {key:'subscriptions',icon:'🪪',label:'الاشتراكات والتراخيص',items:[['syslicenses','🪪','التراخيص والاشتراكات'],['sysrenewals','📥','طلبات التجديد'],['sysplans','💲','خطط الاشتراك والأسعار'],['sysplanscreens','🎚️','شاشات كل باقة'],['syslicensehistory','📜','سجل حركات الاشتراكات'],['sysrevenue','💰','كشف حساب التحصيلات']]},
   {key:'site',icon:'🖥️',label:'الموقع العام',items:[['syslanding','🖥️','الصفحة الرئيسية وإعدادات العرض'],['sysversions','🆕','سجل الإصدارات والتحديثات'],['sysmarketing','🖨️','بطاقة دعاية للطباعة'],['syslocations','🗺️','المحافظات والمدن']]},
-  {key:'feedback',icon:'💬',label:'التواصل مع العملاء',items:[['sysproposals','💡','مقترحات العملاء'],['systickets','🎫','طلبات الدعم الفني'],['sysstaff','🧑‍💼','فريق الدعم الفني'],['systasks','✅','مهام الفريق']]},
+  {key:'feedback',icon:'💬',label:'التواصل مع العملاء',items:[['sysproposals','💡','مقترحات العملاء'],['systickets','🎫','طلبات الدعم الفني'],['syscontactlog','📇','سجل التواصل'],['sysfollowups','📅','متابعات مستحقة'],['sysstaff','🧑‍💼','فريق الدعم الفني'],['systasks','✅','مهام الفريق']]},
   {key:'ai',icon:'🤖',label:'الذكاء الاصطناعي',items:[['sysaisettings','⚙️','إعدادات الذكاء الاصطناعي'],['sysaireports','🤖','تقارير الذكاء الاصطناعي']]},
-  {key:'system',icon:'🛠️',label:'النظام',items:[['systrash','🗑️','سلة المحذوفات'],['syssettings','⚙️','إعدادات حسابي']]},
+  {key:'system',icon:'🛠️',label:'النظام',items:[['sysidle','⏳','سياسة إقفال الجلسة'],['systrash','🗑️','سلة المحذوفات'],['syssettings','⚙️','إعدادات حسابي']]},
 ];
 window.__navExpandedGroup=null;
 function findGroupKeyForPage(groups,page){const g=groups.find(g=>g.items.some(it=>it[0]===page));return g?g.key:null}
@@ -10712,7 +10735,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.43';
+const APP_BUILD='1.44';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -10926,65 +10949,65 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.43"></script>
-<script type="module" src="emartna-auth.js?v=1.43"></script>
-<script type="module" src="emartna-profile.js?v=1.43"></script>
-<script type="module" src="emartna-users.js?v=1.43"></script>
-<script src="emartna-contacts.js?v=1.43"></script>
-<script type="module" src="emartna-platform.js?v=1.43"></script>
-<script type="module" src="emartna-contactlog.js?v=1.43"></script>
-<script type="module" src="emartna-permreport.js?v=1.43"></script>
-<script type="module" src="emartna-finops.js?v=1.43"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.43"></script>
-<script src="emartna-plansview.js?v=1.43"></script>
-<script src="emartna-uiprefs.js?v=1.43"></script>
-<script src="emartna-chatatt.js?v=1.43"></script>
-<script src="emartna-versionsxls.js?v=1.43"></script>
-<script type="module" src="emartna-planscreens.js?v=1.43"></script>
-<script type="module" src="emartna-recycle.js?v=1.43"></script>
-<script type="module" src="emartna-floors.js?v=1.43"></script>
-<script type="module" src="emartna-modal-size.js?v=1.43"></script>
-<script type="module" src="emartna-guard.js?v=1.43"></script>
-<script type="module" src="emartna-statement.js?v=1.43"></script>
-<script type="module" src="emartna-reports.js?v=1.43"></script>
-<script type="module" src="emartna-admin.js?v=1.43"></script>
-<script type="module" src="emartna-ui.js?v=1.43"></script>
-<script type="module" src="emartna-excel.js?v=1.43"></script>
-<script type="module" src="emartna-send.js?v=1.43"></script>
-<script type="module" src="emartna-pwa.js?v=1.43"></script>
-<script type="module" src="emartna-landing.js?v=1.43"></script>
-<script type="module" src="emartna-comm.js?v=1.43"></script>
-<script type="module" src="emartna-period.js?v=1.43"></script>
-<script type="module" src="emartna-fast.js?v=1.43"></script>
-<script type="module" src="emartna-ops.js?v=1.43"></script>
-<script type="module" src="emartna-onboarding.js?v=1.43"></script>
-<script type="module" src="emartna-bldcols.js?v=1.43"></script>
-<script type="module" src="emartna-reminder.js?v=1.43"></script>
-<script type="module" src="emartna-coupons.js?v=1.43"></script>
-<script type="module" src="emartna-videos.js?v=1.43"></script>
-<script type="module" src="emartna-colfit.js?v=1.43"></script>
-<script type="module" src="emartna-visits.js?v=1.43"></script>
-<script type="module" src="emartna-promo.js?v=1.43"></script>
-<script type="module" src="emartna-welcome.js?v=1.43"></script>
-<script src="emartna-idle.js?v=1.43"></script>
-<script type="module" src="emartna-offers.js?v=1.43"></script>
-<script type="module" src="emartna-dates.js?v=1.43"></script>
-<script type="module" src="emartna-paging.js?v=1.43"></script>
-<script type="module" src="emartna-leads.js?v=1.43"></script>
-<script type="module" src="emartna-live.js?v=1.43"></script>
-<script type="module" src="emartna-wa.js?v=1.43"></script>
-<script type="module" src="emartna-mobile.js?v=1.43"></script>
-<script type="module" src="emartna-numbering.js?v=1.43"></script>
-<script type="module" src="emartna-facade.js?v=1.43"></script>
-<script type="module" src="emartna-pricing.js?v=1.43"></script>
-<script type="module" src="emartna-newbld.js?v=1.43"></script>
-<script type="module" src="emartna-floorplan.js?v=1.43"></script>
-<script type="module" src="emartna-staff.js?v=1.43"></script>
-<script type="module" src="emartna-resaccess.js?v=1.43"></script>
-<script type="module" src="emartna-uitoggles.js?v=1.43"></script>
-<script type="module" src="emartna-cities.js?v=1.43"></script>
-<script type="module" src="emartna-perms.js?v=1.43"></script>
-<script type="module" src="emartna-lastlogin.js?v=1.43"></script>
+<script type="module" src="emartna-cloud.js?v=1.44"></script>
+<script type="module" src="emartna-auth.js?v=1.44"></script>
+<script type="module" src="emartna-profile.js?v=1.44"></script>
+<script type="module" src="emartna-users.js?v=1.44"></script>
+<script src="emartna-contacts.js?v=1.44"></script>
+<script type="module" src="emartna-platform.js?v=1.44"></script>
+<script type="module" src="emartna-contactlog.js?v=1.44"></script>
+<script type="module" src="emartna-permreport.js?v=1.44"></script>
+<script type="module" src="emartna-finops.js?v=1.44"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.44"></script>
+<script src="emartna-plansview.js?v=1.44"></script>
+<script src="emartna-uiprefs.js?v=1.44"></script>
+<script src="emartna-chatatt.js?v=1.44"></script>
+<script src="emartna-versionsxls.js?v=1.44"></script>
+<script type="module" src="emartna-planscreens.js?v=1.44"></script>
+<script type="module" src="emartna-recycle.js?v=1.44"></script>
+<script type="module" src="emartna-floors.js?v=1.44"></script>
+<script type="module" src="emartna-modal-size.js?v=1.44"></script>
+<script type="module" src="emartna-guard.js?v=1.44"></script>
+<script type="module" src="emartna-statement.js?v=1.44"></script>
+<script type="module" src="emartna-reports.js?v=1.44"></script>
+<script type="module" src="emartna-admin.js?v=1.44"></script>
+<script type="module" src="emartna-ui.js?v=1.44"></script>
+<script type="module" src="emartna-excel.js?v=1.44"></script>
+<script type="module" src="emartna-send.js?v=1.44"></script>
+<script type="module" src="emartna-pwa.js?v=1.44"></script>
+<script type="module" src="emartna-landing.js?v=1.44"></script>
+<script type="module" src="emartna-comm.js?v=1.44"></script>
+<script type="module" src="emartna-period.js?v=1.44"></script>
+<script type="module" src="emartna-fast.js?v=1.44"></script>
+<script type="module" src="emartna-ops.js?v=1.44"></script>
+<script type="module" src="emartna-onboarding.js?v=1.44"></script>
+<script type="module" src="emartna-bldcols.js?v=1.44"></script>
+<script type="module" src="emartna-reminder.js?v=1.44"></script>
+<script type="module" src="emartna-coupons.js?v=1.44"></script>
+<script type="module" src="emartna-videos.js?v=1.44"></script>
+<script type="module" src="emartna-colfit.js?v=1.44"></script>
+<script type="module" src="emartna-visits.js?v=1.44"></script>
+<script type="module" src="emartna-promo.js?v=1.44"></script>
+<script type="module" src="emartna-welcome.js?v=1.44"></script>
+<script src="emartna-idle.js?v=1.44"></script>
+<script type="module" src="emartna-offers.js?v=1.44"></script>
+<script type="module" src="emartna-dates.js?v=1.44"></script>
+<script type="module" src="emartna-paging.js?v=1.44"></script>
+<script type="module" src="emartna-leads.js?v=1.44"></script>
+<script type="module" src="emartna-live.js?v=1.44"></script>
+<script type="module" src="emartna-wa.js?v=1.44"></script>
+<script type="module" src="emartna-mobile.js?v=1.44"></script>
+<script type="module" src="emartna-numbering.js?v=1.44"></script>
+<script type="module" src="emartna-facade.js?v=1.44"></script>
+<script type="module" src="emartna-pricing.js?v=1.44"></script>
+<script type="module" src="emartna-newbld.js?v=1.44"></script>
+<script type="module" src="emartna-floorplan.js?v=1.44"></script>
+<script type="module" src="emartna-staff.js?v=1.44"></script>
+<script type="module" src="emartna-resaccess.js?v=1.44"></script>
+<script type="module" src="emartna-uitoggles.js?v=1.44"></script>
+<script type="module" src="emartna-cities.js?v=1.44"></script>
+<script type="module" src="emartna-perms.js?v=1.44"></script>
+<script type="module" src="emartna-lastlogin.js?v=1.44"></script>
 
 
 
