@@ -3351,6 +3351,8 @@ function bindSysNav(){
 }
 function goSys(page){
   hideModalUI();
+  /* وحدة الشاشة بتتحمّل عند أول فتح */
+  if(window.ensureScreenModule)ensureScreenModule(page);
   curPage=page;
   window.__navExpandedGroup=findGroupKeyForPage(SYS_NAV_GROUPS,page);
   const nc=document.getElementById('navContainer'); if(nc)nc.innerHTML=renderNavGroups(SYS_NAV_GROUPS,'goSys');
@@ -6976,6 +6978,8 @@ function bindNav(){
 }
 function go(page){
   hideModalUI();
+  /* وحدة الشاشة بتتحمّل عند أول فتح */
+  if(window.ensureScreenModule)ensureScreenModule(page);
   curPage=page;
   const u=currentUser();
   if(u){
@@ -11094,7 +11098,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.64';
+const APP_BUILD='1.65';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11294,69 +11298,64 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.64"></script>
-<script type="module" src="emartna-auth.js?v=1.64"></script>
-<script type="module" src="emartna-profile.js?v=1.64"></script>
-<script type="module" src="emartna-users.js?v=1.64"></script>
-<script defer src="emartna-contacts.js?v=1.64"></script>
-<script type="module" src="emartna-platform.js?v=1.64"></script>
-<script type="module" src="emartna-contactlog.js?v=1.64"></script>
-<script type="module" src="emartna-permreport.js?v=1.64"></script>
-<script type="module" src="emartna-finops.js?v=1.64"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.64"></script>
-<script defer src="emartna-plansview.js?v=1.64"></script>
-<script defer src="emartna-uiprefs.js?v=1.64"></script>
-<script defer src="emartna-chatatt.js?v=1.64"></script>
-<script defer src="emartna-expreport.js?v=1.64"></script>
-<script defer src="emartna-statements.js?v=1.64"></script>
-<script defer src="emartna-versionsxls.js?v=1.64"></script>
-<script type="module" src="emartna-planscreens.js?v=1.64"></script>
-<script type="module" src="emartna-recycle.js?v=1.64"></script>
-<script type="module" src="emartna-floors.js?v=1.64"></script>
-<script type="module" src="emartna-modal-size.js?v=1.64"></script>
-<script type="module" src="emartna-guard.js?v=1.64"></script>
-<script type="module" src="emartna-statement.js?v=1.64"></script>
-<script type="module" src="emartna-reports.js?v=1.64"></script>
-<script type="module" src="emartna-admin.js?v=1.64"></script>
-<script type="module" src="emartna-ui.js?v=1.64"></script>
-<script type="module" src="emartna-excel.js?v=1.64"></script>
-<script type="module" src="emartna-send.js?v=1.64"></script>
+<script type="module" src="emartna-cloud.js?v=1.65"></script>
+<script type="module" src="emartna-auth.js?v=1.65"></script>
+<script type="module" src="emartna-profile.js?v=1.65"></script>
+<script type="module" src="emartna-users.js?v=1.65"></script>
+<script type="module" src="emartna-platform.js?v=1.65"></script>
+<script type="module" src="emartna-contactlog.js?v=1.65"></script>
+<script type="module" src="emartna-permreport.js?v=1.65"></script>
+<script type="module" src="emartna-finops.js?v=1.65"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.65"></script>
+<script type="module" src="emartna-planscreens.js?v=1.65"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-landing.js?v=1.64"></script>
-<script type="module" src="emartna-comm.js?v=1.64"></script>
-<script type="module" src="emartna-period.js?v=1.64"></script>
-<script type="module" src="emartna-fast.js?v=1.64"></script>
-<script type="module" src="emartna-ops.js?v=1.64"></script>
-<script type="module" src="emartna-onboarding.js?v=1.64"></script>
-<script type="module" src="emartna-bldcols.js?v=1.64"></script>
-<script type="module" src="emartna-reminder.js?v=1.64"></script>
-<script type="module" src="emartna-coupons.js?v=1.64"></script>
-<script type="module" src="emartna-videos.js?v=1.64"></script>
-<script type="module" src="emartna-colfit.js?v=1.64"></script>
-<script type="module" src="emartna-visits.js?v=1.64"></script>
-<script type="module" src="emartna-promo.js?v=1.64"></script>
-<script type="module" src="emartna-welcome.js?v=1.64"></script>
-<script defer src="emartna-idle.js?v=1.64"></script>
-<script type="module" src="emartna-offers.js?v=1.64"></script>
-<script type="module" src="emartna-dates.js?v=1.64"></script>
-<script type="module" src="emartna-paging.js?v=1.64"></script>
-<script type="module" src="emartna-leads.js?v=1.64"></script>
-<script type="module" src="emartna-live.js?v=1.64"></script>
-<script type="module" src="emartna-wa.js?v=1.64"></script>
-<script type="module" src="emartna-mobile.js?v=1.64"></script>
-<script type="module" src="emartna-numbering.js?v=1.64"></script>
-<script type="module" src="emartna-facade.js?v=1.64"></script>
-<script type="module" src="emartna-pricing.js?v=1.64"></script>
-<script type="module" src="emartna-newbld.js?v=1.64"></script>
-<script type="module" src="emartna-floorplan.js?v=1.64"></script>
-<script type="module" src="emartna-staff.js?v=1.64"></script>
-<script type="module" src="emartna-resaccess.js?v=1.64"></script>
-<script type="module" src="emartna-uitoggles.js?v=1.64"></script>
-<script type="module" src="emartna-cities.js?v=1.64"></script>
-<script type="module" src="emartna-perms.js?v=1.64"></script>
-<script type="module" src="emartna-lastlogin.js?v=1.64"></script>
+<script type="module" src="emartna-perms.js?v=1.65"></script>
+<script type="module" src="emartna-lastlogin.js?v=1.65"></script>
+<script defer src="emartna-bundle.js?v=1.65"></script>
+<script>
+/* ═══ التحميل عند الطلب ═══
+   ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
+   البرنامج. بتتحمّل أول مرة المستخدم يفتح شاشتها، وبعدها
+   بتفضل في الذاكرة. */
+(function(){
+  const LAZY = {
+    expreport:      'emartna-expreport.js',
+    statements:     'emartna-statements.js',
+    aging:          'emartna-reports.js',
+    balanceSheet:   'emartna-reports.js',
+    incomeStatement:'emartna-reports.js',
+    trialBalance:   'emartna-reports.js',
+    sysplans:       'emartna-plansview.js',
+    sysversions:    'emartna-versionsxls.js',
+    sysaireports:   'emartna-admin.js',
+    sysaisettings:  'emartna-admin.js',
+    syssettings:    'emartna-admin.js',
+  };
+  const loaded = {};
+  window.ensureScreenModule = function(page){
+    const f = LAZY[page];
+    if (!f || loaded[f]) return Promise.resolve();
+    loaded[f] = true;
+    return new Promise(res => {
+      const el = document.createElement('script');
+      el.type = 'module';
+      el.src = f + '?v=1.65';
+      el.onload = () => {
+        /* الوحدة بتغلّف دالة الشاشة، فلازم نعيد الرسم بعدها */
+        try{
+          if (window.renderContent && window.getSession && getSession()) renderContent();
+          else if (window.renderSysContent) renderSysContent();
+        }catch(e){}
+        res();
+      };
+      el.onerror = () => { loaded[f] = false; res(); };
+      document.head.appendChild(el);
+    });
+  };
+})();
+</script>
 
 
 
