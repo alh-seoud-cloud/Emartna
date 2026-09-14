@@ -667,6 +667,14 @@
           (أو <b>Ctrl+B</b>).</p>
       </div>
 
+      ${window.checkBadge ? `<div class="card mtop2">
+        <b class="small">🔔 شارة الإشعارات على أيقونة التطبيق</b>
+        <p class="small" style="color:var(--muted)">
+          الرقم بيظهر على أيقونة التطبيق المثبّت — أندرويد وويندوز وماك.
+          مش بتشتغل في المتصفح العادي ولا على الآيفون.</p>
+        <button class="btn sm mtop" onclick="checkBadge()">افحص الشارة</button>
+      </div>` : ''}
+
       <div class="modal-actions">
         <button class="btn primary" onclick="closeModal()">تمام</button>
       </div>`);

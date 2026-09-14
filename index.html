@@ -1683,6 +1683,30 @@ window.bumpAppBadge = function(){
   setTimeout(() => { try{ refreshAppBadge(); }catch(e){} }, 120);
 };
 setInterval(() => { try{ refreshAppBadge(); }catch(e){} }, 15000);
+/* ⚠️ كان بيتنادى عند فتح العمارة بس — فالمستخدم اللي بيفتح التطبيق
+   على شاشة جاهزة مايشوفش الشارة. بنناديه بعد كل رسم وعند الرجوع
+   للتطبيق. */
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) { try{ refreshAppBadge(); }catch(e){} }
+});
+window.addEventListener('focus', () => { try{ refreshAppBadge(); }catch(e){} });
+setTimeout(() => { try{ refreshAppBadge(); }catch(e){} }, 2500);
+
+/* تشخيص: يقول ليه الشارة مش شغالة */
+window.checkBadge = function(){
+  const out = [];
+  out.push('التطبيق مثبّت: ' +
+    (matchMedia('(display-mode: standalone)').matches ? 'أيوه ✅' : 'لأ ⚠️ — الشارة بتشتغل على المثبّت بس'));
+  out.push('المتصفح بيدعم الشارة: ' +
+    (navigator.setAppBadge ? 'أيوه ✅' : 'لأ ⚠️ — سفاري/iOS مابيدعمش'));
+  let n = 0; try{ n = appBadgeCount(); }catch(e){}
+  out.push('العدد الحالي: ' + n);
+  if (navigator.setAppBadge && n > 0){
+    try{ navigator.setAppBadge(n); out.push('اتطبّقت دلوقتي ✅'); }
+    catch(e){ out.push('فشل التطبيق: ' + e.message); }
+  }
+  showMessage('🔔 فحص شارة الإشعارات\n\n' + out.join('\n'));
+};
 document.addEventListener('emartna:building-complete',
   () => setTimeout(() => { try{ refreshAppBadge(); }catch(e){} }, 1500));
 
@@ -11372,7 +11396,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.88';
+const APP_BUILD='1.89';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11575,25 +11599,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.88"></script>
-<script type="module" src="emartna-auth.js?v=1.88"></script>
-<script type="module" src="emartna-profile.js?v=1.88"></script>
-<script type="module" src="emartna-users.js?v=1.88"></script>
-<script type="module" src="emartna-platform.js?v=1.88"></script>
-<script type="module" src="emartna-contactlog.js?v=1.88"></script>
-<script type="module" src="emartna-permreport.js?v=1.88"></script>
-<script type="module" src="emartna-finops.js?v=1.88"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.88"></script>
-<script type="module" src="emartna-planscreens.js?v=1.88"></script>
+<script type="module" src="emartna-cloud.js?v=1.89"></script>
+<script type="module" src="emartna-auth.js?v=1.89"></script>
+<script type="module" src="emartna-profile.js?v=1.89"></script>
+<script type="module" src="emartna-users.js?v=1.89"></script>
+<script type="module" src="emartna-platform.js?v=1.89"></script>
+<script type="module" src="emartna-contactlog.js?v=1.89"></script>
+<script type="module" src="emartna-permreport.js?v=1.89"></script>
+<script type="module" src="emartna-finops.js?v=1.89"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.89"></script>
+<script type="module" src="emartna-planscreens.js?v=1.89"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=1.88"></script>
+<script type="module" src="emartna-perms.js?v=1.89"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=1.88"></script>
+<script type="module" src="emartna-bundle.js?v=1.89"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
