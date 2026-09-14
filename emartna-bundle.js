@@ -365,6 +365,66 @@
     setNavSize(NAV_SIZES[(i + 1) % NAV_SIZES.length].key);
   };
 
+  /* ===== وضع مصغّر: أيقونات بس =====
+     بين "عادية" و"مخفية" تمامًا — بيدي مساحة للمحتوى والتنقل
+     يفضل متاح بضغطة. */
+  const MINI_KEY = 'emartna_nav_mini';
+  const navMini = () => { try{ return localStorage.getItem(MINI_KEY) === '1'; }
+                          catch(e){ return false; } };
+  window.toggleNavMini = function(){
+    const on = !navMini();
+    try{ localStorage.setItem(MINI_KEY, on ? '1' : '0'); }catch(e){}
+    if (on) try{ localStorage.setItem(NAV_HIDE,'0'); }catch(e){}
+    applyNav(); injectNavButtons(true);
+    if (window.toast) toast(on ? 'قائمة مصغّرة' : 'قائمة عادية');
+  };
+
+  /* دورة: عادية ← مصغّرة ← مخفية ← عادية */
+  window.cycleNav = function(){
+    if (navHidden()){
+      try{ localStorage.setItem(NAV_HIDE,'0'); localStorage.setItem(MINI_KEY,'0'); }catch(e){}
+    } else if (navMini()){
+      try{ localStorage.setItem(NAV_HIDE,'1'); localStorage.setItem(MINI_KEY,'0'); }catch(e){}
+    } else {
+      try{ localStorage.setItem(MINI_KEY,'1'); }catch(e){}
+    }
+    applyNav(); injectNavButtons(true);
+  };
+
+  function miniStyles(){
+    if (document.getElementById('navMiniStyles')) return;
+    const st = document.createElement('style');
+    st.id = 'navMiniStyles';
+    st.textContent = `
+      @media (min-width:861px){
+        body.nav-mini .sidebar{width:62px !important;overflow:visible}
+        /* النصوص تختفي والأيقونة تفضل في النص */
+        body.nav-mini .sidebar .nav-btn span:not(.ic),
+        body.nav-mini .sidebar .nav-group-header span:not(.ic),
+        body.nav-mini .sidebar .nav-sec,
+        body.nav-mini .sidebar .brand h1,
+        body.nav-mini .sidebar .brand p,
+        body.nav-mini .sidebar-foot b,
+        body.nav-mini .sidebar-foot > *:not(#fontBar):not(.install-btn-slot),
+        body.nav-mini .nav-group-arrow{display:none !important}
+        body.nav-mini .sidebar .nav-btn,
+        body.nav-mini .sidebar .nav-group-header{
+          justify-content:center;padding:10px 0 !important;gap:0 !important}
+        body.nav-mini .sidebar .nav-group{margin:2px 4px !important}
+        body.nav-mini .sidebar .brand{justify-content:center;padding:12px 0 !important}
+        body.nav-mini #fontBar{display:none !important}
+        /* تلميح باسم البند عند الوقوف عليه */
+        body.nav-mini .sidebar .nav-btn:hover::after{
+          content:attr(data-label);position:absolute;
+          inset-inline-end:68px;background:var(--panel);color:var(--text);
+          border:1px solid var(--line);border-radius:8px;padding:5px 10px;
+          font-size:12.5px;white-space:nowrap;z-index:900;
+          box-shadow:0 4px 12px rgba(0,0,0,.14)}
+        body.nav-mini .sidebar .nav-btn{position:relative}
+      }`;
+    document.head.appendChild(st);
+  }
+
   /* عرض القائمة بيتحط كنمط مباشر — بيكسب أنماط البرنامج */
   function applyNav(){
     const w = navWidth(), hid = navHidden();
@@ -381,8 +441,13 @@
                 'border:0 !important;' : ''}}
       #navGrip{inset-inline-end:${hid ? 0 : w}px}
     }`;
-    document.body.classList.toggle('nav-compact', !hid && w <= 200);
+    const mini = navMini() && !hid;
+    document.body.classList.toggle('nav-mini', mini);
+    document.body.classList.toggle('nav-compact', !hid && !mini && w <= 200);
     document.body.classList.toggle('nav-hidden', hid);
+    if (mini) st.textContent = `@media (min-width:861px){
+      .sidebar{width:62px !important} #navGrip{inset-inline-end:62px}}`;
+    miniStyles();
     installGrip();
   }
 
@@ -659,7 +724,27 @@
 
   /* ---------- التشغيل ---------- */
 
-  styles();
+  /* زرار طيّ القائمة في الشريط العلوي — أوضح من حافة السحب */
+  function installNavToggleBtn(){
+    if (window.innerWidth < 861) return;
+    const bar = document.querySelector('.top .flexrow') || document.querySelector('.top');
+    if (!bar || document.getElementById('navCycle')) return;
+    const b = document.createElement('button');
+    b.id = 'navCycle';
+    b.className = 'btn ghost sm';
+    b.title = 'طيّ القائمة (عادية · مصغّرة · مخفية)';
+    b.style.cssText = 'flex:0 0 auto;padding:4px 9px;font-size:15px';
+    b.onclick = () => { cycleNav(); paintCycleIcon(); };
+    bar.insertBefore(b, bar.firstChild);
+    paintCycleIcon();
+  }
+  function paintCycleIcon(){
+    const b = document.getElementById('navCycle'); if (!b) return;
+    b.textContent = navHidden() ? '▶' : navMini() ? '▮' : '◀';
+  }
+  setInterval(() => { try{ installNavToggleBtn(); paintCycleIcon(); }catch(e){} }, 1200);
+
+  styles(); miniStyles();
   applyFont(); applyNav(); injectNavButtons(true);
   document.addEventListener('emartna:building-complete', () => {
     styles(); applyFont(); applyNav(); injectNavButtons(true);
@@ -3591,12 +3676,37 @@
      ============================================================ */
 
   /* قائمة إكسل واحدة تجمع كل العمليات بدل أزرار متفرقة */
+  /* ⚠️ كانت position:absolute جوه الشريط: لو الشريط قريب من حافة
+     الشاشة أو جوه عنصر بـoverflow، القائمة بتتقص ونصها يختفي.
+     دلوقتي بتتثبّت على مستوى الصفحة بموضع محسوب، مع ضمان إنها
+     جوه الشاشة من كل الجهات. */
   window.toggleExcelMenu = function(id){
     const m = document.getElementById(id);
     if (!m) return;
     const open = m.style.display === 'block';
     document.querySelectorAll('.excel-menu').forEach(x => x.style.display = 'none');
-    m.style.display = open ? 'none' : 'block';
+    if (open) return;
+
+    const btn = m.previousElementSibling;
+    m.style.display = 'block';
+    if (btn && btn.getBoundingClientRect){
+      const r = btn.getBoundingClientRect();
+      const W = Math.min(300, window.innerWidth - 16);
+      let left = Math.min(Math.max(8, r.right - W), window.innerWidth - W - 8);
+      let top  = r.bottom + 6;
+      m.style.position = 'fixed';
+      m.style.width    = W + 'px';
+      m.style.minWidth = '0';
+      m.style.left     = left + 'px';
+      m.style.insetInlineEnd = 'auto';
+      m.style.maxHeight = '70vh';
+      m.style.overflowY = 'auto';
+      m.style.top = top + 'px';
+      /* لو مفيش مكان تحت، نفتحها فوق الزرار */
+      const h = m.offsetHeight;
+      if (top + h > window.innerHeight - 8)
+        m.style.top = Math.max(8, r.top - h - 6) + 'px';
+    }
   };
   document.addEventListener('click', e => {
     if (e.target.closest && e.target.closest('.excel-wrap')) return;
