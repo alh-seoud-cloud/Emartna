@@ -8071,8 +8071,11 @@ window.deleteMyChatMessage = function(localId){
   if(!m) return;
   confirmAction('هل تريد حذف هذه الرسالة؟', async ()=>{
     try{
-      if(!m.__uuid) return showMessage('الرسالة لسه بتتزامن — جرّب بعد ثانية.');
-      const { error } = await CLOUD._sb.rpc('delete_own_chat',{ p_msg:m.__uuid });
+      const bU=CLOUD._cache.buildingUuid[activeBuildingId];
+      const { error } = m.__uuid
+        ? await CLOUD._sb.rpc('delete_own_chat',{ p_msg:m.__uuid })
+        : await CLOUD._sb.rpc('delete_own_chat_by_legacy',
+            { p_building:bU, p_legacy:String(m.id) });
       if(error) throw error;
       m.kind='event'; m.eventType='moderated'; m.text=''; m.icon='🗑';
       m.title='تم حذف هذه الرسالة بواسطة المرسل';
@@ -8129,10 +8132,14 @@ window.deleteChatMessage = function(localId){
   if(!m) return;
   confirmAction('هل أنت متأكد من حذف هذه الرسالة؟\n\nهيتسجّل مين حذفها وإمتى، والمحتوى مش هيرجع.', async ()=>{
     try{
+      /* الرسالة الجديدة مابيتحطش عليها uuid إلا بعد إعادة تحميل
+         العمارة — فبنحذف بالمعرّف المحلي لو الـuuid لسه مش موجود. */
       const uuid=m.__uuid;
-      if(!uuid) return showMessage('الرسالة لسه بتتزامن — جرّب بعد ثانية.');
-      const { error } = await CLOUD._sb.rpc('moderate_delete_chat',
-        { p_msg: uuid, p_reason: null });
+      const bU=CLOUD._cache.buildingUuid[activeBuildingId];
+      const { error } = uuid
+        ? await CLOUD._sb.rpc('moderate_delete_chat',{ p_msg: uuid, p_reason: null })
+        : await CLOUD._sb.rpc('moderate_delete_chat_by_legacy',
+            { p_building: bU, p_legacy: String(m.id), p_reason: null });
       if(error) throw error;
       m.kind='event'; m.eventType='moderated'; m.text=''; m.icon='🚫';
       m.title='تم حذف هذه الرسالة بواسطة الإدارة.';
@@ -11298,7 +11305,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.81';
+const APP_BUILD='1.82';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11430,25 +11437,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.81"></script>
-<script type="module" src="emartna-auth.js?v=1.81"></script>
-<script type="module" src="emartna-profile.js?v=1.81"></script>
-<script type="module" src="emartna-users.js?v=1.81"></script>
-<script type="module" src="emartna-platform.js?v=1.81"></script>
-<script type="module" src="emartna-contactlog.js?v=1.81"></script>
-<script type="module" src="emartna-permreport.js?v=1.81"></script>
-<script type="module" src="emartna-finops.js?v=1.81"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.81"></script>
-<script type="module" src="emartna-planscreens.js?v=1.81"></script>
+<script type="module" src="emartna-cloud.js?v=1.82"></script>
+<script type="module" src="emartna-auth.js?v=1.82"></script>
+<script type="module" src="emartna-profile.js?v=1.82"></script>
+<script type="module" src="emartna-users.js?v=1.82"></script>
+<script type="module" src="emartna-platform.js?v=1.82"></script>
+<script type="module" src="emartna-contactlog.js?v=1.82"></script>
+<script type="module" src="emartna-permreport.js?v=1.82"></script>
+<script type="module" src="emartna-finops.js?v=1.82"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.82"></script>
+<script type="module" src="emartna-planscreens.js?v=1.82"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=1.81"></script>
+<script type="module" src="emartna-perms.js?v=1.82"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=1.81"></script>
+<script type="module" src="emartna-bundle.js?v=1.82"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح

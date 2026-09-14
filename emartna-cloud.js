@@ -666,6 +666,11 @@ async function pushBuilding(legacyId){
       (r.data || []).forEach(row => {
         ctx.uuidOf[coll][row.legacy_id] = row.id;
         ctx.legacyOf[coll][row.id] = row.legacy_id;
+        /* ⚠️ الـuuid كان بيتخزّن في الخريطة بس — والعنصر في الذاكرة
+           يفضل بلا معرّف لحد إعادة تحميل العمارة. فالحذف والتعديل
+           الفوري كانوا بيفشلوا بـ"لسه بتتزامن" رغم إنه اترفع. */
+        const it = (D[coll] || []).find(x => String(x.id) === String(row.legacy_id));
+        if (it) it.__uuid = row.id;
       });
     }
 
