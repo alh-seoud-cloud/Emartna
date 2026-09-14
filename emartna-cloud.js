@@ -238,6 +238,7 @@ const BUILDING_FIELDS = {
   paymentMethods:'payment_methods',
   contactPhoneCountry:'contact_phone_country', contactPhone:'contact_phone',
   remindersSettings:'reminders_settings',
+  residentsSeeStatements:'residents_see_statements',
   chatStatus:'chat_status', chatLockReason:'chat_lock_reason',
   chatStaffCanWrite:'chat_staff_can_write',
   /* قرار رئيس الاتحاد: السكان يشوفوا المصروفات والأرصدة ولا لأ.

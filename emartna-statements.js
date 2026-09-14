@@ -77,6 +77,11 @@
         ${can('add') ? `<button class="btn primary" onclick="openStatementModal()">
           + كشف جديد</button>` : ''}
       </div>
+      ${(can('add') && window.D && D.building && D.building.residentsSeeStatements === false)
+        ? `<div class="card mtop" style="background:var(--tint-warning)">
+        <b class="small">🔒 الكشوف مقفولة عن السكان</b>
+        <div class="small">مفيش ساكن هيشوف أي كشف — حتى المنشور.
+          تقدر تفتحها من الإعدادات ← اللي السكان يشوفوه.</div></div>` : ''}
     </div>
 
     ${!LIST.length ? `<div class="card content-narrow mtop2" style="text-align:center;padding:30px">
@@ -99,6 +104,10 @@
                 ${files.length} ملف${st.notes ? ' · ' + esc2(String(st.notes).slice(0,50)) : ''}</div>
             </div>
             <div class="flexrow" style="gap:6px">
+              ${can('edit') ? `<button class="btn sm ${st.published?'ghost':'gold'}"
+                onclick="toggleStatementPublish('${esc2(st.id)}')"
+                title="${st.published?'منشور للسكان — اضغط للإخفاء':'مخفي — اضغط للنشر'}">
+                ${st.published?'👁️ منشور':'🔒 مخفي'}</button>` : ''}
               <button class="btn sm" onclick="openStatement('${esc2(st.id)}')">عرض الكشف</button>
               ${can('delete') ? `<button class="btn sm red"
                 onclick="deleteStatement('${esc2(st.id)}')">🗑</button>` : ''}
@@ -216,6 +225,13 @@
         <input type="file" id="stAtts" multiple accept=".pdf,.xlsx,.xls,.doc,.docx,image/*">
         <p class="hint">PDF · صور · إكسل · وورد — الملف لحد ١٠ ميجا.</p></div>
 
+      <label class="checkline mtop2">
+        <input type="checkbox" id="stPub" ${st ? (st.published?'checked':'') : 'checked'}>
+        <span><b>منشور للسكان</b>
+          <div class="small" style="color:var(--muted)">
+            اقفله لو لسه بتراجعه، أو لو الكشف للإدارة بس.</div></span>
+      </label>
+
       <div id="stProgress" class="small mtop" style="color:var(--muted)"></div>
       <div class="modal-actions">
         <button class="btn primary" onclick="saveStatement(${st?`'${esc2(st.id)}'`:'null'})">
@@ -254,12 +270,15 @@
       let stId = id;
       if (id){
         const { error } = await s.from('expense_statements')
-          .update({ year, month, title, notes, updated_at:new Date().toISOString() })
+          .update({ year, month, title, notes,
+                    published: !!(document.getElementById('stPub')||{}).checked,
+                    updated_at:new Date().toISOString() })
           .eq('id', id).select('id');
         if (error) throw error;
       } else {
         const { data, error } = await s.from('expense_statements')
           .insert({ building_id:b, year, month, title, notes,
+                    published: !!(document.getElementById('stPub')||{}).checked,
                     created_by:(CLOUD_AUTH.user||{}).id })
           .select('id').single();
         if (error) throw error;
@@ -286,6 +305,19 @@
       prog.textContent = '';
       showMessage(e.message || 'تعذّر الحفظ');
     }
+  };
+
+  /* النشر: الكشف ممكن يتجهّز ويتراجع قبل ما السكان يشوفوه */
+  window.toggleStatementPublish = async function(id){
+    const st = (LIST||[]).find(x => x.id === id); if (!st) return;
+    try{
+      const { error } = await sb().from('expense_statements')
+        .update({ published: !st.published }).eq('id', id).select('id');
+      if (error) throw error;
+      st.published = !st.published;
+      if (window.toast) toast(st.published ? 'اتنشر للسكان' : 'اتخبّى عن السكان');
+      if (window.renderContent) renderContent();
+    }catch(e){ showMessage(e.message || 'تعذّر التغيير'); }
   };
 
   window.deleteStatement = function(id){
