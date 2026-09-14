@@ -21,8 +21,16 @@ const SHELL_RE = /\.(?:html|js|css|svg|png|webp|woff2?)(?:\?|$)|\/$/i;
 /* ملف عليه بصمة نسخة = محتواه ثابت لهذه النسخة */
 const VERSIONED_RE = /[?&]v=[\d.]+/;
 
+/* ⚠️ skipWaiting الفوري كان بيستبدل النسخة والمستخدم في نص شغله —
+   ممكن يكون بيكتب رسالة أو بيملا نموذج، فالصفحة تتحدّث تحت إيده.
+   دلوقتي: النسخة الجديدة تستنى، والبرنامج بيسأل المستخدم الأول. */
 self.addEventListener('install', e => {
-  self.skipWaiting();
+  /* مانعملش skipWaiting هنا — بننتظر إذن المستخدم */
+});
+
+/* البرنامج بيبعتلنا لما المستخدم يوافق على التحديث */
+self.addEventListener('message', e => {
+  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', e => {
