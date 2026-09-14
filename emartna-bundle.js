@@ -9841,7 +9841,10 @@
     const wrapped = function(){
       const html = orig.apply(this, arguments);
       if (!isNarrow() || typeof html !== 'string') return html;
-      if (html.indexOf('data-mob-toggle') >= 0) return html;   // موجود بالفعل
+      /* فحص مزدوج: الأصلية ممكن تكون اتغلّفت من وحدة تانية بعدنا
+         فالناتج يمرّ علينا مرتين. */
+      if (html.indexOf('data-mob-toggle') >= 0) return html;
+      if (html.indexOf('toggleMobileCards()') >= 0) return html;
       const btn = `<button class="btn sm ghost" data-mob-toggle
         onclick="toggleMobileCards()" title="تبديل بين الكروت والجدول">${
         cardsOn() ? '📋 جدول' : '🔲 كروت'}</button>`;

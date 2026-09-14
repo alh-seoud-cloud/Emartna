@@ -234,7 +234,12 @@ a{color:var(--accent)}
 .grid{display:grid;gap:16px}
 .g4{grid-template-columns:repeat(4,1fr)} .g3{grid-template-columns:repeat(3,1fr)} .g2{grid-template-columns:repeat(2,1fr)}
 @media(max-width:1000px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:640px){.g4,.g3,.g2{grid-template-columns:1fr}}
+/* ⚠️ كان كل الشبكات عمود واحد على الموبايل — أربع بطاقات أرقام
+   بتاخد الشاشة كلها والمستخدم بينزّل كتير. عمودين أنسب. */
+@media(max-width:640px){
+  .g4{grid-template-columns:repeat(2,1fr)}
+  .g3,.g2{grid-template-columns:1fr}
+}
 
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
 .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;position:relative;overflow:hidden}
@@ -271,6 +276,23 @@ tr:hover td{background:#faf8f2}
   .table-wrap table td,.table-wrap table th{padding:8px 8px;font-size:12.5px;white-space:nowrap}
 }
 .table-wrap table{border:0}
+
+@media (max-width:640px){
+  /* الجداول: خط أصغر وحشو أقل عشان أعمدة أكتر تبان قبل التمرير */
+  .table-wrap table{font-size:12.5px}
+  .table-wrap th,.table-wrap td{padding:7px 8px;white-space:nowrap}
+  /* أول عمود ثابت أثناء التمرير الأفقي — المستخدم يفضل عارف
+     هو في أنهي صف */
+  .table-wrap th:first-child,.table-wrap td:first-child{
+    position:sticky;inset-inline-start:0;z-index:2;
+    background:var(--card);box-shadow:1px 0 0 var(--line)}
+  .table-wrap thead th:first-child{z-index:3;background:var(--panel)}
+  /* تلميح إن فيه أعمدة تانية على الجنب */
+  .table-wrap{position:relative}
+  .table-wrap::after{content:'';position:absolute;top:0;bottom:0;
+    inset-inline-end:0;width:22px;pointer-events:none;
+    background:linear-gradient(to left,var(--card),transparent)}
+}
 .table-wrap tr:last-child td{border-bottom:0}
 .table-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:nowrap}
 .table-toolbar>.search-box{flex:1 1 auto;min-width:0}
@@ -351,6 +373,36 @@ tr:hover td{background:#faf8f2}
 .small{font-size:12px;color:var(--muted)}
 .mtop{margin-top:14px} .mtop2{margin-top:22px}
 .flexrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+/* ===== شكوى جماعية: الأزرار بتتكدّس سطر لكل زرار على الموبايل =====
+   السبب إن كل زرار عرضه ١٠٠٪ لما يتكسّر. الإصلاح: الأزرار تفضل
+   جنب بعض وتتزحلق أفقيًا لو ضاقت — زي شريط التطبيقات. */
+@media (max-width:640px){
+  /* شريط إجراءات الشاشة: صف واحد بتمرير */
+  .card > .flexrow:not(.no-scroll),
+  .content > .flexrow:not(.no-scroll),
+  .flexrow.actions{
+    flex-wrap:nowrap; overflow-x:auto; overflow-y:visible;
+    gap:6px; padding-bottom:5px; scrollbar-width:none;
+    -webkit-overflow-scrolling:touch}
+  .card > .flexrow::-webkit-scrollbar,
+  .content > .flexrow::-webkit-scrollbar{display:none}
+  .card > .flexrow > .btn,
+  .content > .flexrow > .btn,
+  .flexrow.actions > .btn{
+    flex:0 0 auto; white-space:nowrap;
+    font-size:12.5px; padding:7px 11px}
+  /* خانة البحث تاخد المساحة والباقي جنبها */
+  .flexrow > .search-box{flex:1 1 130px; min-width:110px}
+  .spacer{display:none}          /* الفاصل بيكسّر الصف على الموبايل */
+
+  /* عناوين الشاشات أصغر شوية */
+  .card > h3{font-size:16px}
+  /* الكروت أقل حشو = محتوى أكتر في الشاشة */
+  .card{padding:13px}
+  .grid.g4{grid-template-columns:repeat(2,1fr);gap:9px}
+  .grid.g2,.grid.g3{grid-template-columns:1fr;gap:9px}
+}
 .spacer{flex:1}
 .hidden{display:none!important}
 .hamburger{display:none;background:transparent;border:0;font-size:20px;cursor:pointer;color:var(--text)}
@@ -11164,7 +11216,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.76';
+const APP_BUILD='1.77';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11296,25 +11348,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.76"></script>
-<script type="module" src="emartna-auth.js?v=1.76"></script>
-<script type="module" src="emartna-profile.js?v=1.76"></script>
-<script type="module" src="emartna-users.js?v=1.76"></script>
-<script type="module" src="emartna-platform.js?v=1.76"></script>
-<script type="module" src="emartna-contactlog.js?v=1.76"></script>
-<script type="module" src="emartna-permreport.js?v=1.76"></script>
-<script type="module" src="emartna-finops.js?v=1.76"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.76"></script>
-<script type="module" src="emartna-planscreens.js?v=1.76"></script>
+<script type="module" src="emartna-cloud.js?v=1.77"></script>
+<script type="module" src="emartna-auth.js?v=1.77"></script>
+<script type="module" src="emartna-profile.js?v=1.77"></script>
+<script type="module" src="emartna-users.js?v=1.77"></script>
+<script type="module" src="emartna-platform.js?v=1.77"></script>
+<script type="module" src="emartna-contactlog.js?v=1.77"></script>
+<script type="module" src="emartna-permreport.js?v=1.77"></script>
+<script type="module" src="emartna-finops.js?v=1.77"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.77"></script>
+<script type="module" src="emartna-planscreens.js?v=1.77"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=1.76"></script>
+<script type="module" src="emartna-perms.js?v=1.77"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=1.76"></script>
+<script type="module" src="emartna-bundle.js?v=1.77"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
