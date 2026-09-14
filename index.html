@@ -222,13 +222,48 @@ a{color:var(--accent)}
 .content{padding:22px;overflow-y:auto;flex:1}
 .content-narrow{max-width:1100px}
 
-.btn{border:0;border-radius:9px;padding:8px 15px;color:var(--text);background:var(--card);border:1.5px solid var(--line);cursor:pointer;font-size:13px;transition:.15s;display:inline-flex;align-items:center;gap:6px;font-weight:600}
-.btn:hover{filter:brightness(.97);border-color:var(--accent)}
-.btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent-dark));color:#fff;border:0}
-.btn.gold{background:linear-gradient(135deg,var(--gold),var(--gold-dark));color:#fff;border:0}
-.btn.red{background:var(--red);color:#fff;border:0}
-.btn.ghost{background:transparent;border:1.5px solid var(--line)}
-.btn.sm{padding:5px 10px;font-size:12px}
+/* ===== نظام الأزرار =====
+   المشكلة اللي كانت: primary و gold و red كلهم ملوّنين بنفس القوة،
+   فأربع أزرار في شريط واحد كلهم بيصرخوا والمستخدم مش عارف يبدأ منين.
+
+   الترتيب دلوقتي — زي أي برنامج محترم:
+     primary  = إجراء واحد رئيسي في الشاشة (مصمت)
+     ثانوي    = الافتراضي: إطار وخلفية هادية
+     ghost    = إجراء خفيف (بلا إطار تقريبًا)
+     red/gold = تحذير أو خطر — نادر ومقصود
+   والارتفاع موحّد ٣٦ بكسل عشان الشريط يبان مستوي. */
+.btn{
+  border:1.5px solid var(--line); border-radius:10px;
+  min-height:36px; padding:0 14px;
+  color:var(--text); background:var(--card);
+  cursor:pointer; font-size:13px; font-weight:600;
+  transition:background .15s,border-color .15s,box-shadow .15s;
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  line-height:1; white-space:nowrap; user-select:none}
+.btn:hover{background:var(--tint); border-color:var(--accent)}
+.btn:active{transform:translateY(.5px)}
+.btn:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+/* الإجراء الرئيسي — واحد بس في الشاشة */
+.btn.primary{
+  background:var(--accent); color:#fff; border-color:var(--accent);
+  box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.btn.primary:hover{background:var(--accent-dark); border-color:var(--accent-dark)}
+
+/* تحذير وخطر — بإطار ملوّن مش سطح مصمت، عشان ما ينافسش الرئيسي */
+.btn.gold{background:var(--tint-warning); color:var(--gold-dark);
+  border-color:var(--gold)}
+.btn.gold:hover{background:var(--gold); color:#fff}
+.btn.red{background:transparent; color:var(--red); border-color:var(--red)}
+.btn.red:hover{background:var(--red); color:#fff}
+/* للحذف النهائي: مصمت — بس ده بيتستخدم في نافذة التأكيد بس */
+.btn.red.solid{background:var(--red); color:#fff}
+
+.btn.ghost{background:transparent; border-color:transparent; font-weight:500}
+.btn.ghost:hover{background:var(--tint); border-color:var(--line)}
+
+.btn.sm{min-height:30px; padding:0 10px; font-size:12px; border-radius:8px}
+.btn.lg{min-height:44px; padding:0 20px; font-size:14.5px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 
 .grid{display:grid;gap:16px}
@@ -299,6 +334,10 @@ tr:hover td{background:#faf8f2}
 .table-toolbar>button{flex:0 0 auto}
 .tbl-menu-btn{font-size:17px;line-height:1;padding:5px 11px;letter-spacing:1px}
 .col-quick-menu{position:absolute;z-index:600;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.15);min-width:220px;padding:4px;display:flex;flex-direction:column}
+/* القائمة المحسوبة بالجافاسكريبت بتحدد عرضها وموضعها بنفسها —
+   min-width كان بيدوس عليها ويخلّيها تخرج برّه الشاشة. */
+#tblMenu{position:fixed !important;min-width:0 !important}
+#tblMenu .btn{justify-content:flex-start}
 .var-autocomplete{position:absolute;z-index:700;top:100%;right:0;left:0;background:var(--panel);border:1px solid var(--accent);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-height:220px;overflow-y:auto;margin-top:2px}
 .var-item{padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--line)}
 .var-item:hover{background:var(--bg)}
@@ -377,6 +416,14 @@ tr:hover td{background:#faf8f2}
 /* ===== شكوى جماعية: الأزرار بتتكدّس سطر لكل زرار على الموبايل =====
    السبب إن كل زرار عرضه ١٠٠٪ لما يتكسّر. الإصلاح: الأزرار تفضل
    جنب بعض وتتزحلق أفقيًا لو ضاقت — زي شريط التطبيقات. */
+/* ===== ترتيب شريط الإجراءات =====
+   الإجراء الرئيسي في مكان ثابت (آخر الشريط ناحية البداية)، عشان
+   المستخدم يلاقيه من غير ما يقرا. وباقي الأزرار مرتّبة بعده. */
+.card > .flexrow > .btn.primary,
+.content > .flexrow > .btn.primary{order:-1}
+.card > .flexrow > .btn.ghost,
+.content > .flexrow > .btn.ghost{order:1}
+
 @media (max-width:640px){
   /* شريط إجراءات الشاشة: صف واحد بتمرير */
   .card > .flexrow:not(.no-scroll),
@@ -391,7 +438,10 @@ tr:hover td{background:#faf8f2}
   .content > .flexrow > .btn,
   .flexrow.actions > .btn{
     flex:0 0 auto; white-space:nowrap;
-    font-size:12.5px; padding:7px 11px}
+    /* ٤٠ بكسل = الحد الأدنى المريح للمس (توصية أبل وجوجل) */
+    min-height:40px; font-size:13px; padding:0 13px}
+  .card > .flexrow > .btn.sm,
+  .content > .flexrow > .btn.sm{min-height:36px; padding:0 11px}
   /* خانة البحث تاخد المساحة والباقي جنبها */
   .flexrow > .search-box{flex:1 1 130px; min-width:110px}
   .spacer{display:none}          /* الفاصل بيكسّر الصف على الموبايل */
@@ -1985,8 +2035,14 @@ function openTableMenu(evt,tableId){
   const r=evt.currentTarget.getBoundingClientRect();
   const m=document.createElement('div');
   m.id='tblMenu'; m.className='col-quick-menu';
-  m.style.cssText=`position:fixed;top:${r.bottom+6}px;
-    inset-inline-end:${Math.max(8,window.innerWidth-r.right)}px;min-width:210px`;
+  /* ⚠️ inset-inline-end في صفحة RTL بيتحسب من اليمين، والحساب كان
+     بافتراض LTR — فالقائمة كانت تطلع برّه الشاشة ونصها يتقطع.
+     بنستخدم left صريح، وبنتأكد إنها جوه الشاشة فوق وتحت كمان. */
+  const W=Math.min(260, window.innerWidth-16);
+  let left=Math.min(Math.max(8, r.right-W), window.innerWidth-W-8);
+  let top=r.bottom+6;
+  m.style.cssText=`position:fixed;top:${top}px;left:${left}px;
+    width:${W}px;max-height:70vh;overflow-y:auto`;
   const item=(ic,label,fn,sub)=>`<button class="btn ghost" style="width:100%;
     text-align:right;display:flex;gap:9px;align-items:flex-start;padding:9px 11px"
     onclick="closeTableMenu();${fn}">
@@ -2002,6 +2058,11 @@ function openTableMenu(evt,tableId){
      <p class="small" style="color:var(--muted);padding:6px 11px;margin:0">
        💡 دوس على اسم أي عمود لفرزه أو فلترته، واسحب حافته لتغيير عرضه.</p>`;
   document.body.appendChild(m);
+  /* لو مفيش مكان تحت، نفتحها فوق الزرار */
+  const h=m.offsetHeight;
+  if (top + h > window.innerHeight - 8){
+    m.style.top = Math.max(8, r.top - h - 6) + 'px';
+  }
   setTimeout(()=>document.addEventListener('click',closeTableMenu,{once:true}),0);
 }
 function closeTableMenu(){const m=document.getElementById('tblMenu');if(m)m.remove();}
@@ -9097,10 +9158,10 @@ function pageCollections(){
   const ledRow=l=>`<tr style="cursor:pointer" onclick="openLedgerDetail('${l.id}')">${ledCols.map(c=>`<td>${c.cell(l)}</td>`).join('')}</tr>`;
   return `
   <div class="flexrow">
-    <button class="btn gold" onclick="openGenerateChargeModal()">🧾 توليد تحصيل جديد (شهري / مشروع)</button>
-    <button class="btn primary" onclick="openPaymentModal()">💵 تسجيل دفعة من شقة</button>
-    <button class="btn ghost" onclick="openBulkRemindersModal()">💬 تذكير جماعي بالمستحقات</button>
-    <button class="btn gold" onclick="openProportionalChargeModal()">⚖️ توزيع نسبي لمصروف مشترك</button>
+    <button class="btn primary" onclick="openPaymentModal()">💵 تسجيل دفعة</button>
+    <button class="btn" onclick="openGenerateChargeModal()">🧾 توليد تحصيل</button>
+    <button class="btn" onclick="openProportionalChargeModal()">⚖️ توزيع نسبي</button>
+    <button class="btn ghost" onclick="openBulkRemindersModal()">💬 تذكير جماعي</button>
   </div>
   <div class="section-title"><h3>كشف حساب الشقق (الرصيد المستحق)</h3></div>
   ${sortableTable('apBalTable',aps,balCols,null,{defaultKey:'number',exportName:'كشف حساب الشقق'})}
@@ -9555,7 +9616,7 @@ function pageTreasury(){
   </div>
   <div class="flexrow mtop2">
     <button class="btn primary" onclick="openTransferModal()">🔁 تحويل بين الحسابات</button>
-    <button class="btn gold" onclick="openRefundModal()">↩️ صرف / استرداد لصاحب شقة</button>
+    <button class="btn " onclick="openRefundModal()">↩️ صرف / استرداد لصاحب شقة</button>
   </div>
   <div class="section-title"><h3>حركة الخزينة</h3></div>
   ${sortableTable('treasuryMovesTable',moves,[
@@ -10637,7 +10698,7 @@ function aiSettingsFormHTML(scope,ai){
     <p class="small" style="color:var(--gold-dark)">⚠️ الاتصال بيتم مباشرة من المتصفح (مفيش سيرفر وسيط). Gemini بيدعم ده بشكل مضمون. ChatGPT وClaude ممكن يرفضوا الاتصال المباشر من بعض المتصفحات لأسباب أمان (CORS).</p>
     <div class="flexrow mtop">
       <button class="btn primary" onclick="saveAISettings('${scope}')">💾 حفظ</button>
-      <button class="btn gold" onclick="testAIConnection('${scope}')">🧪 اختبار الاتصال</button>
+      <button class="btn " onclick="testAIConnection('${scope}')">🧪 اختبار الاتصال</button>
     </div>
     <div id="aiTestResult" class="mtop"></div>`;
 }
@@ -10822,7 +10883,7 @@ function pageAIReports(){
     </div>
     <div class="flexrow mtop">
       <button class="btn primary" onclick="generateAIReport('summary')">📝 تقرير ملخص</button>
-      <button class="btn gold" onclick="generateAIReport('detailed')">📊 تقرير تفصيلي</button>
+      <button class="btn " onclick="generateAIReport('detailed')">📊 تقرير تفصيلي</button>
     </div>`}
   </div>`;
 }
@@ -11216,7 +11277,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.77';
+const APP_BUILD='1.79';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11348,25 +11409,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.77"></script>
-<script type="module" src="emartna-auth.js?v=1.77"></script>
-<script type="module" src="emartna-profile.js?v=1.77"></script>
-<script type="module" src="emartna-users.js?v=1.77"></script>
-<script type="module" src="emartna-platform.js?v=1.77"></script>
-<script type="module" src="emartna-contactlog.js?v=1.77"></script>
-<script type="module" src="emartna-permreport.js?v=1.77"></script>
-<script type="module" src="emartna-finops.js?v=1.77"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.77"></script>
-<script type="module" src="emartna-planscreens.js?v=1.77"></script>
+<script type="module" src="emartna-cloud.js?v=1.79"></script>
+<script type="module" src="emartna-auth.js?v=1.79"></script>
+<script type="module" src="emartna-profile.js?v=1.79"></script>
+<script type="module" src="emartna-users.js?v=1.79"></script>
+<script type="module" src="emartna-platform.js?v=1.79"></script>
+<script type="module" src="emartna-contactlog.js?v=1.79"></script>
+<script type="module" src="emartna-permreport.js?v=1.79"></script>
+<script type="module" src="emartna-finops.js?v=1.79"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.79"></script>
+<script type="module" src="emartna-planscreens.js?v=1.79"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=1.77"></script>
+<script type="module" src="emartna-perms.js?v=1.79"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=1.77"></script>
+<script type="module" src="emartna-bundle.js?v=1.79"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
