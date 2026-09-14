@@ -30,6 +30,7 @@ window.addEventListener('appinstalled', function(){
 });
 </script>
 <link rel="apple-touch-icon" href="icon-192.png"/>
+<link rel="icon" href="icon-192.png" type="image/png"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -11118,7 +11119,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.73';
+const APP_BUILD='1.74';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11140,80 +11141,12 @@ function setupPWA(){
       /* ملفات البرنامج (الشكل والكود) بتتقرا من الجهاز فورًا —
          والبيانات وحدها هي اللي بتتجاب من الخادم.
          التحديث بيتنزّل في الخلفية، والمستخدم بيتسأل قبل ما يتطبّق. */
-      const swCode=`
-        const CACHE_NAME='omaretna-shell-${APP_BUILD}';
-        const SHELL_RE=/\\.(?:html|js|css|svg|png|woff2?)(?:\\?|$)|\\/$/i;
-
-        self.addEventListener('install',e=>{
-          e.waitUntil(caches.open(CACHE_NAME).then(c=>c.add(self.registration.scope)));
-          self.skipWaiting();
-        });
-
-        self.addEventListener('activate',e=>{
-          e.waitUntil(caches.keys().then(ks=>Promise.all(
-            ks.filter(k=>k!==CACHE_NAME).map(k=>caches.delete(k))   // تنضيف النسخ القديمة
-          )).then(()=>self.clients.claim()));
-        });
-
-        self.addEventListener('fetch',e=>{
-          if(e.request.method!=='GET')return;
-          const url=new URL(e.request.url);
-          if(url.origin!==location.origin)return;          // الخادم والمكتبات: من الشبكة دايمًا
-
-          // صفحة البرنامج نفسها: من الشبكة الأول.
-          // مهم جدًا — لو اتقرت من الكاش، رقم البناء الجديد
-          // عمره ما هيوصل، وبالتالي الملفات الجديدة مش هتنزل أبدًا.
-          const isDoc = e.request.mode==='navigate' ||
-                        /\/$|\.html($|\?)/i.test(url.pathname);
-          if(isDoc){
-            e.respondWith(
-              fetch(e.request).then(res=>{
-                if(res && res.status===200){
-                  const clone=res.clone();
-                  caches.open(CACHE_NAME).then(c=>c.put(e.request,clone));
-                }
-                return res;
-              }).catch(()=>caches.match(e.request).then(r=>r||caches.match(self.registration.scope)))
-            );
-            return;
-          }
-
-          if(!SHELL_RE.test(url.pathname))return;
-
-          /* ⚠️ ملفات البرنامج (emartna-*.js و vendor-*.js): الشبكة الأول.
-             القراءة من الكاش كانت بتخلّي نسخة قديمة تفضل شغّالة حتى بعد
-             النشر — ولو النسخة القديمة فيها عطل، العميل يفضل واقف عليه. */
-          if(/\/(emartna-|vendor-)[^\/]*\.js$/i.test(url.pathname)){
-            e.respondWith(
-              fetch(e.request).then(res=>{
-                if(res && res.status===200){
-                  const clone=res.clone();
-                  caches.open(CACHE_NAME).then(c=>c.put(e.request,clone));
-                }
-                return res;
-              }).catch(()=>caches.match(e.request))   // من غير نت: الكاش
-            );
-            return;
-          }
-
-          // باقي الملفات: من الكاش فورًا وتحديث هادي في الخلفية
-          e.respondWith(
-            caches.match(e.request).then(hit=>{
-              const net=fetch(e.request).then(res=>{
-                if(res && res.status===200){
-                  const clone=res.clone();
-                  caches.open(CACHE_NAME).then(c=>c.put(e.request,clone));
-                }
-                return res;
-              }).catch(()=>hit);
-              return hit || net;
-            })
-          );
-        });
-      `;
-      const swBlob=new Blob([swCode],{type:'application/javascript'});
-      const swUrl=URL.createObjectURL(swBlob);
-      navigator.serviceWorker.register(swUrl).catch(()=>{});
+      /* ⚠️ كان متسجّل من Blob URL: المتصفح بيعتبره عامل جديد كل
+         تحميل فالكاش مابيستقرش. وكان بيعمل "كاش + تحديث خلفي"
+         لكل ملف = طلبين لكل ملف (٢٨٥ طلب و٤٨ ثانية في Network).
+         دلوقتي ملف حقيقي، والملفات اللي عليها بصمة بتتقرا من
+         الكاش وخلاص. */
+      navigator.serviceWorker.register('sw.js').catch(()=>{});
     }
   }catch(e){}
 }
@@ -11318,25 +11251,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.73"></script>
-<script type="module" src="emartna-auth.js?v=1.73"></script>
-<script type="module" src="emartna-profile.js?v=1.73"></script>
-<script type="module" src="emartna-users.js?v=1.73"></script>
-<script type="module" src="emartna-platform.js?v=1.73"></script>
-<script type="module" src="emartna-contactlog.js?v=1.73"></script>
-<script type="module" src="emartna-permreport.js?v=1.73"></script>
-<script type="module" src="emartna-finops.js?v=1.73"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.73"></script>
-<script type="module" src="emartna-planscreens.js?v=1.73"></script>
+<script type="module" src="emartna-cloud.js?v=1.74"></script>
+<script type="module" src="emartna-auth.js?v=1.74"></script>
+<script type="module" src="emartna-profile.js?v=1.74"></script>
+<script type="module" src="emartna-users.js?v=1.74"></script>
+<script type="module" src="emartna-platform.js?v=1.74"></script>
+<script type="module" src="emartna-contactlog.js?v=1.74"></script>
+<script type="module" src="emartna-permreport.js?v=1.74"></script>
+<script type="module" src="emartna-finops.js?v=1.74"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.74"></script>
+<script type="module" src="emartna-planscreens.js?v=1.74"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=1.73"></script>
+<script type="module" src="emartna-perms.js?v=1.74"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=1.73"></script>
+<script type="module" src="emartna-bundle.js?v=1.74"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
