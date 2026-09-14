@@ -1188,10 +1188,28 @@ function cacheOwnerId(){
   try{ return (window.CLOUD_AUTH && CLOUD_AUTH.user) ? CLOUD_AUTH.user.id : 'local'; }
   catch(e){ return 'local'; }
 }
+/* بديل خفيف لشاشة "كل العمارات": الأرقام بتتحسب على السيرفر
+   (__stats) بدل تحميل كل عمارة بالكامل. لو العمارة متحمّلة فعلًا
+   بنرجّع بياناتها الحقيقية، وإلا بنركّب شكل مبسّط من الملخّص. */
+function buildingSummaryData(id){
+  try{
+    const rec=(window.REG&&REG.buildings||[]).find(b=>b.id===id);
+    const st=rec&&rec.__stats; if(!st)return null;
+    return {
+      __summary:true,
+      apartments:new Array(st.units||0).fill(0).map((_,i)=>({id:'s'+i,number:i+1})),
+      accounts:new Array(st.accounts||0).fill(0).map((_,i)=>({id:'a'+i})),
+      users:[], expenses:st.expenses>0?[{amount:st.expenses}]:[],
+      ledger:st.collected>0||st.due>0?[{type:'دفعة',amount:st.collected}]:[],
+      __stats:st,
+    };
+  }catch(e){ return null; }
+}
+
 function loadBuildingData(id){
   try{
     const raw=localStorage.getItem(buildingKey(id));
-    if(!raw)return null;
+    if(!raw)return buildingSummaryData(id);
     const d=JSON.parse(raw);
     if(d && d.__owner && d.__owner!==cacheOwnerId()){
       localStorage.removeItem(buildingKey(id));   // بتاع مستخدم تاني
@@ -1202,6 +1220,8 @@ function loadBuildingData(id){
 }
 function saveBuildingData(id,data){
   try{
+    /* الملخّص مش بيانات حقيقية — لو اتحفظ هيدوس على الأصل */
+    if(data && data.__summary)return;
     if(data && typeof data==='object')data.__owner=cacheOwnerId();
     localStorage.setItem(buildingKey(id),JSON.stringify(data));
   }catch(e){
@@ -11098,7 +11118,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.70';
+const APP_BUILD='1.71';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11298,25 +11318,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.70"></script>
-<script type="module" src="emartna-auth.js?v=1.70"></script>
-<script type="module" src="emartna-profile.js?v=1.70"></script>
-<script type="module" src="emartna-users.js?v=1.70"></script>
-<script type="module" src="emartna-platform.js?v=1.70"></script>
-<script type="module" src="emartna-contactlog.js?v=1.70"></script>
-<script type="module" src="emartna-permreport.js?v=1.70"></script>
-<script type="module" src="emartna-finops.js?v=1.70"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.70"></script>
-<script type="module" src="emartna-planscreens.js?v=1.70"></script>
+<script type="module" src="emartna-cloud.js?v=1.71"></script>
+<script type="module" src="emartna-auth.js?v=1.71"></script>
+<script type="module" src="emartna-profile.js?v=1.71"></script>
+<script type="module" src="emartna-users.js?v=1.71"></script>
+<script type="module" src="emartna-platform.js?v=1.71"></script>
+<script type="module" src="emartna-contactlog.js?v=1.71"></script>
+<script type="module" src="emartna-permreport.js?v=1.71"></script>
+<script type="module" src="emartna-finops.js?v=1.71"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.71"></script>
+<script type="module" src="emartna-planscreens.js?v=1.71"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=1.70"></script>
+<script type="module" src="emartna-perms.js?v=1.71"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=1.70"></script>
+<script type="module" src="emartna-bundle.js?v=1.71"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح

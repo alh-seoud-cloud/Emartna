@@ -1,11 +1,6 @@
-/* ============================================================
-   عمارتنا — الحزمة الموحّدة (مولّدة آليًا)
-   ------------------------------------------------------------
-   44 ملف بالترتيب الأصلي — الوحدات بتغلّف بعضها وأي خلط بيكسر
-   السلسلة. كل ملف في IIFE عشان يفضل معزول زي type=module
-   (فيه ١٥٣ اسم متكرر)، واللي فيه await علوي في async IIFE.
-   ⚠️ ما تعدّلش هنا — عدّل الأصل وأعد البناء.
-   ============================================================ */
+/* عمارتنا — الحزمة الموحّدة (مولّدة آليًا)
+   44 ملف بالترتيب الأصلي. كل ملف في IIFE للعزل، واللي فيه await
+   علوي في async IIFE. ⚠️ ما تعدّلش هنا. */
 
 /* ═══ emartna-contacts.js ═══ */
 (function(){
@@ -2532,8 +2527,8 @@
 
 })();
 
-/* ═══ emartna-admin.js (async) ═══ */
-(async function(){
+/* ═══ emartna-admin.js ═══ */
+(function(){
 /* ============================================================
    عمارتنا — تحكّم صاحب البرنامج
    ------------------------------------------------------------
@@ -2811,30 +2806,44 @@
 
   window.__loadingBuildings = false;
 
+  /* ⚠️ كان بيحمّل ٣٠ عمارة كاملة (كل قيودها ومصروفاتها) عشان
+     يعرض ٥ أرقام في جدول — ميجابايتات بتتنقل عشان مجاميع.
+     دلوقتي الأرقام بتتحسب على السيرفر في طلب واحد (~٦٥٠ مللي
+     لـ٢٨ عمارة)، والعمارة الكاملة بتتحمّل عند الفتح بس. */
   async function loadMissingBuildings(){
     if (window.__loadingBuildings) return;
-    if (!window.CLOUD || !window.CLOUD.loadBuilding) return;
+    if (!window.CLOUD || !window.CLOUD._sb) return;
     if (!window.REG || !window.REG.buildings) return;
 
-    const missing = window.REG.buildings
-      .filter(b => !window.loadBuildingData(b.id))
-      .slice(0, MAX_AUTO_LOAD);
-    if (!missing.length) return;
-
     window.__loadingBuildings = true;
-    let done = 0;
     try{
-      await Promise.all(missing.map(async b => {
-        try{ await window.CLOUD.loadBuilding(b.id); done++; }
-        catch(e){ console.warn('[عمارتنا] تعذّر تحميل', b.name, e.message); }
-      }));
+      const { data, error } = await window.CLOUD._sb.rpc('buildings_overview');
+      if (error || !data) return;
+
+      const byUuid = {};
+      data.forEach(r => { byUuid[r.building_id] = r; });
+
+      let hit = 0;
+      REG.buildings.forEach(b => {
+        const r = byUuid[b.__uuid];
+        if (!r) return;
+        hit++;
+        /* ملخّص خفيف للعرض — مش بديل عن بيانات العمارة الكاملة */
+        b.__stats = {
+          units: r.units, collected: Number(r.collected)||0,
+          due: Number(r.due)||0, expenses: Number(r.expenses_total)||0,
+          balance: Number(r.balance)||0, accounts: r.accounts_count,
+          lastActivity: r.last_activity, setupPct: r.setup_pct,
+        };
+      });
+      if (hit && window.renderSysContent) renderSysContent();
+    }catch(e){
+      console.warn('[عمارتنا] تعذّر جلب ملخّص العمارات', e.message);
     } finally {
       window.__loadingBuildings = false;
     }
-    if (done && window.isSysOwner && isSysOwner() && window.renderSysContent){
-      renderSysContent();
-    }
   }
+
   window.reloadPlatformBuildings = loadMissingBuildings;
 
   /* لو السجل وصل متأخر (سباق البدء)، أعد التحميل أول ما يجهز */
