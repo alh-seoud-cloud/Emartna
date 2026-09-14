@@ -119,6 +119,11 @@
   };
 
   function dismissed(){
+    /* إخفاء مؤقت بأسبوع من زرار ✕ في الشريط */
+    try{
+      const t = parseInt(localStorage.getItem('emartna_setup_bar_hide'),10);
+      if (t && Date.now() < t) return true;
+    }catch(e){}
     try{ return localStorage.getItem(DISMISS + '_' + (window.activeBuildingId||'')) === '1'; }
     catch(e){ return false; }
   }
@@ -132,23 +137,39 @@
 
     const next = list.find(s => !s.done);
     const pct = Math.round(done / total * 100);
-    const card = `
-      <div class="card" style="border:1.5px solid var(--accent);background:linear-gradient(135deg,rgba(21,154,140,.06),transparent)">
-        <div class="flexrow" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-          <div style="flex:1;min-width:220px">
-            <b>🚀 خطوة ${done+1} من ${total}: ${esc2(next.title)}</b>
-            <div class="small" style="color:var(--muted);margin-top:3px">${esc2(next.desc)}</div>
-            <div style="height:7px;background:var(--line);border-radius:5px;margin-top:9px;max-width:320px;overflow:hidden">
-              <div style="width:${pct}%;height:100%;background:var(--accent)"></div>
-            </div>
-          </div>
-          <div class="flexrow" style="gap:6px">
-            <button class="btn primary sm" onclick="${next.action}">${esc2(next.label)}</button>
-            <button class="btn ghost sm" onclick="openSetupWizard()">كل الخطوات</button>
-          </div>
-        </div>
+    /* ⚠️ كان كارت كامل فوق لوحة التحكم — مع كارت النسخة الاحتياطية
+       كانوا بياخدوا نص الشاشة على الموبايل قبل ما المستخدم يشوف أي
+       رقم. بقى شريط رفيع بمؤشر تقدّم، والتفاصيل في نافذة. */
+    const bar = `
+      <div class="flexrow" style="gap:8px;align-items:center;flex-wrap:nowrap;
+        padding:7px 11px;margin-bottom:10px;border-radius:10px;
+        border:1px solid var(--accent);background:var(--tint);cursor:pointer"
+        onclick="openSetupWizard()">
+        <span style="font-size:15px;flex:0 0 auto">🚀</span>
+        <span style="flex:1;min-width:0">
+          <span style="display:block;font-size:12.5px;font-weight:700;
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+            إعداد العمارة ${done}/${total} — ${esc2(next.title)}</span>
+          <span style="display:block;height:4px;background:var(--line);
+            border-radius:3px;margin-top:4px;overflow:hidden">
+            <span style="display:block;width:${pct}%;height:100%;
+              background:var(--accent)"></span></span>
+        </span>
+        <button class="btn sm primary" style="flex:0 0 auto;padding:4px 10px;font-size:12px"
+          onclick="event.stopPropagation();${next.action}">كمّل</button>
+        <span onclick="event.stopPropagation();dismissSetupBar()"
+          title="إخفاء لأسبوع" style="flex:0 0 auto;cursor:pointer;opacity:.5;
+          font-size:14px;padding:0 3px">✕</span>
       </div>`;
-    return card + html;
+    return bar + html;
+  };
+
+  /* الإخفاء لأسبوع مش للأبد — الإعداد الناقص بيأثر على استخدامه */
+  window.dismissSetupBar = function(){
+    try{ localStorage.setItem('emartna_setup_bar_hide',
+      String(Date.now() + 7*86400000)); }catch(e){}
+    if (window.renderContent) renderContent();
+    if (window.toast) toast('هنفكّرك بعد أسبوع');
   };
 
   /* ============================================================

@@ -1,0 +1,58 @@
+{
+  "name": "عمارتنا — إدارة اتحاد الملاك",
+  "short_name": "عمارتنا",
+  "description": "نظام إدارة اتحاد الملاك: تحصيل، مصروفات، تقارير، ومحادثة السكان.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F8FAF9",
+  "theme_color": "#159A8C",
+  "dir": "rtl",
+  "lang": "ar",
+  "categories": [
+    "business",
+    "finance",
+    "productivity"
+  ],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512-any.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "تسجيل دفعة",
+      "short_name": "دفعة",
+      "description": "تسجيل تحصيل جديد",
+      "url": "/?go=collections"
+    },
+    {
+      "name": "محادثة السكان",
+      "short_name": "المحادثة",
+      "description": "فتح محادثة العمارة",
+      "url": "/?go=chat"
+    },
+    {
+      "name": "المتأخرات",
+      "short_name": "المتأخرات",
+      "description": "الوحدات المتأخرة في السداد",
+      "url": "/?go=arrears"
+    }
+  ]
+}
