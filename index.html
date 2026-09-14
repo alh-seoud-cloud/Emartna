@@ -134,7 +134,7 @@ a{color:var(--accent)}
 /* 100dvh بيحسب شريط المتصفح المتحرك على الموبايل — 100vh بيحسبه
    غلط فبيقص آخر الصفحة ويخلي الشريط العلوي يتزحلق. */
 .app{display:flex;height:100vh;height:100dvh;overflow:hidden}
-.sidebar{width:250px;background:var(--sidebarbg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;border-left:1px solid var(--line)}
+.sidebar{padding-top:env(safe-area-inset-top,0px);width:250px;background:var(--sidebarbg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;border-left:1px solid var(--line)}
 .sidebar .brand{padding:20px 18px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
 .sidebar .brand .mark{width:38px;height:38px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .sidebar .brand h1{font-size:16px;color:var(--sidebar-text)}
@@ -166,7 +166,7 @@ a{color:var(--accent)}
    على الموبايل ده معناه إن المستخدم لازم ينزل تحت أو يضغط مرتين
    عشان يوصل لزرار القائمة. */
 .topbar{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:10px;
-  padding:10px 16px;background:var(--card);border-bottom:1px solid var(--line);
+  padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px;background:var(--card);border-bottom:1px solid var(--line);
   flex:0 0 auto}
 .topbar h2{font-size:17px;margin:0;flex:1;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis}
@@ -180,17 +180,34 @@ a{color:var(--accent)}
   /* الشاشة الحقيقية على الموبايل: dvh بيحسب شريط المتصفح المتحرك،
      وvh بيحسبه غلط فبيقص آخر الصفحة. */
   .app{height:100dvh}
-  .content{padding:14px;padding-bottom:calc(14px + env(safe-area-inset-bottom))}
+  /* المساحة الآمنة تحت كمان — شريط الإيماءات في الآيفون بياكل من
+     آخر الصفحة. */
+  .content{padding:14px;
+    padding-bottom:calc(14px + env(safe-area-inset-bottom,0px));
+    padding-inline-start:calc(14px + env(safe-area-inset-right,0px));
+    padding-inline-end:calc(14px + env(safe-area-inset-left,0px))}
 }
 /* الشريط العلوي لازم يفضل ثابت فوق: كان بيتمرّر مع المحتوى، فعلى
    الموبايل المستخدم يضطر ينزل أو يضغط مرتين عشان يوصل لزرار
    القائمة. sticky + z-index بيخلّيه فوق دايمًا. */
+/* viewport-fit=cover بيخلّي الصفحة تمتد تحت النوتش/شريط الحالة على
+   الآيفون — من غير safe-area-inset الشريط العلوي بيتحط جوه منطقة
+   الساعة والشبكة فيتداخل معاها.
+   env() بترجع صفر على الأجهزة اللي مالهاش نوتش، فمفيش أثر عليها. */
 .top{height:58px;background:var(--panel);border-bottom:1px solid var(--line);
   display:flex;align-items:center;justify-content:space-between;padding:0 22px;
-  flex-shrink:0;position:sticky;top:0;z-index:60}
+  flex-shrink:0;position:sticky;top:0;z-index:60;
+  padding-top:env(safe-area-inset-top,0px);
+  height:calc(58px + env(safe-area-inset-top,0px));
+  padding-inline-start:calc(22px + env(safe-area-inset-right,0px));
+  padding-inline-end:calc(22px + env(safe-area-inset-left,0px))}
 @media (max-width:860px){
   /* ارتفاع أقل وحشو أضيق — شاشة الموبايل قصيرة */
-  .top{height:50px;padding:0 12px;gap:8px}
+  .top{gap:8px;
+    height:calc(50px + env(safe-area-inset-top,0px));
+    padding-top:env(safe-area-inset-top,0px);
+    padding-inline-start:calc(12px + env(safe-area-inset-right,0px));
+    padding-inline-end:calc(12px + env(safe-area-inset-left,0px))}
   .top .tl{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   /* الأزرار اليمين تتزحلق أفقيًا بدل ما تتكسّر على سطرين */
   .top .actions{display:flex;gap:5px;align-items:center;overflow-x:auto;
@@ -338,7 +355,7 @@ tr:hover td{background:#faf8f2}
 .hamburger{display:none;background:transparent;border:0;font-size:20px;cursor:pointer;color:var(--text)}
 .sidebar-backdrop{display:none}
 @media(max-width:860px){
-  .sidebar{position:fixed;top:0;bottom:0;right:0;z-index:500;transform:translateX(100%);transition:transform .2s;box-shadow:-10px 0 30px rgba(0,0,0,.3)}
+  .sidebar{position:fixed;top:0;bottom:0;right:0;z-index:500;padding-bottom:env(safe-area-inset-bottom,0px);transform:translateX(100%);transition:transform .2s;box-shadow:-10px 0 30px rgba(0,0,0,.3)}
   .sidebar.open{transform:translateX(0)}
   .hamburger{display:block;flex-shrink:0}
   .g4,.g3{grid-template-columns:repeat(2,1fr)}
@@ -2843,7 +2860,7 @@ function signupHTML(){
         <div class="field"><label>اسم العمارة / الاتحاد</label><input id="suName" placeholder="مثال: عمارة النيل"></div>
         <div class="field"><label>نوع الإدارة</label><select id="suCommunityType" onchange="toggleSuCommunityFields()">
           <option value="single">عمارة واحدة</option>
-          <option value="compound">كمبوند (أكتر من عمارة/فيلا تحت إدارة واحدة)</option>
+          ${window.COMPOUND_ENABLED?`<option value="compound">كمبوند (أكتر من عمارة/فيلا تحت إدارة واحدة)</option>`:''}
         </select></div>
         <div id="suFlatUnitsWrap">
         <div class="field"><label>عدد الأدوار (غير الأرضي)</label>
@@ -3681,20 +3698,68 @@ function pageSysDashboard(){
   </div>
   <div class="mtop">${sortableTable('sysBldTable',shownRows,cols,null,{defaultKey:'name',emptyText:'لا توجد عمارات مطابقة لهذا الفلتر',exportName:filterMap[window.__sysDashFilter].label})}</div>`;
 }
+/* مميزات البرنامج: مفاتيح عامة بتتحفظ في إعدادات المنصة. */
+const FEATURE_LIST = [
+  { key:'compound', icon:'🏘️', title:'إدارة الكمبوندات',
+    desc:'أكتر من عمارة أو فيلا تحت إدارة واحدة. مقفولة دلوقتي عشان '+
+         'المنتج بيستهدف العمارة الواحدة — والعملاء اللي مسجّلين '+
+         'كمبوند بالفعل بيفضلوا شغالين عادي.' },
+];
+
+window.openFeatureFlags = async function(){
+  openModal('<h3>⏳ بنحمّل الإعدادات...</h3>');
+  let cur = {};
+  try{
+    const { data } = await CLOUD._sb.from('platform_settings')
+      .select('value').eq('key','public:features').maybeSingle();
+    cur = (data && data.value) || {};
+  }catch(e){}
+
+  openModal(`
+    <h3>🎛️ مميزات البرنامج</h3>
+    <p class="small mtop">التفعيل والإيقاف بيأثر على <b>كل العملاء</b> فورًا،
+      من غير رفع أي ملف.</p>
+    ${FEATURE_LIST.map(f=>`
+      <label class="checkline mtop2" style="align-items:flex-start">
+        <input type="checkbox" id="ff_${esc(f.key)}" ${cur[f.key]===true?'checked':''}>
+        <span><b>${esc(f.icon)} ${esc(f.title)}</b>
+          <div class="small" style="color:var(--muted)">${esc(f.desc)}</div></span>
+      </label>`).join('')}
+    <div class="modal-actions">
+      <button class="btn primary" onclick="saveFeatureFlags()">💾 حفظ</button>
+      <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+    </div>`);
+};
+
+window.saveFeatureFlags = async function(){
+  const val = {};
+  FEATURE_LIST.forEach(f=>{
+    val[f.key] = !!(document.getElementById('ff_'+f.key)||{}).checked;
+  });
+  try{
+    const { error } = await CLOUD._sb.rpc('save_platform_doc',
+      { p_key:'public:features', p_value: val });
+    if(error) throw error;
+    window.COMPOUND_ENABLED = val.compound === true;
+    closeModal(); toast('اتحفظت المميزات');
+  }catch(e){ showMessage(e.message||'تعذّر الحفظ'); }
+};
+
 function setSysDashFilter(key){window.__sysDashFilter=key;renderSysContent()}
 
 /* بنود القائمة الجديدة: بتفتح النوافذ اللي كانت أزرار متناثرة فوق
    شاشة العمارات. الأدوات بقت في مجموعتها المنطقية بدل ما تبقى
    مكدّسة في شاشة مالهاش علاقة بيها. */
 const SYS_MODAL_PAGES = {
-  sysplanscreens:{ fn:'openPlanScreens',  title:'شاشات كل باقة',
-    desc:'حدّد الشاشات المتاحة لكل باقة، واستثناءات لعمارات بعينها.' },
+
   syscontactlog: { fn:'openAllContacts',  title:'سجل التواصل',
     desc:'كل اتصال أو رسالة مع رؤساء الاتحادات، ونتيجتها.' },
   sysfollowups:  { fn:'openFollowups',    title:'متابعات مستحقة',
     desc:'العملاء اللي محتاجين متابعة النهاردة أو فات ميعادهم.' },
   sysidle:       { fn:'openIdlePolicy',   title:'سياسة إقفال الجلسة',
     desc:'مدة الخمول قبل ما البرنامج يقفل الجلسة للإدارة والسكان.' },
+  sysfeatures:   { fn:'openFeatureFlags', title:'مميزات البرنامج',
+    desc:'فعّل أو أوقف مميزات لكل العملاء من غير رفع كود.' },
 };
 function pageSysModalHost(page){
   const m = SYS_MODAL_PAGES[page]; if(!m) return '';
@@ -3777,7 +3842,7 @@ function openNewBuildingModal(){
     <div class="field2"><label>اسم العمارة</label><input id="nbName" placeholder="مثال: عمارة النيل"></div>
     <div class="field2"><label>نوع الإدارة</label><select id="nbCommunityType" onchange="toggleNbCommunityFields()">
       <option value="single">عمارة واحدة</option>
-      <option value="compound">كمبوند (أكتر من عمارة/فيلا تحت إدارة واحدة)</option>
+      ${window.COMPOUND_ENABLED?`<option value="compound">كمبوند (أكتر من عمارة/فيلا تحت إدارة واحدة)</option>`:''}
     </select></div>
     <div class="grid g2" id="nbFlatUnitsWrap">
       <div class="field2"><label>عدد الشقق</label><input id="nbCount" type="number" value="24"></div>
@@ -6694,26 +6759,31 @@ function submitRenewalRequest(){
 /* ---------- هيكل تطبيق العمارة ---------- */
 var ADMIN_NAV_GROUPS=[
   {key:'home',icon:'🏠',label:'الرئيسية',items:[['dashboard','📊','لوحة التحكم'],['analytics','📈','التحليلات والاتجاهات']]},
-  {key:'building',icon:'🏢',label:'العمارة والملاك',items:[['building','🏢','بيانات العمارة'],['blocks','🏘️','مباني وفلل الكمبوند'],['apartments','🚪','الشقق والملاك'],['users','👥','المستخدمون'],['vendors','🛠️','مقاولون وموردون'],['maintenance','🔧','بلاغات الصيانة'],['floors','🏗️','تقرير الأدوار']]},
-  {key:'finance',icon:'💰',label:'الماليات',items:[['collections','🧾','التحصيل والدفعات'],['paymentRequests','📥','طلبات دفع من الملاك'],['projects','🏗️','المشاريع'],['treasury','🏦','الخزينة والحسابات'],['expenses','💳','المصروفات'],['expreport','📑','تقرير المصروفات'],['statements','🗂️','كشوف المصروفات الشهرية'],['expenseCategories','📋','بنود الصرف'],['distweights','⚖️','نسب توزيع المصروفات']]},
+  {key:'building',icon:'🏢',label:'العمارة والملاك',items:[['building','🏢','بيانات العمارة'],['blocks','🏘️','مباني وفلل الكمبوند'],['apartments','🚪','الشقق والملاك'],['users','👥','المستخدمون'],['vendors','🛠️','مقاولون وموردون'],['maintenance','🔧','بلاغات الصيانة']]},
+  {key:'finance',icon:'💰',label:'الماليات',items:[['collections','🧾','التحصيل والدفعات'],['paymentRequests','📥','طلبات دفع من الملاك'],['projects','🏗️','المشاريع'],['treasury','🏦','الخزينة والحسابات'],['expenses','💳','المصروفات'],['expreport','📑','تقرير المصروفات'],['statements','🗂️','كشوف المصروفات الشهرية'],['floors','🏗️','تقرير الأدوار']]},
   {key:'engage',icon:'💬',label:'التواصل مع الملاك',items:[['chat','💬','محادثة السكان'],['polls','🗳️','استطلاعات الرأي'],['announcements','📢','الإعلانات'],['suggestions','💡','المقترحات'],['meetings','🗓️','الاجتماعات']]},
-  {key:'settings',icon:'⚙️',label:'الإعدادات والأدوات',items:[['settings','⚙️','الإعدادات'],['aireports','🤖','تقارير الذكاء الاصطناعي'],['license','🪪','الرخصة والاشتراك'],['referral','🎁','برنامج الإحالة'],['activity','📜','سجل النشاط'],['myproposals','💡','مقترحاتي لصاحب البرنامج'],['support','🎫','الدعم الفني'],['whatsnew','🆕','ما الجديد']]},
+  {key:'settings',icon:'⚙️',label:'الإعدادات والأدوات',items:[['settings','⚙️','الإعدادات'],['expenseCategories','📋','بنود الصرف'],['distweights','⚖️','نسب توزيع المصروفات'],['aireports','🤖','تقارير الذكاء الاصطناعي'],['license','🪪','الرخصة والاشتراك'],['activity','📜','سجل النشاط'],['support','🎫','المساعدة والدعم']]},
 ];
 var OWNER_NAV_GROUPS=[
   /* تسجيل الدفعة أول حاجة — ده السبب الأساسي اللي بيخلّي
      الساكن يفتح البرنامج أصلًا. */
   {key:'home',icon:'🏠',label:'الرئيسية',items:[['home','🏠','حسابي وشقتي'],['paymentRequests','💸','تسجيل دفعة']]},
-  {key:'engage',icon:'💬',label:'التواصل مع العمارة',items:[['chat','💬','محادثة السكان'],['expenses','💳','مصروفات العمارة'],['statements','🗂️','كشوف المصروفات'],['polls','🗳️','استطلاعات الرأي'],['announcements','📢','الإعلانات'],['suggestions','💡','المقترحات'],['meetings','🗓️','الاجتماعات'],['maintenance','🔧','بلاغات الصيانة']]},
-  {key:'profile',icon:'👤',label:'حسابي',items:[['profile','👤','بياناتي'],['myproposals','💡','مقترحاتي لصاحب البرنامج']]},
+  /* المالية اتفصلت عن التواصل: المصروفات والكشوف مش "تواصل" —
+     والخلط بينهم كان بيخلي المجموعة ٨ بنود = نص القائمة. */
+  {key:'finance',icon:'💳',label:'مالية العمارة',items:[['expenses','💳','مصروفات العمارة'],['statements','🗂️','كشوف المصروفات']]},
+  {key:'engage',icon:'💬',label:'التواصل مع العمارة',items:[['chat','💬','محادثة السكان'],['announcements','📢','الإعلانات'],['polls','🗳️','استطلاعات الرأي'],['suggestions','💡','المقترحات'],['meetings','🗓️','الاجتماعات'],['maintenance','🔧','بلاغات الصيانة']]},
+  /* "مقترحاتي لصاحب البرنامج" اتشالت: الساكن مش عميل المنصة —
+     قناته الطبيعية مع رئيس اتحاده عن طريق "المقترحات". */
+  {key:'profile',icon:'👤',label:'حسابي',items:[['profile','👤','بياناتي']]},
 ];
 var SYS_NAV_GROUPS=[
   {key:'overview',icon:'🏙️',label:'نظرة عامة',items:[['sysdash','🏙️','كل العمارات'],['sysusers','👥','كل المستخدمين'],['sysdailysummary','📊','الملخص اليومي'],['sysreports','📈','تقارير الفترات'],['sysactivitylog','📜','سجل نشاطي']]},
   {key:'marketing',icon:'📣',label:'التسويق والمبيعات',items:[['syspipeline','🎯','قمع المبيعات'],['sysleads','📋','أرقام تسويقية'],['sysvisits','📈','مصادر الزيارات'],['sysoffers','🎉','عروض العملاء الجدد'],['sysreferrals','🎁','برنامج الإحالة'],['syscoupons','🎟️','أكواد الخصم'],['sysmessages','💬','قوالب الرسائل']]},
-  {key:'subscriptions',icon:'🪪',label:'الاشتراكات والتراخيص',items:[['syslicenses','🪪','التراخيص والاشتراكات'],['sysrenewals','📥','طلبات التجديد'],['sysplans','💲','خطط الاشتراك والأسعار'],['sysplanscreens','🎚️','شاشات كل باقة'],['syslicensehistory','📜','سجل حركات الاشتراكات'],['sysrevenue','💰','كشف حساب التحصيلات']]},
+  {key:'subscriptions',icon:'🪪',label:'الاشتراكات والتراخيص',items:[['syslicenses','🪪','التراخيص والاشتراكات'],['sysrenewals','📥','طلبات التجديد'],['sysplans','💲','خطط الاشتراك والأسعار'],['syslicensehistory','📜','سجل حركات الاشتراكات'],['sysrevenue','💰','كشف حساب التحصيلات']]},
   {key:'site',icon:'🖥️',label:'الموقع العام',items:[['syslanding','🖥️','الصفحة الرئيسية وإعدادات العرض'],['sysversions','🆕','سجل الإصدارات والتحديثات'],['sysmarketing','🖨️','بطاقة دعاية للطباعة'],['syslocations','🗺️','المحافظات والمدن']]},
   {key:'feedback',icon:'💬',label:'التواصل مع العملاء',items:[['sysproposals','💡','مقترحات العملاء'],['systickets','🎫','طلبات الدعم الفني'],['syscontactlog','📇','سجل التواصل'],['sysfollowups','📅','متابعات مستحقة'],['sysstaff','🧑‍💼','فريق الدعم الفني'],['systasks','✅','مهام الفريق']]},
   {key:'ai',icon:'🤖',label:'الذكاء الاصطناعي',items:[['sysaisettings','⚙️','إعدادات الذكاء الاصطناعي'],['sysaireports','🤖','تقارير الذكاء الاصطناعي']]},
-  {key:'system',icon:'🛠️',label:'النظام',items:[['sysidle','⏳','سياسة إقفال الجلسة'],['systrash','🗑️','سلة المحذوفات'],['syssettings','⚙️','إعدادات حسابي']]},
+  {key:'system',icon:'🛠️',label:'النظام',items:[['sysidle','⏳','سياسة إقفال الجلسة'],['sysfeatures','🎛️','مميزات البرنامج'],['systrash','🗑️','سلة المحذوفات'],['syssettings','⚙️','إعدادات حسابي']]},
 ];
 window.__navExpandedGroup=null;
 function findGroupKeyForPage(groups,page){const g=groups.find(g=>g.items.some(it=>it[0]===page));return g?g.key:null}
@@ -6801,6 +6871,26 @@ function screenVisible(u,page){
   if(!u.screenPerms)return true;
   return window.userCan?userCan(u,page,'view'):true;
 }
+/* الكمبوند مؤجّل: المنتج بيستهدف العمارة الواحدة دلوقتي.
+   COMPOUND_ENABLED=false بيخفي الخيار من شاشة التسجيل — والعمارات
+   اللي اتسجلت كمبوند بالفعل بتفضل شغالة وبنودها بتبان ليها هي بس.
+   خلّيه true لما تقرر تفتح الكمبوند. */
+/* مفاتيح المميزات — بتتحمّل من إعدادات المنصة، وصاحب البرنامج
+   بيقلّبها من لوحته من غير رفع كود. القيمة هنا احتياطي لحد ما
+   تتحمّل من الخادم. */
+window.COMPOUND_ENABLED = false;
+window.loadFeatureFlags = async function(){
+  try{
+    const sb = window.CLOUD && window.CLOUD._sb; if(!sb) return;
+    const { data } = await sb.from('platform_settings')
+      .select('value').eq('key','public:features').maybeSingle();
+    if(data && data.value){
+      window.COMPOUND_ENABLED = data.value.compound === true;
+    }
+  }catch(e){}
+};
+setTimeout(()=>{ if(window.loadFeatureFlags) loadFeatureFlags(); }, 900);
+
 function visibleNavGroups(u){
   const isCompound=D&&D.building&&D.building.communityType==='compound';
   const base=!isStaffRole(u.role)?OWNER_NAV_GROUPS:ADMIN_NAV_GROUPS;
@@ -11004,7 +11094,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.58';
+const APP_BUILD='1.63';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11204,67 +11294,69 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.58"></script>
-<script type="module" src="emartna-auth.js?v=1.58"></script>
-<script type="module" src="emartna-profile.js?v=1.58"></script>
-<script type="module" src="emartna-users.js?v=1.58"></script>
-<script src="emartna-contacts.js?v=1.58"></script>
-<script type="module" src="emartna-platform.js?v=1.58"></script>
-<script type="module" src="emartna-contactlog.js?v=1.58"></script>
-<script type="module" src="emartna-permreport.js?v=1.58"></script>
-<script type="module" src="emartna-finops.js?v=1.58"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.58"></script>
-<script src="emartna-plansview.js?v=1.58"></script>
-<script src="emartna-uiprefs.js?v=1.58"></script>
-<script src="emartna-chatatt.js?v=1.58"></script>
-<script src="emartna-expreport.js?v=1.58"></script>
-<script src="emartna-statements.js?v=1.58"></script>
-<script src="emartna-versionsxls.js?v=1.58"></script>
-<script type="module" src="emartna-planscreens.js?v=1.58"></script>
-<script type="module" src="emartna-recycle.js?v=1.58"></script>
-<script type="module" src="emartna-floors.js?v=1.58"></script>
-<script type="module" src="emartna-modal-size.js?v=1.58"></script>
-<script type="module" src="emartna-guard.js?v=1.58"></script>
-<script type="module" src="emartna-statement.js?v=1.58"></script>
-<script type="module" src="emartna-reports.js?v=1.58"></script>
-<script type="module" src="emartna-admin.js?v=1.58"></script>
-<script type="module" src="emartna-ui.js?v=1.58"></script>
-<script type="module" src="emartna-excel.js?v=1.58"></script>
-<script type="module" src="emartna-send.js?v=1.58"></script>
-<script type="module" src="emartna-pwa.js?v=1.58"></script>
-<script type="module" src="emartna-landing.js?v=1.58"></script>
-<script type="module" src="emartna-comm.js?v=1.58"></script>
-<script type="module" src="emartna-period.js?v=1.58"></script>
-<script type="module" src="emartna-fast.js?v=1.58"></script>
-<script type="module" src="emartna-ops.js?v=1.58"></script>
-<script type="module" src="emartna-onboarding.js?v=1.58"></script>
-<script type="module" src="emartna-bldcols.js?v=1.58"></script>
-<script type="module" src="emartna-reminder.js?v=1.58"></script>
-<script type="module" src="emartna-coupons.js?v=1.58"></script>
-<script type="module" src="emartna-videos.js?v=1.58"></script>
-<script type="module" src="emartna-colfit.js?v=1.58"></script>
-<script type="module" src="emartna-visits.js?v=1.58"></script>
-<script type="module" src="emartna-promo.js?v=1.58"></script>
-<script type="module" src="emartna-welcome.js?v=1.58"></script>
-<script src="emartna-idle.js?v=1.58"></script>
-<script type="module" src="emartna-offers.js?v=1.58"></script>
-<script type="module" src="emartna-dates.js?v=1.58"></script>
-<script type="module" src="emartna-paging.js?v=1.58"></script>
-<script type="module" src="emartna-leads.js?v=1.58"></script>
-<script type="module" src="emartna-live.js?v=1.58"></script>
-<script type="module" src="emartna-wa.js?v=1.58"></script>
-<script type="module" src="emartna-mobile.js?v=1.58"></script>
-<script type="module" src="emartna-numbering.js?v=1.58"></script>
-<script type="module" src="emartna-facade.js?v=1.58"></script>
-<script type="module" src="emartna-pricing.js?v=1.58"></script>
-<script type="module" src="emartna-newbld.js?v=1.58"></script>
-<script type="module" src="emartna-floorplan.js?v=1.58"></script>
-<script type="module" src="emartna-staff.js?v=1.58"></script>
-<script type="module" src="emartna-resaccess.js?v=1.58"></script>
-<script type="module" src="emartna-uitoggles.js?v=1.58"></script>
-<script type="module" src="emartna-cities.js?v=1.58"></script>
-<script type="module" src="emartna-perms.js?v=1.58"></script>
-<script type="module" src="emartna-lastlogin.js?v=1.58"></script>
+<script type="module" src="emartna-cloud.js?v=1.63"></script>
+<script type="module" src="emartna-auth.js?v=1.63"></script>
+<script type="module" src="emartna-profile.js?v=1.63"></script>
+<script type="module" src="emartna-users.js?v=1.63"></script>
+<script defer src="emartna-contacts.js?v=1.63"></script>
+<script type="module" src="emartna-platform.js?v=1.63"></script>
+<script type="module" src="emartna-contactlog.js?v=1.63"></script>
+<script type="module" src="emartna-permreport.js?v=1.63"></script>
+<script type="module" src="emartna-finops.js?v=1.63"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.63"></script>
+<script defer src="emartna-plansview.js?v=1.63"></script>
+<script defer src="emartna-uiprefs.js?v=1.63"></script>
+<script defer src="emartna-chatatt.js?v=1.63"></script>
+<script defer src="emartna-expreport.js?v=1.63"></script>
+<script defer src="emartna-statements.js?v=1.63"></script>
+<script defer src="emartna-versionsxls.js?v=1.63"></script>
+<script type="module" src="emartna-planscreens.js?v=1.63"></script>
+<script type="module" src="emartna-recycle.js?v=1.63"></script>
+<script type="module" src="emartna-floors.js?v=1.63"></script>
+<script type="module" src="emartna-modal-size.js?v=1.63"></script>
+<script type="module" src="emartna-guard.js?v=1.63"></script>
+<script type="module" src="emartna-statement.js?v=1.63"></script>
+<script type="module" src="emartna-reports.js?v=1.63"></script>
+<script type="module" src="emartna-admin.js?v=1.63"></script>
+<script type="module" src="emartna-ui.js?v=1.63"></script>
+<script type="module" src="emartna-excel.js?v=1.63"></script>
+<script type="module" src="emartna-send.js?v=1.63"></script>
+<!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
+     ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
+     (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
+<script type="module" src="emartna-landing.js?v=1.63"></script>
+<script type="module" src="emartna-comm.js?v=1.63"></script>
+<script type="module" src="emartna-period.js?v=1.63"></script>
+<script type="module" src="emartna-fast.js?v=1.63"></script>
+<script type="module" src="emartna-ops.js?v=1.63"></script>
+<script type="module" src="emartna-onboarding.js?v=1.63"></script>
+<script type="module" src="emartna-bldcols.js?v=1.63"></script>
+<script type="module" src="emartna-reminder.js?v=1.63"></script>
+<script type="module" src="emartna-coupons.js?v=1.63"></script>
+<script type="module" src="emartna-videos.js?v=1.63"></script>
+<script type="module" src="emartna-colfit.js?v=1.63"></script>
+<script type="module" src="emartna-visits.js?v=1.63"></script>
+<script type="module" src="emartna-promo.js?v=1.63"></script>
+<script type="module" src="emartna-welcome.js?v=1.63"></script>
+<script defer src="emartna-idle.js?v=1.63"></script>
+<script type="module" src="emartna-offers.js?v=1.63"></script>
+<script type="module" src="emartna-dates.js?v=1.63"></script>
+<script type="module" src="emartna-paging.js?v=1.63"></script>
+<script type="module" src="emartna-leads.js?v=1.63"></script>
+<script type="module" src="emartna-live.js?v=1.63"></script>
+<script type="module" src="emartna-wa.js?v=1.63"></script>
+<script type="module" src="emartna-mobile.js?v=1.63"></script>
+<script type="module" src="emartna-numbering.js?v=1.63"></script>
+<script type="module" src="emartna-facade.js?v=1.63"></script>
+<script type="module" src="emartna-pricing.js?v=1.63"></script>
+<script type="module" src="emartna-newbld.js?v=1.63"></script>
+<script type="module" src="emartna-floorplan.js?v=1.63"></script>
+<script type="module" src="emartna-staff.js?v=1.63"></script>
+<script type="module" src="emartna-resaccess.js?v=1.63"></script>
+<script type="module" src="emartna-uitoggles.js?v=1.63"></script>
+<script type="module" src="emartna-cities.js?v=1.63"></script>
+<script type="module" src="emartna-perms.js?v=1.63"></script>
+<script type="module" src="emartna-lastlogin.js?v=1.63"></script>
 
 
 
