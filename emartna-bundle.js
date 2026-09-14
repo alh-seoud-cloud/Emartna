@@ -1,16 +1,14 @@
 /* ============================================================
-   عمارتنا — الحزمة الموحّدة
+   عمارتنا — الحزمة الموحّدة (مولّدة آليًا)
    ------------------------------------------------------------
-   42 ملف في واحد: كل ملف كان رحلة ذهاب وإياب للسيرفر، و٦٠ رحلة
-   على شبكة موبايل = ثواني قبل ما أي كود يشتغل.
+   44 ملف في واحد. الترتيب مطابق لترتيب التحميل الأصلي — الوحدات
+   بتغلّف بعضها وأي تغيير في الترتيب بيكسر السلسلة.
 
-   كل ملف متلفّف في IIFE عشان يفضل معزول زي ما كان type=module —
-   فيه ١٥٣ اسم متكرر بين الملفات وكانوا هيدوسوا على بعض.
+   كل ملف متلفّف في IIFE عشان يفضل معزول زي type=module: فيه ١٥٣
+   اسم متكرر بين الملفات وكانوا هيدوسوا على بعض.
+   واللي فيه await علوي بيتلفّف في async IIFE.
 
-   ⚠️ الوحدات اللي فيها await علوي بتتلفّف في async IIFE، وإلا
-   بتترمي SyntaxError وتوقف الحزمة كلها.
-
-   ⚠️ مولّد آليًا — ما تعدّلش هنا. عدّل الملف الأصلي وأعد البناء.
+   ⚠️ ما تعدّلش هنا — عدّل الملف الأصلي وأعد البناء.
    ============================================================ */
 
 /* ═══ emartna-contacts.js ═══ */
@@ -1884,6 +1882,1188 @@
 
 })();
 
+/* ═══ emartna-reports.js ═══ */
+(function(){
+/* ============================================================
+   عمارتنا — التقارير المحاسبية
+   ------------------------------------------------------------
+   تبويب جديد فيه:
+     ١) ميزان المراجعة — حركة الفترة + الأرصدة + فحص سلامة القيود
+                          + مقارنة بفترة سابقة
+     ٢) أعمار الديون   — المتأخرات موزّعة حسب عمرها (٣٠/٦٠/٩٠/أكتر)
+   ============================================================ */
+
+(function(){
+  'use strict';
+
+  const cash  = n => (window.money ? money(n) : String(n));
+  const esc2  = s => (window.esc ? esc(s) : String(s == null ? '' : s));
+  const today = () => (window.todayISO ? todayISO() : new Date().toISOString().slice(0,10));
+  const unit  = a => (window.unitLabel ? unitLabel(a) : ('وحدة ' + (a ? a.number : '')));
+
+  const R = () => (window.__rep = window.__rep || { from:'', to:'', cmp:'prev' });
+
+  const prevDay = d => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate()-1); return x.toISOString().slice(0,10); };
+  const addDays = (d, n) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toISOString().slice(0,10); };
+  const daysBetween = (a, b) => Math.round((new Date(b+'T00:00:00') - new Date(a+'T00:00:00')) / 86400000);
+
+  /* ---------- أدوات الفترة ---------- */
+
+  window.setRepPeriod = function(months){
+    const s = R();
+    if (months === 'all'){ s.from = ''; s.to = ''; }
+    else if (months === 'year'){ s.from = new Date().getFullYear() + '-01-01'; s.to = today(); }
+    else {
+      const d = new Date(); d.setMonth(d.getMonth() - months + 1);
+      s.from = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0,10);
+      s.to = today();
+    }
+    renderContent();
+  };
+  window.applyRepDates = function(){
+    const s = R();
+    const f = document.getElementById('repFrom'), t = document.getElementById('repTo');
+    if (f) s.from = f.value || '';
+    if (t) s.to = t.value || '';
+    renderContent();
+  };
+  window.setRepCompare = function(v){ R().cmp = v; renderContent(); };
+
+  function periodBar(showCompare){
+    const s = R();
+    const b = (label, arg) => `<button class="btn sm ghost" onclick="setRepPeriod(${typeof arg==='string'?`'${arg}'`:arg})">${label}</button>`;
+    return `
+    <div class="card">
+      <div class="grid g2">
+        <div class="field2"><label>من تاريخ</label><input id="repFrom" type="date" value="${s.from}" onchange="applyRepDates()"></div>
+        <div class="field2"><label>إلى تاريخ</label><input id="repTo" type="date" value="${s.to}" onchange="applyRepDates()"></div>
+      </div>
+      <div class="flexrow mtop">
+        ${b('الشهر الحالي',1)} ${b('آخر 3 شهور',3)} ${b('آخر 6 شهور',6)} ${b('آخر 12 شهر',12)}
+        ${b('السنة الحالية','year')} ${b('كل الفترة','all')}
+      </div>
+      ${showCompare ? `
+      <div class="field2 mtop"><label>قارن بـ</label>
+        <select onchange="setRepCompare(this.value)">
+          <option value="none"  ${s.cmp==='none' ?'selected':''}>بدون مقارنة</option>
+          <option value="prev"  ${s.cmp==='prev' ?'selected':''}>الفترة السابقة مباشرة (نفس الطول)</option>
+          <option value="year"  ${s.cmp==='year' ?'selected':''}>نفس الفترة من السنة اللي فاتت</option>
+        </select>
+      </div>` : ''}
+    </div>`;
+  }
+
+  /* حدود الفترة الفعلية (لو فاضية → من أول حركة لآخر حركة) */
+  function bounds(){
+    const s = R();
+    const D = window.D;
+    const dates = []
+      .concat((D.ledger||[]).map(x => x.date))
+      .concat((D.expenses||[]).map(x => x.date))
+      .filter(Boolean).sort();
+    return {
+      from: s.from || (dates[0] || today()),
+      to:   s.to   || today(),
+    };
+  }
+
+  function comparePeriod(from, to){
+    const s = R();
+    if (s.cmp === 'none') return null;
+    if (s.cmp === 'year'){
+      const shift = d => { const x = new Date(d+'T00:00:00'); x.setFullYear(x.getFullYear()-1); return x.toISOString().slice(0,10); };
+      return { from: shift(from), to: shift(to), label: 'نفس الفترة من السنة اللي فاتت' };
+    }
+    const len = daysBetween(from, to);
+    return { from: addDays(from, -(len+1)), to: addDays(to, -(len+1)), label: 'الفترة السابقة' };
+  }
+
+  /* ---------- ١) ميزان المراجعة ---------- */
+
+  function movements(from, to){
+    const D = window.D;
+    const inR = d => d && d >= from && d <= to;
+    const L = (D.ledger || []).filter(l => inR(l.date));
+    const sum = arr => arr.reduce((a,x) => a + Number(x.amount || 0), 0);
+    return {
+      charges:   sum(L.filter(l => l.type === 'شهري')),
+      projects:  sum(L.filter(l => l.type === 'مشروع')),
+      adjust:    sum(L.filter(l => l.type === 'تسوية')),
+      payments:  sum(L.filter(l => l.type === 'دفعة')),
+      refunds:   sum(L.filter(l => l.type === 'صرف')),
+      expenses:  sum((D.expenses || []).filter(e => inR(e.date))),
+      transfers: sum((D.transfers || []).filter(t => inR(t.date))),
+      count:     L.length + (D.expenses||[]).filter(e => inR(e.date)).length,
+    };
+  }
+
+  function balancesAsOf(to){
+    const D = window.D;
+    const upto = d => !d || d <= to;
+    const sum = arr => arr.reduce((a,x) => a + Number(x.amount || 0), 0);
+    const L = (D.ledger || []).filter(l => upto(l.date));
+    const E = (D.expenses || []).filter(e => upto(e.date));
+
+    const apOpen  = (D.apartments || []).reduce((a,x) => a + (Number(x.openingBalance) || 0), 0);
+    const accOpen = (D.accounts   || []).reduce((a,x) => a + (Number(x.opening)        || 0), 0);
+
+    const charges  = sum(L.filter(l => l.type === 'شهري'));
+    const projects = sum(L.filter(l => l.type === 'مشروع'));
+    const adjust   = sum(L.filter(l => l.type === 'تسوية'));
+    const payments = sum(L.filter(l => l.type === 'دفعة'));
+    const refunds  = sum(L.filter(l => l.type === 'صرف'));
+    const expenses = sum(E);
+
+    const receivables = apOpen + charges + projects + adjust + refunds - payments;  // ذمم الملاك
+    const treasury    = accOpen + payments - refunds - expenses;                     // أرصدة الحسابات
+    const fund        = apOpen + accOpen + charges + projects + adjust - expenses;   // حقوق العمارة
+
+    return { apOpen, accOpen, charges, projects, adjust, payments, refunds, expenses,
+             receivables, treasury, fund, diff: (receivables + treasury) - fund };
+  }
+
+  /* أرصدة الوحدات حتى تاريخ: مدينون (مستحق) ودائنون (دفع مقدم) */
+  function unitBalances(to){
+    const D = window.D;
+    const upto = d => !d || d <= to;
+    let debit = 0, credit = 0;
+    (D.apartments || []).forEach(a => {
+      let b = Number(a.openingBalance) || 0;
+      (D.ledger || []).forEach(l => {
+        if (l.apartmentId !== a.id || !upto(l.date)) return;
+        const amt = Number(l.amount) || 0;
+        if (l.type === 'دفعة') b -= amt; else b += amt;
+      });
+      if (b > 0) debit += b; else credit += -b;
+    });
+    return { debit, credit };
+  }
+
+  /* أرصدة كل حساب على حدة حتى تاريخ */
+  function accountBalances(to){
+    const D = window.D;
+    const upto = d => !d || d <= to;
+    return (D.accounts || []).map(a => {
+      let b = Number(a.opening) || 0;
+      (D.ledger || []).forEach(l => {
+        if (l.accountId !== a.id || !upto(l.date)) return;
+        const amt = Number(l.amount) || 0;
+        if (l.type === 'دفعة') b += amt;
+        if (l.type === 'صرف')  b -= amt;
+      });
+      (D.expenses || []).forEach(e => { if (e.accountId === a.id && upto(e.date)) b -= Number(e.amount)||0; });
+      (D.transfers || []).forEach(t => {
+        if (!upto(t.date)) return;
+        if (t.to === a.id)   b += Number(t.amount)||0;
+        if (t.from === a.id) b -= Number(t.amount)||0;
+      });
+      return { name:a.name, type:a.type, balance:b };
+    });
+  }
+
+  /* فحص سلامة القيود — بيدوّر على الحركات الناقصة أو الغريبة */
+  function integrityChecks(){
+    const D = window.D;
+    const out = [];
+    const apIds  = new Set((D.apartments || []).map(a => a.id));
+    const accIds = new Set((D.accounts   || []).map(a => a.id));
+
+    const noAccount = (D.ledger || []).filter(l => (l.type === 'دفعة' || l.type === 'صرف') && !l.accountId);
+    if (noAccount.length) out.push({ t:'دفعات/مستردات غير مربوطة بحساب', n:noAccount.length,
+      why:'الحركة دي مش بتظهر في رصيد أي حساب، فالخزينة هتبان أقل من الحقيقة.' });
+
+    const expNoAcc = (D.expenses || []).filter(e => !e.accountId);
+    if (expNoAcc.length) out.push({ t:'مصروفات غير مربوطة بحساب', n:expNoAcc.length,
+      why:'المصروف مش هيتخصم من أي حساب، فالخزينة هتبان أعلى من الحقيقة.' });
+
+    const orphanL = (D.ledger || []).filter(l => l.apartmentId && !apIds.has(l.apartmentId));
+    if (orphanL.length) out.push({ t:'حركات مربوطة بوحدة محذوفة', n:orphanL.length,
+      why:'الحركة موجودة في الخزينة بس مش بتظهر في كشف أي وحدة.' });
+
+    const badAcc = (D.ledger || []).filter(l => l.accountId && !accIds.has(l.accountId))
+      .concat((D.expenses || []).filter(e => e.accountId && !accIds.has(e.accountId)));
+    if (badAcc.length) out.push({ t:'حركات مربوطة بحساب محذوف', n:badAcc.length, why:'مش بتظهر في كشف أي حساب.' });
+
+    const noDate = (D.ledger || []).filter(l => !l.date)
+      .concat((D.expenses || []).filter(e => !e.date));
+    if (noDate.length) out.push({ t:'حركات بدون تاريخ', n:noDate.length,
+      why:'مش هتظهر في أي تقرير بفترة محددة.' });
+
+    const zero = (D.ledger || []).filter(l => !Number(l.amount))
+      .concat((D.expenses || []).filter(e => !Number(e.amount)));
+    if (zero.length) out.push({ t:'حركات بمبلغ صفر', n:zero.length, why:'غالبًا إدخال ناقص.' });
+
+    const noFee = (D.apartments || []).filter(a => !a.closed && !Number(a.monthlyFee));
+    if (noFee.length) out.push({ t:'وحدات بدون اشتراك شهري', n:noFee.length,
+      why:'مش هتتحسب في التحصيل الشهري. لو ده مقصود تجاهل التنبيه.' });
+
+    return out;
+  }
+
+  window.pageTrialBalance = function(){
+    if (!window.D) return '<p class="small">مفيش بيانات</p>';
+    const { from, to } = bounds();
+    const cur = movements(from, to);
+    const cmp = comparePeriod(from, to);
+    const prev = cmp ? movements(cmp.from, cmp.to) : null;
+    const bal  = balancesAsOf(to);
+    const open = balancesAsOf(prevDay(from));   // أرصدة أول المدة
+    const checks = integrityChecks();
+
+    const pct = (a,b) => b === 0 ? (a > 0 ? 100 : 0) : Math.round(((a-b)/b)*100);
+    const chg = (a,b) => {
+      if (!prev) return '';
+      const p = pct(a,b);
+      if (p === 0) return '<span class="badge n">=</span>';
+      return p > 0 ? `<span class="badge g">▲ ${p}%</span>` : `<span class="badge r">▼ ${Math.abs(p)}%</span>`;
+    };
+
+    const row = (label, val, prevVal, hint) => `
+      <tr>
+        <td style="padding:7px;border-bottom:1px solid var(--line)">${label}${hint?`<div class="small" style="color:var(--muted)">${hint}</div>`:''}</td>
+        <td style="padding:7px;border-bottom:1px solid var(--line);font-weight:700">${cash(val)}</td>
+        ${prev ? `<td style="padding:7px;border-bottom:1px solid var(--line);color:var(--muted)">${cash(prevVal)}</td>
+                  <td style="padding:7px;border-bottom:1px solid var(--line)">${chg(val,prevVal)}</td>` : ''}
+      </tr>`;
+
+    const bRow = (label, o, c) => `
+      <tr>
+        <td style="padding:7px;border-bottom:1px solid var(--line)">${label}</td>
+        <td style="padding:7px;border-bottom:1px solid var(--line);color:var(--muted)">${cash(o)}</td>
+        <td style="padding:7px;border-bottom:1px solid var(--line)">${(c-o)>=0?'+':'−'}${cash(Math.abs(c-o))}</td>
+        <td style="padding:7px;border-bottom:1px solid var(--line);font-weight:700">${cash(c)}</td>
+      </tr>`;
+
+    const head = `<tr>
+      <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">البيان</th>
+      <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">الفترة الحالية</th>
+      ${prev ? `<th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">${esc2(cmp.label)}</th>
+                <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">التغيّر</th>` : ''}
+    </tr>`;
+
+    const totalDue = cur.charges + cur.projects + cur.adjust;
+    const prevDue  = prev ? prev.charges + prev.projects + prev.adjust : 0;
+    const netCash  = cur.payments - cur.refunds - cur.expenses;
+    const prevNet  = prev ? prev.payments - prev.refunds - prev.expenses : 0;
+    const rate     = totalDue > 0 ? Math.round((cur.payments / totalDue) * 100) : null;
+
+    return `
+    <p class="small">ملخص محاسبي للفترة: المستحق مقابل المحصّل مقابل المصروف، وأرصدة آخر المدة، وفحص لسلامة القيود.</p>
+    ${periodBar(true)}
+    <p class="small mtop" style="color:var(--muted)">الفترة: ${esc2(from)} → ${esc2(to)} · ${cur.count} حركة</p>
+
+    <div class="grid g4 mtop">
+      <div class="kpi"><div class="ic">📄</div><div class="lbl">إجمالي المستحق</div><div class="val" style="font-size:15px">${cash(totalDue)}</div></div>
+      <div class="kpi ok"><div class="ic">📥</div><div class="lbl">المحصّل</div><div class="val" style="font-size:15px">${cash(cur.payments)}</div></div>
+      <div class="kpi owe"><div class="ic">📤</div><div class="lbl">المصروفات</div><div class="val" style="font-size:15px">${cash(cur.expenses)}</div></div>
+      <div class="kpi ${rate!==null&&rate>=80?'ok':''}"><div class="ic">📊</div><div class="lbl">نسبة التحصيل</div><div class="val" style="font-size:15px">${rate===null?'-':rate+'%'}</div></div>
+    </div>
+
+    <div class="section-title"><h3>حركة الفترة</h3></div>
+    <div class="card"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>${head}</thead>
+      <tbody>
+        ${row('اشتراكات شهرية مستحقة', cur.charges, prev&&prev.charges)}
+        ${row('مساهمات مشاريع مستحقة', cur.projects, prev&&prev.projects)}
+        ${row('تسويات', cur.adjust, prev&&prev.adjust, 'خصومات أو عكس مستحقات')}
+        ${row('<b>إجمالي المستحق</b>', totalDue, prevDue)}
+        ${row('المحصّل من الملاك', cur.payments, prev&&prev.payments)}
+        ${row('مستردات للملاك', cur.refunds, prev&&prev.refunds)}
+        ${row('المصروفات', cur.expenses, prev&&prev.expenses)}
+        ${row('<b>صافي حركة الخزينة</b>', netCash, prevNet, 'المحصّل − المستردات − المصروفات')}
+        ${row('تحويلات بين الحسابات', cur.transfers, prev&&prev.transfers, 'ما بتأثرش على الإجمالي')}
+      </tbody>
+    </table></div>
+
+    <div class="section-title"><h3>ميزان المراجعة — أول المدة · الحركة · آخر المدة</h3></div>
+    <div class="card"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr>
+        <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">الحساب</th>
+        <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">رصيد ${esc2(from)}</th>
+        <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">حركة الفترة</th>
+        <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">رصيد ${esc2(to)}</th>
+      </tr></thead>
+      <tbody>
+        ${bRow('ذمم الملاك (مستحق لم يُحصّل)', open.receivables, bal.receivables)}
+        ${bRow('أرصدة الحسابات (خزينة + بنوك)', open.treasury, bal.treasury)}
+        ${bRow('<b>إجمالي أصول العمارة</b>', open.receivables + open.treasury, bal.receivables + bal.treasury)}
+        ${bRow('حقوق العمارة (الافتتاحي + المستحقات − المصروفات)', open.fund, bal.fund)}
+      </tbody>
+    </table>
+    <p class="small mtop">${Math.abs(bal.diff) < 0.01
+      ? '✅ <b>الميزان متوازن</b> — الأصول تساوي الحقوق بالضبط.'
+      : `⚠️ <b>فرق غير متوازن: ${cash(bal.diff)}</b> — راجع فحص القيود تحت.`}</p></div>
+
+    <div class="section-title"><h3>🔍 فحص سلامة القيود</h3></div>
+    <div class="card">${checks.length ? checks.map(c => `
+      <div class="flexrow" style="padding:7px 0;border-bottom:1px solid var(--line)">
+        <span class="badge y" style="min-width:38px;text-align:center">${c.n}</span>
+        <div style="flex:1"><b class="small">${esc2(c.t)}</b>
+          <div class="small" style="color:var(--muted)">${esc2(c.why)}</div></div>
+      </div>`).join('') : '<p class="small">✅ مفيش أي ملاحظات — كل الحركات مربوطة صح.</p>'}</div>`;
+  };
+
+  /* ---------- ٢) أعمار الديون ---------- */
+
+  /* بنوزّع المدفوع على المستحقات بالأقدم أولًا، والباقي بيتحسب عمره من تاريخه */
+  function agingFor(apId, asOf){
+    const D = window.D;
+    const rows = (D.ledger || []).filter(l => l.apartmentId === apId && (!l.date || l.date <= asOf));
+    const dues = rows.filter(l => ['شهري','مشروع','تسوية','صرف'].includes(l.type))
+                     .map(l => ({ date:l.date || asOf, amount:Number(l.amount) || 0, type:l.type }))
+                     .filter(x => x.amount > 0)
+                     .sort((a,b) => (a.date||'').localeCompare(b.date||''));
+    const a = (D.apartments || []).find(x => x.id === apId);
+    const open = Number(a && a.openingBalance) || 0;
+    if (open > 0) dues.unshift({ date: (dues[0] && dues[0].date) || asOf, amount: open, type:'رصيد افتتاحي' });
+
+    // المدفوع = الدفعات + أي تسوية بالسالب (خصم) — الاتنين بيقلّلوا المستحق.
+    // من غير التسويات السالبة، إجمالي أعمار الديون كان بيطلع أكبر من
+    // إجمالي أرصدة الوحدات بقيمة الخصومات.
+    let paid = rows.filter(l => l.type === 'دفعة')
+                   .reduce((s,l) => s + (Number(l.amount)||0), 0)
+             + rows.filter(l => Number(l.amount) < 0)
+                   .reduce((s,l) => s + Math.abs(Number(l.amount)||0), 0);
+
+    const buckets = { d30:0, d60:0, d90:0, more:0 };
+    let oldest = null;
+    for (const d of dues){
+      let rem = d.amount;
+      if (paid > 0){ const use = Math.min(paid, rem); paid -= use; rem -= use; }
+      if (rem <= 0.001) continue;
+      const age = daysBetween(d.date, asOf);
+      if (oldest === null || age > oldest) oldest = age;
+      if (age <= 30) buckets.d30 += rem;
+      else if (age <= 60) buckets.d60 += rem;
+      else if (age <= 90) buckets.d90 += rem;
+      else buckets.more += rem;
+    }
+    const total = buckets.d30 + buckets.d60 + buckets.d90 + buckets.more;
+    return { buckets, total, oldest, credit: paid };   // paid المتبقي = رصيد دائن
+  }
+
+  window.pageAging = function(){
+    if (!window.D) return '<p class="small">مفيش بيانات</p>';
+    const s = R();
+    const asOf = s.to || today();
+    const list = (window.D.apartments || []).map(a => {
+      const g = agingFor(a.id, asOf);
+      return { a, ...g };
+    });
+    const debtors = list.filter(x => x.total > 0.001)
+                        .sort((x,y) => (y.oldest||0) - (x.oldest||0) || y.total - x.total);
+    const credits = list.filter(x => x.credit > 0.001);
+
+    const sum = k => debtors.reduce((t,x) => t + x.buckets[k], 0);
+    const t30 = sum('d30'), t60 = sum('d60'), t90 = sum('d90'), tmore = sum('more');
+    const grand = t30 + t60 + t90 + tmore;
+
+    const cols = [
+      { key:'unit',  label:'الوحدة',  value:x => x.a.number || 0, cell:x => `<b>${esc2(unit(x.a))}</b>` },
+      { key:'owner', label:'المالك',  value:x => x.a.ownerName || '', cell:x => esc2(x.a.ownerName || '-') },
+      { key:'phone', label:'الهاتف',  value:x => x.a.phone || '', cell:x => esc2(x.a.phone || '-') },
+      { key:'d30',   label:'حتى 30 يوم', value:x => x.buckets.d30,  cell:x => x.buckets.d30  ? cash(x.buckets.d30)  : '-' },
+      { key:'d60',   label:'31 — 60',    value:x => x.buckets.d60,  cell:x => x.buckets.d60  ? cash(x.buckets.d60)  : '-' },
+      { key:'d90',   label:'61 — 90',    value:x => x.buckets.d90,  cell:x => x.buckets.d90  ? `<span style="color:var(--red)">${cash(x.buckets.d90)}</span>` : '-' },
+      { key:'more',  label:'أكثر من 90', value:x => x.buckets.more, cell:x => x.buckets.more ? `<span style="color:var(--red)"><b>${cash(x.buckets.more)}</b></span>` : '-' },
+      { key:'total', label:'الإجمالي',   value:x => x.total, cell:x => `<b>${cash(x.total)}</b>` },
+      { key:'age',   label:'أقدم دين',   value:x => x.oldest || 0, cell:x => x.oldest === null ? '-' :
+          `<span class="badge ${x.oldest>90?'r':x.oldest>60?'y':'n'}">${x.oldest} يوم</span>` },
+      { key:'x', label:'', value:null, cell:x => `<button class="btn sm ghost" onclick="openApartmentDetail('${x.a.id}')">كشف</button>` },
+    ];
+
+    return `
+    <p class="small">المتأخرات موزّعة حسب عمر الدين. الدفعات بتتخصم من الأقدم أولًا، فالمبالغ في خانة "أكثر من 90" هي فعلًا أقدم مستحقات لسه ما اتسددتش.</p>
+    ${periodBar(false)}
+    <p class="small mtop" style="color:var(--muted)">الأعمار محسوبة حتى: ${esc2(asOf)}</p>
+
+    <div class="grid g4 mtop">
+      <div class="kpi"><div class="ic">🕐</div><div class="lbl">حتى 30 يوم</div><div class="val" style="font-size:15px">${cash(t30)}</div></div>
+      <div class="kpi"><div class="ic">🕑</div><div class="lbl">31 — 60 يوم</div><div class="val" style="font-size:15px">${cash(t60)}</div></div>
+      <div class="kpi owe"><div class="ic">🕒</div><div class="lbl">61 — 90 يوم</div><div class="val" style="font-size:15px">${cash(t90)}</div></div>
+      <div class="kpi owe"><div class="ic">🚨</div><div class="lbl">أكثر من 90 يوم</div><div class="val" style="font-size:15px">${cash(tmore)}</div></div>
+    </div>
+    <p class="small mtop"><b>إجمالي المتأخرات: ${cash(grand)}</b> على ${debtors.length} وحدة${
+      credits.length ? ` · و${credits.length} وحدة عندها رصيد دائن (دفع مقدم)` : ''}</p>
+
+    <div class="mtop">${window.sortableTable('agingTable', debtors, cols, null, {
+      defaultKey:'age', emptyText:'🎉 مفيش أي متأخرات', exportName:'أعمار الديون'
+    })}</div>`;
+  };
+
+
+  /* ---------- ٣) قائمة الدخل ---------- */
+
+  function expensesByCategory(from, to){
+    const D = window.D;
+    const map = {};
+    (D.expenses || []).forEach(e => {
+      const d = e.date || '';
+      if (d < from || d > to) return;
+      const c = e.category || 'أخرى';
+      map[c] = (map[c] || 0) + (Number(e.amount) || 0);
+    });
+    return Object.keys(map).map(c => ({ category:c, amount:map[c] }))
+                 .sort((a,b) => b.amount - a.amount);
+  }
+
+  window.pageIncomeStatement = function(){
+    if (!window.D) return '<p class="small">مفيش بيانات</p>';
+    const { from, to } = bounds();
+    const cur = movements(from, to);
+    const cmp = comparePeriod(from, to);
+    const prev = cmp ? movements(cmp.from, cmp.to) : null;
+
+    // أساس الاستحقاق: الإيراد وقت ما يستحق. الأساس النقدي: وقت ما يتحصّل.
+    const accIncome = cur.charges + cur.projects + cur.adjust;
+    const accResult = accIncome - cur.expenses;
+    const cashIn    = cur.payments - cur.refunds;
+    const cashResult= cashIn - cur.expenses;
+
+    const pAccIncome = prev ? prev.charges + prev.projects + prev.adjust : 0;
+    const pAccResult = prev ? pAccIncome - prev.expenses : 0;
+
+    const cats  = expensesByCategory(from, to);
+    const pCats = prev ? expensesByCategory(cmp.from, cmp.to) : [];
+    const pCat  = c => (pCats.find(x => x.category === c) || {}).amount || 0;
+    const maxCat = Math.max(...cats.map(c => c.amount), 1);
+
+    const pct = (a,b) => b === 0 ? (a > 0 ? 100 : 0) : Math.round(((a-b)/b)*100);
+    const chg = (a,b) => {
+      if (!prev) return '';
+      const p = pct(a,b);
+      if (p === 0) return '<span class="badge n">=</span>';
+      return p > 0 ? `<span class="badge g">▲ ${p}%</span>` : `<span class="badge r">▼ ${Math.abs(p)}%</span>`;
+    };
+    const line = (label, v, pv, bold, hint) => `
+      <tr>
+        <td style="padding:7px;border-bottom:1px solid var(--line)">${bold?`<b>${label}</b>`:label}
+          ${hint?`<div class="small" style="color:var(--muted)">${hint}</div>`:''}</td>
+        <td style="padding:7px;border-bottom:1px solid var(--line);${bold?'font-weight:700':''}">${cash(v)}</td>
+        ${prev ? `<td style="padding:7px;border-bottom:1px solid var(--line);color:var(--muted)">${cash(pv)}</td>
+                  <td style="padding:7px;border-bottom:1px solid var(--line)">${chg(v,pv)}</td>` : ''}
+      </tr>`;
+    const th = `<tr>
+      <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">البيان</th>
+      <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">الفترة</th>
+      ${prev ? `<th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">${esc2(cmp.label)}</th>
+                <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">التغيّر</th>` : ''}
+    </tr>`;
+
+    return `
+    <p class="small">إيرادات العمارة مقابل مصروفاتها خلال الفترة، وفائض أو عجز الفترة. معروضة بالأساسين: الاستحقاق (المستحق) والنقدي (المحصّل فعلًا).</p>
+    ${periodBar(true)}
+    <p class="small mtop" style="color:var(--muted)">الفترة: ${esc2(from)} → ${esc2(to)}</p>
+
+    <div class="grid g3 mtop">
+      <div class="kpi ok"><div class="ic">📥</div><div class="lbl">إجمالي الإيرادات المستحقة</div><div class="val" style="font-size:15px">${cash(accIncome)}</div></div>
+      <div class="kpi owe"><div class="ic">📤</div><div class="lbl">إجمالي المصروفات</div><div class="val" style="font-size:15px">${cash(cur.expenses)}</div></div>
+      <div class="kpi ${accResult>=0?'ok':'owe'}"><div class="ic">${accResult>=0?'📈':'📉'}</div><div class="lbl">${accResult>=0?'فائض الفترة':'عجز الفترة'}</div><div class="val" style="font-size:15px">${cash(Math.abs(accResult))}</div></div>
+    </div>
+
+    <div class="section-title"><h3>الإيرادات</h3></div>
+    <div class="card"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>${th}</thead><tbody>
+        ${line('اشتراكات شهرية', cur.charges, prev&&prev.charges)}
+        ${line('مساهمات مشاريع', cur.projects, prev&&prev.projects)}
+        ${line('تسويات', cur.adjust, prev&&prev.adjust, false, 'خصومات أو إضافات على الملاك')}
+        ${line('إجمالي الإيرادات', accIncome, pAccIncome, true)}
+      </tbody></table></div>
+
+    <div class="section-title"><h3>المصروفات حسب البند</h3></div>
+    <div class="card">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>${th}</thead><tbody>
+          ${cats.length ? cats.map(c => `
+          <tr>
+            <td style="padding:7px;border-bottom:1px solid var(--line)">
+              ${esc2(c.category)}
+              <div style="height:6px;background:var(--line);border-radius:4px;margin-top:5px;overflow:hidden">
+                <div style="width:${(c.amount/maxCat*100).toFixed(0)}%;height:100%;background:var(--gold)"></div>
+              </div>
+              <div class="small" style="color:var(--muted)">${cur.expenses?Math.round(c.amount/cur.expenses*100):0}% من المصروفات</div>
+            </td>
+            <td style="padding:7px;border-bottom:1px solid var(--line)">${cash(c.amount)}</td>
+            ${prev ? `<td style="padding:7px;border-bottom:1px solid var(--line);color:var(--muted)">${cash(pCat(c.category))}</td>
+                      <td style="padding:7px;border-bottom:1px solid var(--line)">${chg(c.amount, pCat(c.category))}</td>` : ''}
+          </tr>`).join('') : `<tr><td colspan="4" class="small" style="padding:10px">مفيش مصروفات في الفترة دي</td></tr>`}
+          ${line('إجمالي المصروفات', cur.expenses, prev&&prev.expenses, true)}
+        </tbody></table></div>
+
+    <div class="section-title"><h3>النتيجة</h3></div>
+    <div class="card"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>${th}</thead><tbody>
+        ${line(accResult>=0?'فائض الفترة (أساس الاستحقاق)':'عجز الفترة (أساس الاستحقاق)', accResult, pAccResult, true,
+               'الإيرادات المستحقة − المصروفات')}
+        ${line('التدفق النقدي الفعلي', cashResult, prev ? (prev.payments-prev.refunds-prev.expenses) : 0, true,
+               'المحصّل فعلًا − المستردات − المصروفات')}
+        ${line('الفرق بين الاتنين', accResult - cashResult, null, false,
+               'ده مقدار المستحق اللي لسه ما اتحصّلش في الفترة')}
+      </tbody></table>
+      <p class="small mtop">${accResult >= 0
+        ? '✅ العمارة حققت فائض في الفترة دي على أساس الاستحقاق.'
+        : '⚠️ المصروفات زادت عن الإيرادات المستحقة في الفترة دي.'}
+        ${cashResult < 0 && accResult >= 0 ? ' لاحظ إن التدفق النقدي سالب رغم الفائض — يعني في مستحقات ما اتحصّلتش.' : ''}</p>
+    </div>`;
+  };
+
+  /* ---------- ٤) الميزانية المصغرة ---------- */
+
+  window.pageBalanceSheet = function(){
+    if (!window.D) return '<p class="small">مفيش بيانات</p>';
+    const { from, to } = bounds();
+    const u  = unitBalances(to);
+    const uo = unitBalances(prevDay(from));
+    const accs  = accountBalances(to);
+    const accsO = accountBalances(prevDay(from));
+
+    const cashNow = accs.reduce((s,a) => s + a.balance, 0);
+    const cashOld = accsO.reduce((s,a) => s + a.balance, 0);
+
+    const assetsNow = cashNow + u.debit;
+    const assetsOld = cashOld + uo.debit;
+    const liabNow = u.credit, liabOld = uo.credit;
+    const netNow = assetsNow - liabNow, netOld = assetsOld - liabOld;
+
+    const m = movements(from, to);
+    const surplus = m.charges + m.projects + m.adjust - m.expenses;
+    const check = netNow - netOld - surplus;
+
+    const r = (label, now, old, bold) => `
+      <tr>
+        <td style="padding:7px;border-bottom:1px solid var(--line)">${bold?`<b>${label}</b>`:label}</td>
+        <td style="padding:7px;border-bottom:1px solid var(--line);color:var(--muted)">${cash(old)}</td>
+        <td style="padding:7px;border-bottom:1px solid var(--line);${bold?'font-weight:700':''}">${cash(now)}</td>
+      </tr>`;
+    const th2 = `<tr>
+      <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">البند</th>
+      <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">${esc2(from)}</th>
+      <th style="text-align:right;padding:7px;border-bottom:2px solid var(--line)">${esc2(to)}</th>
+    </tr>`;
+
+    return `
+    <p class="small">مركز العمارة المالي: إيه اللي عندها، وإيه اللي عليها، وصافي حقوقها — في بداية الفترة ونهايتها.</p>
+    ${periodBar(false)}
+
+    <div class="grid g3 mtop">
+      <div class="kpi ok"><div class="ic">🏦</div><div class="lbl">النقدية والبنوك</div><div class="val" style="font-size:15px">${cash(cashNow)}</div></div>
+      <div class="kpi ${u.debit>0?'owe':''}"><div class="ic">📄</div><div class="lbl">مستحق على الملاك</div><div class="val" style="font-size:15px">${cash(u.debit)}</div></div>
+      <div class="kpi"><div class="ic">🧮</div><div class="lbl">صافي أصول العمارة</div><div class="val" style="font-size:15px">${cash(netNow)}</div></div>
+    </div>
+
+    <div class="section-title"><h3>الأصول (اللي للعمارة)</h3></div>
+    <div class="card"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>${th2}</thead><tbody>
+        ${accs.map((a,i) => r((a.type==='نقدي'?'💵 ':'🏦 ') + esc2(a.name), a.balance, (accsO[i]||{}).balance || 0)).join('')}
+        ${r('مستحقات على الملاك (مدينون)', u.debit, uo.debit)}
+        ${r('إجمالي الأصول', assetsNow, assetsOld, true)}
+      </tbody></table></div>
+
+    <div class="section-title"><h3>الالتزامات (اللي على العمارة)</h3></div>
+    <div class="card"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>${th2}</thead><tbody>
+        ${r('دفعات مقدمة من الملاك (دائنون)', liabNow, liabOld)}
+        ${r('إجمالي الالتزامات', liabNow, liabOld, true)}
+      </tbody></table>
+      <p class="small mtop">دي مبالغ دفعها ملاك زيادة عن المستحق عليهم، فهي حق ليهم على العمارة.</p></div>
+
+    <div class="section-title"><h3>صافي حقوق العمارة</h3></div>
+    <div class="card"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tbody>
+        ${r('صافي الأصول أول المدة', netOld, netOld)}
+        ${r((surplus>=0?'+ فائض الفترة':'− عجز الفترة'), Math.abs(surplus), Math.abs(surplus))}
+        ${r('= صافي الأصول آخر المدة', netNow, netNow, true)}
+      </tbody></table>
+      <p class="small mtop">${Math.abs(check) < 0.01
+        ? '✅ <b>الميزانية متوازنة</b> — صافي الأصول أول المدة + نتيجة الفترة = صافي الأصول آخر المدة.'
+        : `⚠️ <b>فرق ${cash(check)}</b> — في حركة تاريخها برّه الفترة أو قيد ناقص. راجع "فحص سلامة القيود" في ميزان المراجعة.`}</p>
+    </div>`;
+  };
+
+  /* ---------- ربط التبويب في القائمة ---------- */
+
+  function installNav(){
+    const G = window.ADMIN_NAV_GROUPS;
+    if (!G || G.some(g => g.key === 'reports')) return;
+    // التبويب ده تابع لصلاحية "الماليات" — اللي مالوش صلاحية مالية مايشوفهوش
+    const origPerm = window.hasGroupPermission;
+    if (origPerm && !origPerm.__repPatched){
+      window.hasGroupPermission = function(u, key){
+        if (key === 'reports') return origPerm(u, 'finance');
+        return origPerm.apply(this, arguments);
+      };
+      window.hasGroupPermission.__repPatched = true;
+    }
+
+    const item = { key:'reports', icon:'📑', label:'التقارير المحاسبية',
+      items:[ ['trialBalance','⚖️','ميزان المراجعة'],
+              ['incomeStatement','📈','قائمة الدخل'],
+              ['balanceSheet','🧮','الميزانية المصغرة'],
+              ['aging','⏳','أعمار الديون'] ] };
+    const at = G.findIndex(g => g.key === 'finance');
+    G.splice(at >= 0 ? at + 1 : G.length, 0, item);
+
+    // عناوين الشاشات
+    if (window.PAGE_TITLES){
+      window.PAGE_TITLES.trialBalance = 'ميزان المراجعة';
+      window.PAGE_TITLES.aging = 'أعمار الديون';
+    }
+  }
+
+  // الراوتر بينده على الدوال بالاسم، فبنلفّه عشان نضيف الشاشتين
+  const origRender = window.renderContent;
+  window.renderContent = function(){
+    const p = (typeof curPage !== 'undefined') ? curPage : '';
+    const REPORTS = {
+      trialBalance:    ['ميزان المراجعة',    pageTrialBalance],
+      incomeStatement: ['قائمة الدخل',        pageIncomeStatement],
+      balanceSheet:    ['الميزانية المصغرة',  pageBalanceSheet],
+      aging:           ['أعمار الديون',       pageAging],
+    };
+    if (REPORTS[p]){
+      const t = document.getElementById('pageTitle');
+      if (t) t.textContent = REPORTS[p][0];
+      const c = document.getElementById('content');
+      if (c) c.innerHTML = REPORTS[p][1]();
+      return;
+    }
+    return origRender.apply(this, arguments);
+  };
+
+  installNav();
+  console.log('[عمارتنا] التقارير المحاسبية جاهزة');
+})();
+
+})();
+
+/* ═══ emartna-admin.js (async) ═══ */
+(async function(){
+/* ============================================================
+   عمارتنا — تحكّم صاحب البرنامج
+   ------------------------------------------------------------
+   ١) الذكاء الاصطناعي: مقفول على رؤساء الاتحادات دلوقتي،
+      وصاحب البرنامج يقدر يفتحه من "إعدادات الذكاء الاصطناعي"
+      لما يجهّز. صاحب البرنامج نفسه بيستخدمه عادي.
+
+   ٢) سجل الإصدارات: أي تطوير جديد بيتسجّل تلقائيًا كـ"داخلي
+      فقط" أول ما صاحب البرنامج يدخل — وما يظهرش لرؤساء
+      الاتحادات إلا لما هو يراجعه ويعلّمه "ظاهر".
+   ============================================================ */
+
+(function(){
+  'use strict';
+
+  const SETTING_KEY = 'ai_for_admins';
+
+  /* ============================================================
+     ١) قفل الذكاء الاصطناعي على رؤساء الاتحادات
+     ============================================================ */
+
+  // الافتراضي: مقفول. بيتقرا من إعدادات المنصة لو صاحب البرنامج فتحه.
+  window.__aiForAdmins = false;
+
+  function stripAITab(){
+    const G = window.ADMIN_NAV_GROUPS;
+    if (!G) return;
+    G.forEach(g => {
+      if (window.__aiForAdmins){
+        // رجّعه لو كان متشال
+        if (g.key === 'settings' && !g.items.some(it => it[0] === 'aireports')){
+          const at = g.items.findIndex(it => it[0] === 'license');
+          g.items.splice(at >= 0 ? at : g.items.length, 0, ['aireports','🤖','تقارير الذكاء الاصطناعي']);
+        }
+      } else {
+        g.items = g.items.filter(it => it[0] !== 'aireports');
+      }
+    });
+  }
+
+  // حتى لو حد كتب العنوان بإيده، الشاشة نفسها مقفولة
+  const origAIPage = window.pageAIReports;
+  window.pageAIReports = function(){
+    if (window.__aiForAdmins && origAIPage) return origAIPage.apply(this, arguments);
+    return `<div class="card content-narrow">
+      <h3>🤖 تقارير الذكاء الاصطناعي</h3>
+      <p class="small mtop">الخدمة دي لسه تحت التجهيز ومش متاحة حاليًا.
+      هتظهر لك هنا أول ما تتفعّل من إدارة البرنامج.</p>
+    </div>`;
+  };
+
+  /* قراءة الإعداد من المنصة (متاح للقراءة للجميع) */
+  async function loadAISetting(){
+    try{
+      const sb = window.CLOUD && window.CLOUD._sb;
+      if (!sb) return;
+      const { data, error } = await sb.from('platform_settings')
+        .select('value').eq('key', SETTING_KEY).maybeSingle();
+      if (error) return;
+      const on = !!(data && (data.value === true || (data.value && data.value.enabled === true)));
+      if (on !== window.__aiForAdmins){
+        window.__aiForAdmins = on;
+        stripAITab();
+        if (window.renderRoot && window.currentUser && currentUser()) renderRoot();
+      }
+    }catch(e){ /* الافتراضي يفضل مقفول */ }
+  }
+
+  /* زرار التحكم لصاحب البرنامج */
+  window.toggleAIForAdmins = async function(){
+    const next = !window.__aiForAdmins;
+    try{
+      const sb = window.CLOUD._sb;
+      const { error } = await sb.rpc('save_platform_doc',
+        { p_key: SETTING_KEY, p_value: { enabled: next } });
+      if (error) throw error;
+      window.__aiForAdmins = next;
+      stripAITab();
+      if (window.toast) toast(next ? 'الخدمة اتفتحت لرؤساء الاتحادات' : 'الخدمة اتقفلت على رؤساء الاتحادات');
+      if (window.renderSysContent) renderSysContent();
+    }catch(e){
+      if (window.showMessage) showMessage(e.message || 'تعذّر حفظ الإعداد');
+    }
+  };
+
+  // نضيف كارت التحكم في شاشة إعدادات الذكاء الاصطناعي عند صاحب البرنامج
+  const origSysAI = window.pageSysAISettings;
+  if (origSysAI) window.pageSysAISettings = function(){
+    const on = window.__aiForAdmins;
+    return `
+    <div class="card content-narrow" style="border:1px solid var(--line)">
+      <h3>👁️ إتاحة الخدمة لرؤساء اتحادات الملاك</h3>
+      <p class="small mtop">
+        دلوقتي الخدمة <b>${on ? 'مفتوحة' : 'مقفولة'}</b> بالنسبة لرؤساء الاتحادات.
+        ${on ? 'بيشوفوا تبويب "تقارير الذكاء الاصطناعي" ويقدروا يولّدوا تقارير عن عمارتهم.'
+             : 'التبويب مخفي عندهم تمامًا. إنت بتستخدم الخدمة عادي من هنا.'}
+      </p>
+      <div class="flexrow mtop">
+        <button class="btn ${on ? 'red' : 'primary'}" onclick="toggleAIForAdmins()">
+          ${on ? '🔒 اقفل الخدمة عليهم' : '🔓 افتح الخدمة لهم'}
+        </button>
+      </div>
+    </div>
+    ${origSysAI.apply(this, arguments)}`;
+  };
+
+  /* ============================================================
+     ٢) سجل الإصدارات التلقائي
+     ============================================================ */
+
+  /* أي تطوير جديد بيتضاف هنا. البرنامج بيسجّله تلقائيًا كـ"داخلي فقط". */
+  const CHANGELOG = [
+    { version:'1.06', date:'2026-09-02', notes:[
+      'إصلاح حرج: البرنامج كان بيجيب مكتبة أساسية من موقع خارجي وقت كل فتح — '
+        + 'ولو الموقع بطيء أو محجوب، تسجيل الدخول كان بيتقفل تمامًا. '
+        + 'المكتبة بقت جوه البرنامج، فمفيش اعتماد على أي طرف تالت.',
+      'صلاحيات السكان: رئيس اتحاد كل عمارة يحدد الشاشات اللي صاحب الشقة والمستأجر يفتحوها',
+      'رقم الوحدة بقى موحّد في كل الشاشات — مفيش تكرار بين المحل والشقة',
+    ]},
+    { version:'1.05', date:'2026-09-02', notes:[
+      'توزيع الأدوار: تحدد لكل دور كام شقة وكام محل — للعمارات اللي أدوارها مش متشابهة',
+      'الدور اللي مفيهوش وحدات (جراج أو مدخل) بقى مقبول — سيبه صفر',
+      'ترقيم الوحدات زي ما هو مكتوب على الباب: A-12 · محل ٣ · ١٢٠١',
+      'اختيار نمط الترقيم وقت التسجيل: دور+رقم · متسلسل · بالنوع · مخصّص لكل دور',
+      'قوالب ترقيم جاهزة تملا كل الوحدات بضغطة، مع منع تكرار الأرقام',
+      'تعديل رقم الوحدة من الإكسل — عمود جديد في ملف التحديث',
+      'خمس أشكال لواجهة العمارة: واجهة · شبكة · قائمة · خريطة حرارية · مصغّر',
+      'الخريطة الحرارية بتوري حجم المتأخر باللون — مش وجوده بس',
+      'الجداول بقى فيها اختيار عدد الصفوف (١٠ · ٢٠ · ٥٠ · ١٠٠ · الكل) مع تنقّل بين الصفحات',
+      'عرض الجداول على الموبايل بقى كروت واضحة بدل السحب يمين وشمال',
+      'حد المساعدين حسب الخطة — رئيس الاتحاد وأصحاب الوحدات مش محسوبين',
+      'ربط عضو الإدارة بوحدته: حساب واحد يشوف صلاحياته وحسابه مع بعض',
+      'التاريخ موحّد يوم/شهر/سنة في كل البرنامج مع توضيح بالعربي',
+      'إصلاح: العمارة الجديدة كانت بتتحفظ على الجهاز بس وما توصلش الخادم',
+      'إصلاح: عدد الوحدات كان بيتقص عند التسجيل لو أكبر من حد الخطة',
+      'إصلاح: دعوة المحاسب أو الإداري كانت بتفشل',
+      'إصلاح: رقم الشقة في الأدوار من العاشر فوق كان بيظهر ناقص (١٢٠١ تبان ٢٠١)',
+      'إصلاح: الدور اللي فيه وحدة واحدة كان بياخد عرض الشاشة كله',
+      'إصلاح: روابط واتساب كانت بتفتح على رقم فاضي',
+      'إصلاح: آخر تعديل قبل قفل التبويب كان ممكن يضيع',
+      'تسريع الدخول: الشاشة بتفتح بأول البيانات والباقي بيكمّل في الخلفية',
+    ]},
+    { version:'1.04', date:'2026-08-27', notes:[
+      'الموقع اتنقل للعنوان الرئيسي myemartna.com',
+      'نافذة ترحيب للزائر: يجرّب كرئيس اتحاد أو صاحب شقة، أو ياخد العرض المجاني',
+      'حاسبة الاشتراك في الصفحة الرئيسية — اكتب عدد وحداتك وشوف سعرك فورًا',
+      'الأسعار اتبسّطت لخطتين: شهري وسنوي، والسعر حسب عدد الوحدات',
+      'العرض المجاني بقى شهرين لحد ١٠٠ وحدة بلا حد معاملات',
+      'تقرير مصادر الزيارات: من فين جه الزائر وجرّب ولا سجّل',
+      'قمع المبيعات: مين جرّب البرنامج وقعد قد إيه وساب رقمه',
+      'مؤشر مباشر بيقولك مين بيجرّب البرنامج دلوقتي',
+      'عمود آخر دخول لرئيس اتحاد كل عمارة',
+      'كود الخصم بقى يوريك مين استفاد منه وتاريخ الاستفادة',
+      'بطاقة الدعاية للطباعة بقى فيها كود QR وبيانات التواصل كاملة',
+      'تنبيه بالحسابات اللي سجّلت ومالهاش عمارة، مع ربطها بضغطة',
+      'العمارات التجريبية بتتمسح تلقائيًا خلال نص ساعة من آخر نشاط',
+      'إصلاح: بيانات التواصل والروابط كانت بتتحفظ على جهاز واحد بس',
+      'إصلاح: سجل الإصدارات ونصوص الصفحة الرئيسية ما كانتش بتوصل للعملاء',
+      'إصلاح أمني: إعدادات المنصة كانت مقروءة لأي زائر',
+    ]},
+    { version:'1.03', date:'2026-08-18', notes:[
+      'أيقونة التطبيق المثبّت بقت مطابقة للشعار الرسمي',
+      'وضع الصيانة: صاحب البرنامج يقدر يوقف الموقع مؤقتًا بفترة محددة ورسالة للمستخدمين',
+      'نسخة من بيانات العمارة بضغطة — تنزيل أو مشاركة على جيميل ودرايف وواتساب',
+      'ملفات البرنامج بقت تتحمّل من الجهاز بدل الشبكة، مع تنبيه لما ينزل تحديث',
+      'فلتر فترة على شاشات المصروفات والخزينة وسجل النشاط وطلبات الدفع',
+      'عرض جدول أو مربعات وفلترة بالحالة في ٩ شاشات',
+      'ترقيم إصدارات موحّد (v1.00 · v1.01 …) مرتّب بالإصدار',
+      'إصلاح: حالة الاشتراك التجريبي كانت تظهر "منتهية" رغم وجود مدة متبقية',
+      'إصلاح: دخول صاحب البرنامج لعمارة كان أحيانًا يفتح بحساب صاحب وحدة',
+      'إصلاح: بعض العمليات كانت تفشل بسبب محاولة كتابة بيانات مش من صلاحية المستخدم',
+      'تنظيف تلقائي يومي للحسابات المؤقتة الفاضية',
+    ]},
+    { version:'1.02', date:'2026-08-14', notes:[
+      'تحديث بيانات الشقق والملاك بالإكسل — تنزيل قالب معبّى بكل الأعمدة، وتعديله خارجيًا، ورفعه بمراجعة تفصيلية قبل الاعتماد',
+      'تحديث بيانات المستخدمين بالإكسل بنفس الطريقة، مع حماية آخر رئيس اتحاد من الإيقاف بالغلط',
+      'تقرير بكل سطر ناجح وكل سطر فيه خطأ مع سببه ورقمه في الملف',
+      'صور إثبات الدفع بقت تتخزن في مساحة تخزين مستقلة بدل قاعدة البيانات — مجلد لكل عمارة وجواه مجلد لكل شقة',
+      'ضغط تلقائي للصور قبل الرفع (الصورة بقت أصغر ١١ مرة من غير ما تقل وضوحها)',
+      'حذف تلقائي لصور الإيصالات بعد ٩٠ يوم من مراجعتها — الحركة المالية بتفضل بأثرها الكامل',
+      'نسخة احتياطية كاملة بضغطة زرار لصاحب البرنامج',
+      'رسائل أخطاء واضحة بالعربي بدل الرسائل التقنية، مع زرار إعادة محاولة عند فشل الحفظ',
+      'تنبيه قبل قفل الصفحة لو في تغييرات لسه ما اتحفظتش',
+      'إصلاح: العمارات كانت أحيانًا تظهر فاضية عند الدخول بسبب سبق تحميل الشاشة على البيانات',
+      'إصلاح: توليد الدعوات كان بيفتح نافذة تأكيد حذف بالغلط',
+      'إصلاح: أكواد الدعوات كانت بتفشل بعد تشديد إعدادات الأمان على الخادم',
+      'إصلاح: بيانات التواصل وطرق السداد وتراخيص الاشتراكات مكانتش بتتحفظ على الخادم',
+    ]},
+    { version:'1.01', date:'2026-08-13', notes:[
+      'تقارير محاسبية جديدة: ميزان المراجعة وأعمار الديون، مع فلترة بالتواريخ ومقارنة بفترات سابقة',
+      'قائمة الدخل والميزانية المصغرة بأرصدة أول وآخر المدة',
+      'كشف حساب موحّد لأي عنصر (شقة · حساب · مشروع · مورد · بند صرف) مع اختيار الفترة',
+      'تقرير الأدوار: توزيع الوحدات على الأدوار مع نسبة تحصيل لكل دور',
+      'سلة المحذوفات بقت تشتغل على الخادم — استعادة العمارات المحذوفة أو حذفها نهائيًا',
+      'تحكّم في حجم النوافذ المنبثقة، وأزرار الحفظ والإغلاق بقت في أعلى النافذة',
+      'توحيد سياسة كلمة المرور وشكل رقم الهاتف في كل شاشات البرنامج',
+      'إصلاح: صورة إثبات الدفع كانت بتضيع بعد التحديث',
+      'إصلاح: استرداد المبالغ وعكس الحركات المالية مكانوش بيتحفظوا على الخادم',
+      'إصلاح: إشعارات قبول ورفض الدفعات والمقترحات مكانتش بتوصل للساكن',
+      'إصلاح: العمارات اللي عندها أكتر من ١٠٠٠ حركة كانت بتتحمّل ناقصة',
+    ]},
+  ];
+
+  /* ترقيم موحّد: النسخة الأساسية v1.00 واللي بعدها v1.01 · v1.02 …
+     الأرقام القديمة (3.0 · 3.1 · 3.2) بتترحّل مرة واحدة. */
+  const VERSION_MAP = { '3.0':'1.00', '3.1':'1.01', '3.2':'1.02',
+                        '2.0':'1.00', '1.0':'1.00' };
+
+  function migrateVersionNumbers(list){
+    let changed = false;
+    list.forEach(v => {
+      const key = String(v.version || '').replace(/^v/i, '');
+      if (VERSION_MAP[key] && key !== VERSION_MAP[key]){
+        v.version = VERSION_MAP[key];
+        changed = true;
+      }
+    });
+    // دمج أي إصدارين بقوا بنفس الرقم بعد الترحيل
+    const byVer = {};
+    for (let i = list.length - 1; i >= 0; i--){
+      const k = String(list[i].version);
+      if (byVer[k]){
+        byVer[k].notes = (byVer[k].notes || []).concat(list[i].notes || []);
+        list.splice(i, 1);
+        changed = true;
+      } else byVer[k] = list[i];
+    }
+    return changed;
+  }
+
+  function seedChangelog(){
+    if (!window.REG || !window.ensureVersionHistory) return;
+    const list = ensureVersionHistory();
+    let changed = migrateVersionNumbers(list);
+
+    for (const entry of CHANGELOG){
+      let v = list.find(x => String(x.version) === String(entry.version));
+      if (!v){
+        v = { id:'v_auto_' + entry.version.replace(/\./g,'_'),
+              version: entry.version, date: entry.date, notes: [] };
+        list.push(v);
+        changed = true;
+      }
+      v.notes = v.notes || [];
+      for (const text of entry.notes){
+        if (!v.notes.some(n => n.text === text)){
+          // داخلي فقط لحد ما صاحب البرنامج يراجعه ويعلّمه ظاهر
+          v.notes.push({ text, visibleToAdmins: false, auto: true });
+          changed = true;
+        }
+      }
+    }
+
+    if (changed){
+      REG.versionHistory = list;
+      try{
+        if (window.PLATFORM && window.PLATFORM.save) window.PLATFORM.save();
+        else if (window.saveRegistry) saveRegistry();
+      }catch(e){ console.warn('[عمارتنا] تعذّر حفظ سجل الإصدارات', e.message); }
+      console.log('[عمارتنا] اتسجّلت تحديثات جديدة في سجل الإصدارات (داخلي فقط)');
+    }
+  }
+
+
+  /* ============================================================
+     ٣) عمارات صاحب البرنامج — تحميل عند الطلب
+     ------------------------------------------------------------
+     عند الدخول بنحمّل بيانات العمارات اللي هو عضو فيها بس (عشان
+     مانحملش عشرات العمارات كل مرة). النتيجة إن العمارات التانية
+     كانت بتظهر في لوحة المنصة بصفر وحدات وصفر حركات، وزرار "فتح"
+     كان بيقول "تعذر تحميل العمارة". دلوقتي بنحمّلها عند الحاجة.
+     ============================================================ */
+
+  const MAX_AUTO_LOAD = 30;      // فوق كده بنحمّل عند الفتح بس
+
+  window.__loadingBuildings = false;
+
+  async function loadMissingBuildings(){
+    if (window.__loadingBuildings) return;
+    if (!window.CLOUD || !window.CLOUD.loadBuilding) return;
+    if (!window.REG || !window.REG.buildings) return;
+
+    const missing = window.REG.buildings
+      .filter(b => !window.loadBuildingData(b.id))
+      .slice(0, MAX_AUTO_LOAD);
+    if (!missing.length) return;
+
+    window.__loadingBuildings = true;
+    let done = 0;
+    try{
+      await Promise.all(missing.map(async b => {
+        try{ await window.CLOUD.loadBuilding(b.id); done++; }
+        catch(e){ console.warn('[عمارتنا] تعذّر تحميل', b.name, e.message); }
+      }));
+    } finally {
+      window.__loadingBuildings = false;
+    }
+    if (done && window.isSysOwner && isSysOwner() && window.renderSysContent){
+      renderSysContent();
+    }
+  }
+  window.reloadPlatformBuildings = loadMissingBuildings;
+
+  /* لو السجل وصل متأخر (سباق البدء)، أعد التحميل أول ما يجهز */
+  document.addEventListener('cloud:ready', () => {
+    setTimeout(() => {
+      if (window.isSysOwner && isSysOwner()){
+        if (window.CLOUD && CLOUD._cache && CLOUD._cache.registry
+            && window.REG !== CLOUD._cache.registry){
+          window.REG = CLOUD._cache.registry;
+          if (window.renderRoot) renderRoot();
+        }
+        loadMissingBuildings();
+      }
+    }, 300);
+  });
+
+  /* لوحة المنصة: حمّل الناقص في الخلفية أول ما تتفتح */
+  const origSysContent = window.renderSysContent;
+  if (origSysContent) window.renderSysContent = function(){
+    const out = origSysContent.apply(this, arguments);
+    setTimeout(loadMissingBuildings, 0);
+    return out;
+  };
+
+  /* زرار "فتح" لعمارة: حمّلها الأول لو مش متحمّلة */
+  const origImpersonate = window.impersonateBuilding;
+  if (origImpersonate) window.impersonateBuilding = function(buildingId){
+    if (window.loadBuildingData(buildingId)) return origImpersonate(buildingId);
+    if (window.toast) toast('بيحمّل بيانات العمارة…');
+    /* لو التحميل وقف من غير خطأ (شبكة بطيئة أو رد ناقص)، الرسالة
+       كانت بتفضل معلّقة والمستخدم مش عارف حصل إيه. */
+    let done = false;
+    const late = setTimeout(() => {
+      if (!done && window.showMessage)
+        showMessage('التحميل واخد وقت أطول من المتوقع.\n\n' +
+          'لو الرسالة فضلت، حدّث الصفحة وجرّب تاني — ولو استمرت ابعتلي كود العمارة.');
+    }, 12000);
+
+    window.CLOUD.loadBuilding(buildingId)
+      .then(() => { done = true; clearTimeout(late); origImpersonate(buildingId); })
+      .catch(e => {
+        done = true; clearTimeout(late);
+        console.error('[عمارتنا] فشل تحميل العمارة', buildingId, e);
+        if (window.showMessage)
+          showMessage('تعذّر تحميل العمارة: ' + (e.message || e.code || 'سبب غير معروف'));
+      });
+  };
+
+
+  /* ============================================================
+     ٤) إعدادات حساب صاحب البرنامج — النسخة السحابية
+     ------------------------------------------------------------
+     الشاشة القديمة بتعدّل حساب محلي مالوش وجود في السحابة، فأي
+     تغيير فيها مكانش بيتحفظ على الخادم — وبعدين الدخول بيفشل
+     لأنه لسه بيتم برقم الموبايل وكلمة السر الحقيقيين.
+     ============================================================ */
+
+  function loginIdentity(){
+    const u = (window.CLOUD_AUTH && CLOUD_AUTH.user) || null;
+    if (!u) return { phone:'', email:'' };
+    const em = u.email || '';
+    if (em.endsWith('@emartna.local')){
+      const d = em.split('@')[0];
+      return { phone: '+' + d, email: '' };
+    }
+    return { phone:'', email: em };
+  }
+
+  window.changeMyCloudPassword = async function(){
+    const p1 = (document.getElementById('cpNew')  || {}).value || '';
+    const p2 = (document.getElementById('cpNew2') || {}).value || '';
+    const perr = window.passwordPolicyError ? passwordPolicyError(p1)
+               : (p1.length < 8 ? 'كلمة السر لازم ٨ خانات على الأقل' : null);
+    if (perr) return showMessage(perr);
+    if (p1 !== p2)     return showMessage('كلمتا السر مش متطابقتين');
+    try{
+      const { error } = await window.CLOUD._sb.auth.updateUser({ password: p1 });
+      if (error) throw error;
+      const f1 = document.getElementById('cpNew'), f2 = document.getElementById('cpNew2');
+      if (f1) f1.value = ''; if (f2) f2.value = '';
+      if (window.toast) toast('اتغيرت كلمة السر — استخدمها في الدخول الجاي');
+    }catch(e){ showMessage(e.message || 'تعذّر تغيير كلمة السر'); }
+  };
+
+  window.changeMyDisplayName = async function(){
+    const name = ((document.getElementById('cpName') || {}).value || '').trim();
+    if (!name) return showMessage('اكتب الاسم');
+    try{
+      const sb = window.CLOUD._sb;
+      const { error } = await sb.from('profiles')
+        .update({ full_name: name }).eq('id', CLOUD_AUTH.user.id);
+      if (error) throw error;
+      if (window.toast) toast('اتحفظ الاسم');
+    }catch(e){ showMessage(e.message || 'تعذّر حفظ الاسم'); }
+  };
+
+  const origSysSettings = window.pageSysSettings;
+  if (origSysSettings) window.pageSysSettings = function(){
+    const id = loginIdentity();
+    const orig = origSysSettings.apply(this, arguments);
+    // نشيل كارت "تغيير بيانات مسؤول النظام" القديم ونحط السحابي مكانه
+    const cleaned = orig.replace(
+      /<div class="card content-narrow"><h3>تغيير بيانات مسؤول النظام<\/h3>[\s\S]*?<\/div>\s*(?=<div class="card content-narrow mtop2">)/,
+      '');
+
+    return `
+    <div class="card content-narrow">
+      <h3>🔑 بيانات دخولك</h3>
+      <p class="small mtop">الدخول بيتم برقم الموبايل أو الإيميل — مفيش اسم مستخدم.</p>
+      <div class="field2 mtop"><label>بتدخل بـ</label>
+        <input value="${esc(id.phone || id.email || '—')}" disabled
+               style="background:var(--line);cursor:not-allowed"></div>
+      <p class="small">لتغيير الرقم أو الإيميل نفسه، كلّم الدعم الفني — التغيير بيحتاج تأكيد الرقم الجديد.</p>
+
+      <div class="field2 mtop2"><label>الاسم اللي بيظهر</label>
+        <input id="cpName" value="${esc((window.CLOUD_AUTH && CLOUD_AUTH.user && CLOUD_AUTH.user.user_metadata && CLOUD_AUTH.user.user_metadata.full_name) || '')}" placeholder="مثال: حسن محمد"></div>
+      <button class="btn sm" onclick="changeMyDisplayName()">💾 حفظ الاسم</button>
+
+      <h3 class="mtop2">تغيير كلمة السر</h3>
+      <div class="field2 mtop"><label>كلمة سر جديدة</label>${window.pwField ? pwField('cpNew','','','new-password') : '<input id="cpNew" type="password">'}</div>
+      <div class="field2"><label>تأكيد كلمة السر</label>${window.pwField ? pwField('cpNew2','','','new-password') : '<input id="cpNew2" type="password">'}</div>
+      <button class="btn primary mtop" onclick="changeMyCloudPassword()">🔒 غيّر كلمة السر</button>
+      <p class="small mtop">٨ خانات على الأقل. التغيير بيسري فورًا على كل أجهزتك.</p>
+
+      <h3 class="mtop2">💾 نسخة احتياطية</h3>
+      <p class="small">بتنزّل ملف واحد فيه كل بيانات المنصة (العمارات · الوحدات · الحركات ·
+      المستخدمين · الإعدادات). احتفظ بيه في مكان آمن — ده خط دفاعك الأخير.</p>
+      <button class="btn gold mtop" onclick="downloadFullBackup()">⬇️ نزّل نسخة احتياطية كاملة</button>
+    </div>
+    ${cleaned}`;
+  };
+
+
+  /* ============================================================
+     ٥) نسخة احتياطية كاملة — تنزيل كل بيانات المنصة كملف JSON
+     ============================================================ */
+
+  window.downloadFullBackup = async function(){
+    const sb = window.CLOUD && window.CLOUD._sb;
+    if (!sb) return showMessage('طبقة السحابة لسه بتحمّل — جرّب بعد ثانية');
+    if (window.toast) toast('بيجهّز النسخة… ممكن تاخد شوية');
+
+    const TABLES = [
+      'buildings','apartments','accounts','ledger','expenses','expense_categories',
+      'transfers','projects','vendors','maintenance_reports','meetings','polls',
+      'announcements','suggestions','payment_requests','notifications',
+      'building_chat','activity_log','memberships','profiles','invitations',
+      'plans','landing_offers','platform_settings','platform_admins','platform_invites',
+      'renewal_requests','customer_proposals_v2','support_tickets','support_staff',
+      'sys_notifications','team_tasks','revenue_ledger','referral_rewards',
+    ];
+    const PAGE = 1000;
+    const out = { meta:{ takenAt:new Date().toISOString(), app:'عمارتنا', version:'backup-1' }, tables:{} };
+    const failed = [];
+
+    for (const t of TABLES){
+      try{
+        const rows = [];
+        for (let from = 0; ; from += PAGE){
+          const r = await sb.from(t).select('*').range(from, from + PAGE - 1);
+          if (r.error) throw r.error;
+          const batch = r.data || [];
+          rows.push(...batch);
+          if (batch.length < PAGE) break;
+        }
+        out.tables[t] = rows;
+      }catch(e){
+        failed.push(t + ' (' + (window.cloudErrorText ? cloudErrorText(e) : e.message) + ')');
+      }
+    }
+
+    // الصور بتكبّر الملف جدًا — بنشيلها ونعدّها
+    let images = 0;
+    (out.tables.payment_requests || []).forEach(r => {
+      if (r.proof_url && r.proof_url.length > 500){ r.proof_url = '[صورة محذوفة من النسخة]'; images++; }
+    });
+    out.meta.imagesStripped = images;
+    out.meta.rowCounts = Object.fromEntries(
+      Object.keys(out.tables).map(t => [t, out.tables[t].length]));
+
+    const blob = new Blob([JSON.stringify(out, null, 1)], { type:'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'emartna-backup-' + new Date().toISOString().slice(0,10) + '.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+
+    const total = Object.values(out.meta.rowCounts).reduce((a,b) => a+b, 0);
+    showMessage('✅ اتنزّلت نسخة فيها ' + total + ' سجل من ' +
+      Object.keys(out.tables).length + ' جدول' +
+      (images ? '\n(اتشال ' + images + ' صورة إثبات عشان الحجم)' : '') +
+      (failed.length ? '\n\n⚠️ جداول ما اتقرتش:\n' + failed.join('\n') : ''));
+  };
+
+  /* ============================================================
+     التشغيل
+     ============================================================ */
+
+  stripAITab();
+
+  // (أ) اقرا إعداد الإتاحة أول ما طبقة السحابة تجهز
+  let tries = 0;
+  const t = setInterval(() => {
+    if (++tries > 300) return clearInterval(t);
+    if (window.CLOUD && window.CLOUD._sb){ clearInterval(t); loadAISetting(); }
+  }, 100);
+
+  // (ب) سجّل التحديثات الجديدة أول ما صاحب البرنامج يدخل — مستقل عن السحابة
+  let seeded = false;
+  const t2 = setInterval(() => {
+    if (seeded) return clearInterval(t2);
+    if (window.REG && window.isSysOwner && isSysOwner()){
+      seeded = true;
+      clearInterval(t2);
+      seedChangelog();
+      loadMissingBuildings();
+    }
+  }, 1000);
+  setTimeout(() => clearInterval(t2), 15 * 60 * 1000);
+
+  console.log('[عمارتنا] تحكّم صاحب البرنامج جاهز');
+})();
+
+})();
+
 /* ═══ emartna-ui.js ═══ */
 (function(){
 /* ============================================================
@@ -1950,6 +3130,639 @@
   };
 
   console.log('[عمارتنا] بحث الجداول بقى يشمل النص المعروض');
+})();
+
+})();
+
+/* ═══ emartna-excel.js ═══ */
+(function(){
+/* ============================================================
+   عمارتنا — تحديث بالإكسل: الشقق والملاك · المستخدمون
+   ------------------------------------------------------------
+   لكل شاشة: تنزيل قالب معبّى بكل الأعمدة والبيانات الحالية،
+   تعديل خارجي، ورفع بمراجعة كاملة قبل الاعتماد:
+     ✅ هيتحدّث   ⚪ من غير تغيير   ❌ خطأ + سببه + رقم السطر
+   ============================================================ */
+
+(function(){
+  'use strict';
+
+  const esc2 = s => (window.esc ? esc(s) : String(s == null ? '' : s));
+  const unit = a => (window.unitLabel ? unitLabel(a) : ('وحدة ' + (a ? a.number : '')));
+  const YES  = ['نعم','yes','true','1','✓'];
+  const isYes = v => YES.includes(String(v == null ? '' : v).trim().toLowerCase());
+
+  const noXLSX = () => {
+    if (typeof XLSX === 'undefined'){
+      showMessage('تعذر تحميل مكتبة إكسيل — اتأكد من الإنترنت وحاول تاني.');
+      return true;
+    }
+    return false;
+  };
+
+  function download(rows, cols, sheet, fileName, widths){
+    const ws = XLSX.utils.aoa_to_sheet([cols, ...rows]);
+    ws['!cols'] = (widths || cols.map(() => 16)).map(w => ({ wch:w }));
+    // إكسيل بيفتح الشيت من الشمال افتراضيًا، فالأعمدة العربية بتبان مقلوبة
+    // للعين. السطر ده بيخلي الورقة تفتح من اليمين زي القراءة العربية.
+    ws['!views'] = [{ RTL: true }];
+    ws['!freeze'] = { xSplit:'0', ySplit:'1' };
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheet);
+    XLSX.writeFile(wb, fileName + ' - ' + (window.todayISO ? todayISO() : '') + '.xlsx');
+  }
+
+  /* بصمة مبسطة للعنوان — عشان نقارن رغم فروق المسافات */
+  const norm = h => String(h == null ? '' : h).replace(/\s+/g,'').trim();
+
+  function headerProblem(got, expected){
+    const g = got.map(norm), e = expected.map(norm);
+    if (g.length < e.length - 1)
+      return `الملف ده فيه ${got.length} عمود، والقالب المطلوب فيه ${expected.length}.`;
+    for (let i = 0; i < e.length; i++){
+      if (g[i] !== e[i])
+        return `ترتيب الأعمدة مختلف: العمود رقم ${i+1} المفروض يكون "${expected[i]}" ` +
+               `ولقيت "${got[i] || '(فاضي)'}".`;
+    }
+    return null;
+  }
+
+  function readSheet(file, onRows, host, expectedCols){
+    const reader = new FileReader();
+    reader.onload = e => {
+      try{
+        const wb = XLSX.read(e.target.result, { type:'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:false });
+        const body = rows.slice(1).filter(r => r.some(c => String(c).trim() !== ''));
+        if (!body.length){
+          host.innerHTML = '<p class="small mtop" style="color:var(--red)">الملف فاضي — مفيش صفوف بيانات.</p>';
+          return;
+        }
+        if (expectedCols){
+          const problem = headerProblem(rows[0] || [], expectedCols);
+          if (problem){
+            host.innerHTML = `
+              <div class="card mtop2" style="border:1px solid var(--red)">
+                <h3 style="color:var(--red)">❌ الملف ده مش القالب الصح</h3>
+                <p class="small mtop">${esc2(problem)}</p>
+                <p class="small">نزّل القالب من الزرار اللي فوق، عدّل عليه، وارفعه —
+                من غير ما تغيّر أسماء الأعمدة ولا ترتيبها ولا تمسح أي عمود.</p>
+                <p class="small" style="color:var(--muted)">الأعمدة المطلوبة بالترتيب:<br>
+                ${expectedCols.map((c,i) => (i+1) + '. ' + esc2(c)).join(' · ')}</p>
+              </div>`;
+            return;
+          }
+        }
+        onRows(body);
+      }catch(err){
+        host.innerHTML = `<p class="small mtop" style="color:var(--red)">تعذّرت قراءة الملف: ${esc2(err.message)}</p>`;
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function normPhone(raw, cc){
+    let d = String(raw == null ? '' : raw).trim().replace(/[\s\-()]/g,'');
+    if (!d) return '';
+    if (/^\d+$/.test(d) && d.length === 10 && cc === '+20') d = '0' + d;   // إكسيل بيبلع الصفر
+    return d;
+  }
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+  /* ============================================================
+     المراجعة المشتركة
+     ============================================================ */
+
+  function renderPreview(hostId, results, applyFn, columns){
+    const upd  = results.filter(x => x.status === 'update');
+    const same = results.filter(x => x.status === 'same');
+    const bad  = results.filter(x => x.status === 'error');
+
+    const changeRows = upd.slice(0,200).map(x => `
+      <tr>
+        <td class="small">${x.line}</td>
+        <td class="small"><b>${esc2(x.label)}</b></td>
+        <td class="small">${x.changes.map(c =>
+          `${esc2(c.field)}: <span style="color:var(--muted)">${esc2(c.from || '—')}</span> ← <b>${esc2(c.to || '—')}</b>`
+        ).join('<br>')}</td>
+      </tr>`).join('');
+
+    document.getElementById(hostId).innerHTML = `
+      <div class="grid g3 mtop2">
+        <div class="card"><h3 style="color:var(--accent)">${upd.length}</h3><p class="small">هيتحدّثوا</p></div>
+        <div class="card"><h3 style="color:var(--muted)">${same.length}</h3><p class="small">من غير تغيير</p></div>
+        <div class="card"><h3 style="color:${bad.length?'var(--red)':'var(--muted)'}">${bad.length}</h3><p class="small">فيهم خطأ</p></div>
+      </div>
+
+      ${bad.length ? `
+      <div class="card mtop2" style="border:1px solid var(--red)">
+        <h3 style="color:var(--red)">❌ سطور فيها أخطاء — مش هتتحدّث</h3>
+        <div class="table-wrap mtop" style="max-height:220px;overflow:auto">
+          <table><thead><tr><th>السطر</th><th>السجل</th><th>الخطأ</th></tr></thead>
+          <tbody>${bad.map(x => `<tr><td class="small"><b>${x.line}</b></td>
+            <td class="small">${esc2(x.label)}</td>
+            <td class="small" style="color:var(--red)">${esc2(x.why)}</td></tr>`).join('')}</tbody>
+        </table></div>
+        <p class="small mtop">صلّح السطور دي في الملف وارفعه تاني — الباقي تقدر تعتمده دلوقتي.</p>
+      </div>` : ''}
+
+      ${upd.length ? `
+      <div class="card mtop2">
+        <h3>✅ التغييرات اللي هتتم</h3>
+        <div class="table-wrap mtop" style="max-height:320px;overflow:auto">
+          <table><thead><tr><th>السطر</th><th>السجل</th><th>التغييرات</th></tr></thead>
+          <tbody>${changeRows}</tbody></table></div>
+        ${upd.length > 200 ? `<p class="small mtop">(معروض أول ٢٠٠ من ${upd.length})</p>` : ''}
+      </div>` : '<p class="small mtop2">مفيش أي تغييرات في الملف ده.</p>'}
+
+      <div class="flexrow mtop2">
+        <button class="btn primary" ${upd.length?'':'disabled'} onclick="${applyFn}()">
+          💾 اعتمد تحديث ${upd.length} سجل</button>
+      </div>`;
+  }
+
+  function finishMessage(kind, done, bad, extra){
+    closeModal();
+    if (window.renderContent) renderContent();
+    showMessage(`✅ تم تحديث ${done} ${kind}` + (extra || '') +
+      (bad ? `\n\n⚠️ فيه ${bad} سطر ما اتحدّثش بسبب أخطاء — صلّحهم في الملف وارفعه تاني.` : ''));
+  }
+
+  /* ============================================================
+     ١) الشقق والملاك
+     ============================================================ */
+
+  const AP_COLS = ['رمز الوحدة (لا تغيّره)','رقم الوحدة','الرقم المعروض (اختياري)',
+    'المبنى/الفيلا','النوع (شقة/محل)',
+    'الاستخدام','الدور','اسم المالك','اسم المستأجر','مفتاح الدولة','رقم الجوال',
+    'البريد الإلكتروني','الاشتراك الشهري','رصيد افتتاحي','مغلقة (نعم/لا)','ملاحظات',
+    'الرصيد الحالي (للعرض فقط)'];
+
+  window.downloadApUpdateTemplate = function(){
+    if (noXLSX()) return;
+    const rows = (D.apartments || []).slice()
+      .sort((a,b) => (Number(a.number)||0) - (Number(b.number)||0))
+      .map(a => [ a.id, a.number, a.label || '', a.blockName || '',
+                  a.type === 'shop' ? 'محل' : 'شقة',
+                  a.usageType || '', a.floor || '',
+                  a.ownerName || '', a.tenantName || '',
+                  a.phoneCountry || '+20', String(a.phone || ''), a.email || '',
+                  Number(a.monthlyFee) || 0, Number(a.openingBalance) || 0,
+                  a.closed ? 'نعم' : 'لا', a.notes || '',
+                  (window.apBalance ? apBalance(a.id) : '') ]);
+    download(rows, AP_COLS, 'الشقق والملاك', 'الشقق والملاك',
+      [14,10,16,14,12,12,14,20,18,10,15,24,14,12,12,22,16]);
+  };
+
+  function checkApRow(r, i, seen){
+    const line = i + 2;
+    const code = String(r[0] || '').trim();
+    const ap = code ? (D.apartments || []).find(a => a.id === code) : null;
+    if (!ap) return { line, status:'error', label:String(r[1] || code || '—'),
+      why: code ? 'مفيش وحدة بالرمز "' + code + '" — الرمز اتغيّر أو الوحدة اتحذفت'
+                : 'عمود "رمز الوحدة" فاضي — مينفعش نعرف الوحدة' };
+
+    const label = unit(ap);
+    const num   = String(r[1] || '').trim();
+    const uLabel = String(r[2] || '').trim();     // الرقم المعروض
+    const type  = String(r[4] || '').trim();
+    const cc    = String(r[9] || '+20').trim() || '+20';
+    const phone = normPhone(r[10], cc);
+    const email = String(r[11] || '').trim();
+    const feeRaw= String(r[12] ?? '').trim();
+    const openRaw=String(r[13] ?? '').trim();
+
+    if (!num || !/^\d+$/.test(num))
+      return { line, status:'error', label, why:'رقم الوحدة لازم يكون رقم' };
+    if (seen.has(num))
+      return { line, status:'error', label, why:'رقم الوحدة ده متكرر في السطر ' + seen.get(num) };
+    seen.set(num, line);
+
+    if (!String(r[7] || '').trim())
+      return { line, status:'error', label, why:'اسم المالك مطلوب' };
+    if (type && !['شقة','محل'].includes(type))
+      return { line, status:'error', label, why:'النوع لازم يكون "شقة" أو "محل"' };
+    if (phone && !/^\d{7,15}$/.test(phone))
+      return { line, status:'error', label, why:'رقم الجوال فيه حروف أو طوله غير معقول' };
+    if (email && !EMAIL_RE.test(email))
+      return { line, status:'error', label, why:'صيغة البريد الإلكتروني غلط' };
+    if (feeRaw !== '' && (isNaN(Number(feeRaw)) || Number(feeRaw) < 0))
+      return { line, status:'error', label, why:'الاشتراك الشهري لازم يكون رقم موجب أو صفر' };
+    if (openRaw !== '' && isNaN(Number(openRaw)))
+      return { line, status:'error', label, why:'الرصيد الافتتاحي لازم يكون رقم' };
+
+    const next = {
+      number: Number(num),
+      label: uLabel,
+      blockName: String(r[3] || '').trim(),
+      type: type === 'محل' ? 'shop' : 'apartment',
+      usageType: String(r[5] || '').trim(),
+      floor: String(r[6] || '').trim(),
+      ownerName: String(r[7] || '').trim(),
+      tenantName: String(r[8] || '').trim(),
+      phoneCountry: cc, phone, email,
+      monthlyFee: feeRaw === '' ? Number(ap.monthlyFee) || 0 : Number(feeRaw),
+      openingBalance: openRaw === '' ? Number(ap.openingBalance) || 0 : Number(openRaw),
+      closed: isYes(r[14]),
+      notes: String(r[15] || '').trim(),
+    };
+
+    const LBL = { number:'رقم الوحدة', label:'الرقم المعروض', blockName:'المبنى', type:'النوع', usageType:'الاستخدام',
+      floor:'الدور', ownerName:'المالك', tenantName:'المستأجر', phoneCountry:'مفتاح الدولة',
+      phone:'الجوال', email:'البريد', monthlyFee:'الاشتراك', openingBalance:'رصيد افتتاحي',
+      closed:'مغلقة', notes:'ملاحظات' };
+
+    const changes = [];
+    Object.keys(next).forEach(k => {
+      const before = k === 'closed' ? (ap[k] ? 'نعم' : 'لا') : String(ap[k] ?? '');
+      const after  = k === 'closed' ? (next[k] ? 'نعم' : 'لا') : String(next[k] ?? '');
+      if (before !== after) changes.push({ field: LBL[k], from: before, to: after });
+    });
+
+    return changes.length
+      ? { line, ap, label, status:'update', next, changes }
+      : { line, ap, label, status:'same' };
+  }
+
+  window.openApUpdateImport = function(){
+    const n = (D.apartments || []).length;
+    openModal(`
+      <h3>📊 تحديث بيانات الشقق والملاك بالإكسل</h3>
+      <p class="small mtop">
+        ١) نزّل القالب — هيتحمّل <b>معبّى بكل بيانات الـ${n} وحدة</b>.<br>
+        ٢) عدّل اللي عايزه: رقم الوحدة · النوع · الدور · المالك · المستأجر · الجوال ·
+        البريد · الاشتراك · الرصيد الافتتاحي · مغلقة · ملاحظات.<br>
+        ٣) ارفع الملف وراجع قبل الاعتماد.
+      </p>
+      <p class="small" style="color:var(--red)">
+        ⚠️ متغيّرش عمود "رمز الوحدة" ولا تمسح صفوف. عمود "الرصيد الحالي" للعرض بس — بيتحسب من الحركات.
+      </p>
+      <button class="btn gold mtop" onclick="downloadApUpdateTemplate()">⬇️ تحميل القالب معبّى</button>
+      <div class="field2 mtop2"><label>ارفع الملف بعد التعديل (.xlsx)</label>
+        <input type="file" id="apImportFile" accept=".xlsx,.xls,.csv" onchange="handleApUpdateUpload(this)"></div>
+      <div id="apImpPreview"></div>
+      <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`, true);
+  };
+
+  window.handleApUpdateUpload = function(input){
+    const file = input.files[0];
+    if (!file || noXLSX()) return;
+    const host = document.getElementById('apImpPreview');
+    readSheet(file, body => {
+      const seen = new Map();
+      const results = body.map((r,i) => checkApRow(r, i, seen));
+      window.__apImp = results;
+      renderPreview('apImpPreview', results, 'applyApUpdateImport');
+    }, host, AP_COLS);
+  };
+
+  window.applyApUpdateImport = function(){
+    const upd = (window.__apImp || []).filter(x => x.status === 'update');
+    if (!upd.length) return;
+    let n = 0;
+    for (const x of upd){ Object.assign(x.ap, x.next); n++; }
+    try{ if (window.logActivity) logActivity('تحديث الوحدات', n + ' وحدة من ملف إكسيل'); }catch(e){}
+    save();
+    finishMessage('وحدة', n, (window.__apImp || []).filter(x => x.status === 'error').length);
+  };
+
+  /* ============================================================
+     ٢) المستخدمون
+     ============================================================ */
+
+  const ROLE_AR = { admin:'رئيس اتحاد', accountant:'محاسب', manager:'إداري',
+                    owner:'صاحب شقة', tenant:'مستأجر' };
+  const AR_ROLE = Object.fromEntries(Object.entries(ROLE_AR).map(([k,v]) => [v,k]));
+
+  const US_COLS = ['معرّف المستخدم (لا تغيّره)','اسم الدخول','الاسم','الوحدة',
+    'الصلاحية (رئيس اتحاد/محاسب/إداري/صاحب شقة/مستأجر)',
+    'مفتاح الدولة','رقم الجوال','البريد الإلكتروني','نشط (نعم/لا)'];
+
+  window.downloadUsersUpdateTemplate = function(){
+    if (noXLSX()) return;
+    const aps = D.apartments || [];
+    const rows = (D.users || []).map(u => {
+      const ap = aps.find(a => a.id === u.apartmentId);
+      return [ u.id, u.username || '', u.name || '', ap ? unit(ap) : '(إدارة)',
+               ROLE_AR[u.role] || u.role || '', u.phoneCountry || '+20',
+               String(u.phone || ''), u.email || '',
+               u.active === false ? 'لا' : 'نعم' ];
+    });
+    download(rows, US_COLS, 'المستخدمون', 'المستخدمون', [16,18,20,14,26,10,15,24,12]);
+  };
+
+  function checkUserRow(r, i, seen){
+    const line = i + 2;
+    const id = String(r[0] || '').trim();
+    const u = id ? (D.users || []).find(x => x.id === id) : null;
+    if (!u) return { line, status:'error', label:String(r[2] || id || '—'),
+      why: id ? 'مفيش مستخدم بالمعرّف ده — اتحذف أو الرمز اتغيّر'
+              : 'عمود "معرّف المستخدم" فاضي' };
+
+    const label = (u.name || u.username || '—');
+    const name  = String(r[2] || '').trim();
+    const roleAr= String(r[4] || '').trim();
+    const cc    = String(r[5] || '+20').trim() || '+20';
+    const phone = normPhone(r[6], cc);
+    const email = String(r[7] || '').trim();
+
+    if (!name) return { line, status:'error', label, why:'اسم المستخدم مطلوب' };
+    if (roleAr && !AR_ROLE[roleAr])
+      return { line, status:'error', label,
+               why:'الصلاحية لازم تكون: ' + Object.keys(AR_ROLE).join(' / ') };
+    if (phone && !/^\d{7,15}$/.test(phone))
+      return { line, status:'error', label, why:'رقم الجوال فيه حروف أو طوله غير معقول' };
+    if (phone && seen.has(cc + phone))
+      return { line, status:'error', label, why:'الرقم ده متكرر في السطر ' + seen.get(cc + phone) };
+    if (phone) seen.set(cc + phone, line);
+    if (email && !EMAIL_RE.test(email))
+      return { line, status:'error', label, why:'صيغة البريد الإلكتروني غلط' };
+
+    const role = roleAr ? AR_ROLE[roleAr] : u.role;
+    const active = String(r[8] || '').trim() === '' ? (u.active !== false) : isYes(r[8]);
+
+    // مانسمحش بإلغاء آخر رئيس اتحاد
+    if (u.role === 'admin' && (role !== 'admin' || !active)){
+      const admins = (D.users || []).filter(x => x.role === 'admin' && x.active !== false);
+      if (admins.length <= 1)
+        return { line, status:'error', label,
+                 why:'ده آخر رئيس اتحاد — مينفعش تغيّر صلاحيته أو توقفه' };
+    }
+
+    const next = { name, role, phoneCountry:cc, phone, email, active };
+    const LBL = { name:'الاسم', role:'الصلاحية', phoneCountry:'مفتاح الدولة',
+                  phone:'الجوال', email:'البريد', active:'نشط' };
+    const changes = [];
+    Object.keys(next).forEach(k => {
+      const before = k === 'active' ? (u.active === false ? 'لا' : 'نعم')
+                   : k === 'role'   ? (ROLE_AR[u.role] || u.role || '')
+                   : String(u[k] ?? '');
+      const after  = k === 'active' ? (next[k] ? 'نعم' : 'لا')
+                   : k === 'role'   ? (ROLE_AR[next.role] || next.role || '')
+                   : String(next[k] ?? '');
+      if (before !== after) changes.push({ field: LBL[k], from: before, to: after });
+    });
+
+    return changes.length
+      ? { line, u, label, status:'update', next, changes }
+      : { line, u, label, status:'same' };
+  }
+
+  window.openUsersUpdateImport = function(){
+    const n = (D.users || []).length;
+    openModal(`
+      <h3>📊 تحديث بيانات المستخدمين بالإكسل</h3>
+      <p class="small mtop">
+        ١) نزّل القالب — <b>معبّى بالـ${n} مستخدم</b> الحاليين.<br>
+        ٢) عدّل: الاسم · الصلاحية · الجوال · البريد · نشط.<br>
+        ٣) ارفع وراجع قبل الاعتماد.
+      </p>
+      <p class="small" style="color:var(--red)">
+        ⚠️ "معرّف المستخدم" و"اسم الدخول" و"الوحدة" للربط بس — متغيّرهمش.
+      </p>
+      <button class="btn gold mtop" onclick="downloadUsersUpdateTemplate()">⬇️ تحميل القالب معبّى</button>
+      <div class="field2 mtop2"><label>ارفع الملف بعد التعديل (.xlsx)</label>
+        <input type="file" id="usImportFile" accept=".xlsx,.xls,.csv" onchange="handleUsersUpdateUpload(this)"></div>
+      <div id="usImpPreview"></div>
+      <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`, true);
+  };
+
+  window.handleUsersUpdateUpload = function(input){
+    const file = input.files[0];
+    if (!file || noXLSX()) return;
+    const host = document.getElementById('usImpPreview');
+    readSheet(file, body => {
+      const seen = new Map();
+      const results = body.map((r,i) => checkUserRow(r, i, seen));
+      window.__usImp = results;
+      renderPreview('usImpPreview', results, 'applyUsersUpdateImport');
+    }, host, US_COLS);
+  };
+
+  window.applyUsersUpdateImport = function(){
+    const upd = (window.__usImp || []).filter(x => x.status === 'update');
+    if (!upd.length) return;
+    let n = 0;
+    for (const x of upd){
+      Object.assign(x.u, x.next);
+      // الصلاحيات بتتبع الدور الجديد
+      if (window.CLOUD_ROLES && CLOUD_ROLES[x.next.role])
+        x.u.permissions = CLOUD_ROLES[x.next.role].perms;
+      // بيانات التواصل تتحدّث في الوحدة المرتبطة كمان
+      const ap = (D.apartments || []).find(a => a.id === x.u.apartmentId);
+      if (ap && x.next.phone){ ap.phoneCountry = x.next.phoneCountry; ap.phone = x.next.phone; }
+      if (ap && x.next.email) ap.email = x.next.email;
+      n++;
+    }
+    try{ if (window.logActivity) logActivity('تحديث المستخدمين', n + ' مستخدم من ملف إكسيل'); }catch(e){}
+    save();
+    finishMessage('مستخدم', n, (window.__usImp || []).filter(x => x.status === 'error').length);
+  };
+
+  /* ============================================================
+     الأزرار في الشاشتين
+     ============================================================ */
+
+  /* قائمة إكسل واحدة تجمع كل العمليات بدل أزرار متفرقة */
+  window.toggleExcelMenu = function(id){
+    const m = document.getElementById(id);
+    if (!m) return;
+    const open = m.style.display === 'block';
+    document.querySelectorAll('.excel-menu').forEach(x => x.style.display = 'none');
+    m.style.display = open ? 'none' : 'block';
+  };
+  document.addEventListener('click', e => {
+    if (e.target.closest && e.target.closest('.excel-wrap')) return;
+    document.querySelectorAll('.excel-menu').forEach(x => x.style.display = 'none');
+  });
+
+  function excelMenu(id, items){
+    return `<span class="excel-wrap" style="position:relative;display:inline-block">
+      <button class="btn gold" onclick="toggleExcelMenu('${id}')">📊 إكسل ▾</button>
+      <div id="${id}" class="excel-menu" style="display:none;position:absolute;z-index:60;
+           top:calc(100% + 6px);inset-inline-end:0;min-width:280px;background:var(--panel);
+           border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.14);
+           padding:6px;text-align:start">
+        ${items.map(it => `
+          <button class="btn ghost" style="display:block;width:100%;text-align:start;border:0;
+                  padding:9px 10px;margin:0" onclick="toggleExcelMenu('${id}');${it.fn}">
+            <b>${it.icon} ${it.label}</b>
+            <div class="small" style="color:var(--muted);font-weight:400">${it.hint}</div>
+          </button>`).join('')}
+      </div></span>`;
+  }
+
+  /* لفّ آمن: لو الشاشة اتعرّفت بعدينا (ترتيب تحميل الملفات)، اللفّة
+     بتفضل شغالة — بنمسك أي إعادة تعريف بـsetter. */
+  function wrapPage(name, transform){
+    let raw = window[name];
+    const wrapper = function(){
+      const html = typeof raw === 'function' ? raw.apply(this, arguments) : '';
+      return transform(html);
+    };
+    /* ⚠️ كنا بنستخدم getter/setter هنا، وده كان بيعمل حلقة لا نهائية:
+       أي ملف يقرا الدالة بياخد لفّتنا، وبيحطها كأصل جوه لفّته،
+       فلفّتنا تنادي لفّته اللي تنادي لفّتنا… لحد ما الشاشة تقع.
+       الاستبدال المباشر + المراقبة أأمن. */
+    {
+      wrapper.__excelWrapped = true;
+      window[name] = wrapper;
+      let tries = 0;
+      const t = setInterval(() => {
+        if (++tries > 20) return clearInterval(t);
+        const cur = window[name];
+        if (cur === wrapper) return;
+        // مهم: لو الملف اللي بعدنا لفّ لفّتنا (مش استبدلها)، منرجعش
+        // لفّتنا فوقه — ده كان بيعمل حلقة لا نهائية وبيوقّع الشاشة.
+        if (typeof cur === 'function' && !cur.__excelWrapped){
+          const probe = cur.toString();
+          if (probe.includes('__excelWrapped') || probe.includes('apply(this, arguments)')){
+            // لفّة تانية فوقنا — نسيبها ونوقف المراقبة
+            return clearInterval(t);
+          }
+        }
+        raw = cur; window[name] = wrapper;
+      }, 500);
+    }
+  }
+
+  /* الشقق: القائمة بتتحط جنب أزرار الإضافة والاستيراد الموجودة */
+  wrapPage('pageApartments', function(html){
+    const importBtn = '<button class="btn ghost" onclick="openImportApartmentsModal()">📥 استيراد من إكسيل</button>';
+    const menu = excelMenu('apExcelMenu', [
+      { icon:'✏️', label:'تحديث بيانات موجودة', fn:'openApUpdateImport()',
+        hint:'نزّل بياناتك معبّاة · عدّلها · ارفعها بمراجعة' },
+      { icon:'➕', label:'إضافة وحدات جديدة',   fn:'openImportApartmentsModal()',
+        hint:'نموذج فاضي لإضافة وحدات دفعة واحدة' },
+      { icon:'⬇️', label:'تصدير الجدول الحالي', fn:"exportSortableTableToExcel('apTable')",
+        hint:'بنفس الفلاتر والأعمدة الظاهرة قدامك' },
+    ]);
+    return html.includes(importBtn)
+      ? html.replace(importBtn, menu)
+      : `<div class="flexrow" style="margin-bottom:10px">${menu}</div>` + html;
+  });
+
+  /* المستخدمون */
+  wrapPage('pageUsers', function(html){
+    const menu = excelMenu('usExcelMenu', [
+      { icon:'✏️', label:'تحديث بيانات المستخدمين', fn:'openUsersUpdateImport()',
+        hint:'الأسماء · الصلاحيات · الجوالات · البريد' },
+      { icon:'⬇️', label:'تصدير الجدول الحالي', fn:"exportSortableTableToExcel('usersTable')",
+        hint:'بنفس الفلاتر والأعمدة الظاهرة قدامك' },
+    ]);
+    // بندوّر على زرار "مستخدم إداري" مهما كانت المسافات حواليه
+    const m = html.match(/<button class="btn ghost" onclick="openUserModal\(\)">[^<]*<\/button>/);
+    return m
+      ? html.replace(m[0], m[0] + menu)
+      : `<div class="flexrow" style="margin-bottom:10px">${menu}</div>` + html;
+  });
+
+
+  /* ============================================================
+     تحسين شاشات الاستيراد القديمة (عمارات · فريق دعم · أرقام تسويق · وحدات)
+     نفس الحماية: ورقة من اليمين + رفض أي ملف أعمدته مش مطابقة
+     ============================================================ */
+
+  const LEGACY = [
+    { tpl:'downloadBuildingsTemplate',  cols:'BUILDINGS_IMPORT_COLUMNS',  sheet:'العمارات' },
+    { tpl:'downloadStaffTemplate',      cols:'STAFF_IMPORT_COLUMNS',      sheet:'فريق الدعم' },
+    { tpl:'downloadLeadsTemplate',      cols:'LEADS_IMPORT_COLUMNS',      sheet:'أرقام التسويق' },
+    { tpl:'downloadApartmentsTemplate', cols:'APARTMENTS_IMPORT_COLUMNS', sheet:'الوحدات' },
+  ];
+
+  // الورقة تفتح من اليمين في كل قوالب البرنامج
+  if (typeof XLSX !== 'undefined' && XLSX.utils && !XLSX.utils.__rtlPatched){
+    const orig = XLSX.utils.aoa_to_sheet;
+    XLSX.utils.aoa_to_sheet = function(){
+      const ws = orig.apply(this, arguments);
+      ws['!views'] = [{ RTL: true }];
+      ws['!freeze'] = { xSplit:'0', ySplit:'1' };
+      return ws;
+    };
+    XLSX.utils.__rtlPatched = true;
+  }
+
+  /* لفّ دوال التحقق القديمة: لو الرأس غلط، نوقف قبل أي قراءة */
+  function guardLegacyImport(handlerName, getCols, label){
+    const orig = window[handlerName];
+    if (typeof orig !== 'function') return;
+    window[handlerName] = function(input){
+      const file = input && input.files && input.files[0];
+      // الأعمدة معرّفة بـconst في الصفحة (مش على window) — بنجيبها بدالة
+      let expected = null;
+      try{ expected = getCols(); }catch(e){}
+      if (!file || !expected || typeof XLSX === 'undefined') return orig.apply(this, arguments);
+      const self = this, args = arguments;
+      const r = new FileReader();
+      r.onload = e => {
+        try{
+          const wb = XLSX.read(e.target.result, { type:'array' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:false });
+          const problem = headerProblem(rows[0] || [], expected);
+          if (problem){
+            input.value = '';
+            return showMessage(
+              `❌ الملف ده مش نموذج "${label}".\n\n${problem}\n\n` +
+              'نزّل النموذج من الزرار اللي فوق واملأه من غير ما تغيّر أسماء الأعمدة ولا ترتيبها.');
+          }
+          orig.apply(self, args);
+        }catch(err){
+          showMessage('تعذّرت قراءة الملف: ' + err.message);
+        }
+      };
+      r.readAsArrayBuffer(file);
+    };
+  }
+
+  // بنلفّ الدوال اللي بتستقبل الملف في الشاشات القديمة
+  [['handleBuildingsFileUpload',  () => BUILDINGS_IMPORT_COLUMNS,  'استيراد العمارات'],
+   ['handleStaffFileUpload',      () => STAFF_IMPORT_COLUMNS,      'استيراد فريق الدعم'],
+   ['handleLeadsFileUpload',      () => LEADS_IMPORT_COLUMNS,      'استيراد أرقام التسويق'],
+   ['handleApartmentsFileUpload', () => APARTMENTS_IMPORT_COLUMNS, 'استيراد الوحدات'],
+  ].forEach(([fn,gc,lb]) => guardLegacyImport(fn, gc, lb));
+
+
+  /* ============================================================
+     المكتبات الخارجية بتتحمّل عند الطلب — بنلفّ كل دالة بتستخدمها
+     عشان تستنى التحميل الأول بدل ما تفشل.
+     ============================================================ */
+  (function lazyLibs(){
+    const XLSX_FNS = ['downloadApartmentsTemplate','downloadBuildingsTemplate',
+      'downloadLeadsTemplate','downloadStaffTemplate','exportSortableTableToExcel',
+      'handleApartmentsFileUpload','handleBuildingsFileUpload','handleLeadsFileUpload',
+      'handleStaffFileUpload','downloadApUpdateTemplate','downloadUsersUpdateTemplate',
+      'handleApUpdateUpload','handleUsersUpdateUpload','printSortableTable'];
+
+    XLSX_FNS.forEach(name => {
+      const orig = window[name];
+      if (typeof orig !== 'function') return;
+      window[name] = function(){
+        if (typeof XLSX !== 'undefined') return orig.apply(this, arguments);
+        const self = this, args = arguments;
+        if (window.toast) toast('بيحمّل مكتبة إكسيل…');
+        return window.ensureXLSX()
+          .then(() => orig.apply(self, args))
+          .catch(err => showMessage(err.message || 'تعذّر تحميل مكتبة إكسيل'));
+      };
+    });
+
+    // QR في بطاقة الدعاية
+    ['renderPromoQR','openPromoCard','downloadPromoCard'].forEach(name => {
+      const orig = window[name];
+      if (typeof orig !== 'function') return;
+      window[name] = function(){
+        if (typeof QRCode !== 'undefined') return orig.apply(this, arguments);
+        const self = this, args = arguments;
+        return window.ensureQRCode()
+          .then(() => orig.apply(self, args))
+          .catch(() => orig.apply(self, args));
+      };
+    });
+  })();
+
+  console.log('[عمارتنا] تحديث الشقق والمستخدمين بالإكسل جاهز');
 })();
 
 })();
@@ -3618,6 +5431,665 @@
   }, 2500);
 
   console.log('[عمارتنا] معالج البداية والتسليم جاهز');
+})();
+
+})();
+
+/* ═══ emartna-bldcols.js ═══ */
+(function(){
+/* ============================================================
+   عمارتنا — جدول كل العمارات: أعمدة ثابتة + مؤشرات استهداف
+   ------------------------------------------------------------
+   ١) تثبيت أول عمودين (اسم العمارة + الكود) أثناء التمرير
+      الأفقي، مع إمكانية إلغاء التثبيت بضغطة.
+   ٢) أعمدة جديدة تساعد صاحب البرنامج يستهدف كل عمارة:
+      نسبة اكتمال البيانات · الأرقام المسجّلة · الدعوات ·
+      الحسابات المفعّلة · الحركات ومتوسطها الشهري · آخر نشاط.
+   ============================================================ */
+
+(function(){
+  'use strict';
+
+  const esc2 = s => (window.esc ? esc(s) : String(s == null ? '' : s));
+  const PIN_KEY = 'emartna_pin_cols';
+
+  const pinned = () => { try{ return localStorage.getItem(PIN_KEY) !== '0'; }catch(e){ return true; } };
+  window.togglePinnedCols = function(){
+    try{ localStorage.setItem(PIN_KEY, pinned() ? '0' : '1'); }catch(e){}
+    if (window.renderSysContent) renderSysContent(); else renderContent();
+  };
+
+  /* ---------- ١) تثبيت الأعمدة ---------- */
+
+  function tableRoomCss(){
+    return `<style id="bldRoomCss">
+      /* مساحة أوسع وصفوف أوضح لجدول العمارات */
+      #sysBldTable_wrap .table-wrap, #supportBldTable_wrap .table-wrap{
+        max-height:none; min-height:340px;
+      }
+      #sysBldTable_wrap .table-wrap td, #supportBldTable_wrap .table-wrap td{
+        padding:11px 10px; font-size:13px;
+      }
+      #sysBldTable_wrap .table-wrap th, #supportBldTable_wrap .table-wrap th{
+        padding:10px; font-size:12.5px;
+      }
+      #sysBldTable_wrap .table-wrap tbody tr:hover td,
+      #supportBldTable_wrap .table-wrap tbody tr:hover td{ background:var(--hover,#F3F8F7); }
+    </style>`;
+  }
+
+  function pinStyle(){
+    if (!pinned()) return '';
+    // الحاوية اللي بتتحرك أفقيًا اسمها .table-wrap جوه #<id>_wrap
+    return `<style id="pinColsCss">
+      /* أول عمودين بيفضلوا مكانهم أثناء التمرير الأفقي */
+      #sysBldTable_wrap .table-wrap th:nth-child(1), #sysBldTable_wrap .table-wrap td:nth-child(1),
+      #supportBldTable_wrap .table-wrap th:nth-child(1), #supportBldTable_wrap .table-wrap td:nth-child(1){
+        position:sticky; inset-inline-start:0; z-index:3;
+        background:var(--panel); box-shadow:3px 0 6px -3px rgba(0,0,0,.16);
+      }
+      #sysBldTable_wrap .table-wrap th:nth-child(2), #sysBldTable_wrap .table-wrap td:nth-child(2),
+      #supportBldTable_wrap .table-wrap th:nth-child(2), #supportBldTable_wrap .table-wrap td:nth-child(2){
+        position:sticky; inset-inline-start:var(--pin1,150px); z-index:2;
+        background:var(--panel); box-shadow:3px 0 6px -3px rgba(0,0,0,.10);
+      }
+      #sysBldTable_wrap .table-wrap thead th, #supportBldTable_wrap .table-wrap thead th{
+        position:sticky; top:0; z-index:4; background:var(--tablehead,#F4F1E8);
+      }
+      #sysBldTable_wrap .table-wrap thead th:nth-child(1),
+      #supportBldTable_wrap .table-wrap thead th:nth-child(1){ z-index:6; }
+      #sysBldTable_wrap .table-wrap thead th:nth-child(2),
+      #supportBldTable_wrap .table-wrap thead th:nth-child(2){ z-index:5; }
+    </style>`;
+  }
+
+  function pinBar(){
+    const on = pinned();
+    let full = false;
+    try{ full = localStorage.getItem('sysBldTable_colsTouched') === '1'; }catch(e){}
+    return `<div class="flexrow mtop" style="gap:8px;flex-wrap:wrap">
+      <button class="btn sm ${demosShown()?'primary':'ghost'}"
+        onclick="showDemoBuildings(${demosShown()?'false':'true'})"
+        title="جلسات الزوّار المؤقتة">
+        ${demosShown()?'🧪 التجريبية ظاهرة':'🧪 إظهار التجريبية'}</button>
+      <span style="display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden">
+        <button class="btn sm ${full?'ghost':'primary'}" style="border-radius:0"
+          onclick="showEssentialBldCols('sysBldTable')">📋 عرض مبسّط</button>
+        <button class="btn sm ${full?'primary':'ghost'}" style="border-radius:0"
+          onclick="showAllBldCols('sysBldTable')">📊 كل الأعمدة</button>
+      </span>
+      <button class="btn sm ${on?'primary':'ghost'}" onclick="togglePinnedCols()">
+        ${on ? '📌 العمودين مثبّتين' : '📍 تثبيت اسم العمارة والكود'}</button>
+      <span class="small" style="color:var(--muted)">
+        ${on ? 'اسم العمارة والكود بيفضلوا ظاهرين وإنت بتتحرك يمين وشمال'
+             : 'الأعمدة كلها بتتحرك مع بعض'}</span>
+    </div>`;
+  }
+
+  /* بنقيس عرض أول عمود عشان نظبط مكان التاني */
+  function measurePins(){
+    if (!pinned()) return;
+    setTimeout(() => {
+      ['sysBldTable','supportBldTable'].forEach(id => {
+        const wrap = document.getElementById(id + '_wrap');
+        if (!wrap) return;
+        const th = wrap.querySelector('.table-wrap thead th:nth-child(1)');
+        if (th) wrap.style.setProperty('--pin1', th.offsetWidth + 'px');
+      });
+    }, 60);
+  }
+
+  /* ---------- ٢) مؤشرات كل عمارة ---------- */
+
+  function metrics(b){
+    const d = (window.loadBuildingData && loadBuildingData(b.id)) || null;
+    if (!d) return { loaded:false };
+    const aps = d.apartments || [];
+    const users = d.users || [];
+    const open = aps.filter(a => !a.closed);
+    const withPhone = aps.filter(a => a.phone).length;
+    const withFee = open.filter(a => Number(a.monthlyFee) > 0).length;
+    const invited = users.filter(u => u.apartmentId && u.inviteStatus === 'pending').length;
+    const joined = users.filter(u => u.apartmentId && u.inviteStatus !== 'pending').length;
+    const moves = (d.ledger || []).length + (d.expenses || []).length;
+
+    const dates = (d.ledger || []).map(x => x.date).filter(Boolean).sort();
+    const first = dates[0], last = dates[dates.length - 1];
+    let months = 1;
+    if (first && last){
+      const a = new Date(first), z = new Date(last);
+      months = Math.max(1, (z.getFullYear()-a.getFullYear())*12 + (z.getMonth()-a.getMonth()) + 1);
+    }
+    const lastAct = [last, ...(d.activityLog||[]).map(x => (x.date||'').slice(0,10))]
+      .filter(Boolean).sort().pop() || '';
+    const daysIdle = lastAct
+      ? Math.round((Date.now() - new Date(lastAct).getTime()) / 86400000) : null;
+
+    // نسبة اكتمال الإعداد — نفس منطق معالج البداية
+    const setup = [
+      !!(d.building && d.building.name && d.building.city),
+      aps.length > 0,
+      aps.length > 0 && withFee === open.length,
+      (d.ledger || []).some(l => l.type === 'شهري'),
+      (invited + joined) > 0,
+    ].filter(Boolean).length;
+
+    return { loaded:true, aps:aps.length, open:open.length, withPhone, withFee,
+             invited, joined, moves, perMonth: Math.round(moves / months),
+             lastAct, daysIdle, setup, users: users.length };
+  }
+
+  const EXTRA_COLS = [
+    { key:'setupPct', label:'اكتمال الإعداد',
+      value: m => m.loaded ? m.setup*20 : -1,
+      cell: m => !m.loaded ? '<span class="small">—</span>' :
+        `<span class="badge ${m.setup>=5?'g':m.setup>=3?'y':'r'}">${m.setup*20}%</span>` },
+
+    { key:'withPhone', label:'وحدات بأرقام',
+      value: m => m.loaded ? m.withPhone : -1,
+      cell: m => !m.loaded ? '—' :
+        `${m.withPhone} <span class="small" style="color:var(--muted)">من ${m.aps}</span>` },
+
+    { key:'invited', label:'دعوات مستنية',
+      value: m => m.loaded ? m.invited : -1,
+      cell: m => !m.loaded ? '—' : (m.invited ? `<span class="badge y">${m.invited}</span>` : '0') },
+
+    { key:'joined', label:'وحدات عندها حساب',
+      value: m => m.loaded ? m.joined : -1,
+      cell: m => !m.loaded ? '—' :
+        `<span class="badge ${m.joined?'g':'n'}">${m.joined}</span>` },
+
+    { key:'adoption', label:'نسبة انضمام السكان',
+      value: m => m.loaded && m.aps ? Math.round(m.joined/m.aps*100) : -1,
+      cell: m => (!m.loaded || !m.aps) ? '—' :
+        `<span class="badge ${m.joined/m.aps>=.5?'g':m.joined?'y':'r'}">${Math.round(m.joined/m.aps*100)}%</span>` },
+
+    { key:'moves', label:'الحركات المالية',
+      value: m => m.loaded ? m.moves : -1,
+      cell: m => m.loaded ? String(m.moves) : '—' },
+
+    { key:'perMonth', label:'متوسط الحركات شهريًا',
+      value: m => m.loaded ? m.perMonth : -1,
+      cell: m => !m.loaded ? '—' :
+        `<span class="badge ${m.perMonth>=20?'g':m.perMonth>=5?'y':'n'}">${m.perMonth}</span>` },
+
+    { key:'lastAct', label:'آخر نشاط',
+      value: m => m.lastAct || '',
+      cell: m => !m.lastAct ? '<span class="small" style="color:var(--muted)">مفيش</span>' :
+        `${esc2(m.lastAct)} <span class="badge ${m.daysIdle<=7?'g':m.daysIdle<=30?'y':'r'}">${m.daysIdle} يوم</span>` },
+
+    { key:'health', label:'حالة الاستخدام',
+      value: m => {
+        if (!m.loaded) return 0;
+        if (m.daysIdle !== null && m.daysIdle > 30) return 1;   // متوقفة
+        if (m.setup < 3) return 2;                              // متعثّرة
+        if (m.joined === 0) return 3;                           // بدون سكان
+        if (m.perMonth >= 10) return 5;                         // نشطة
+        return 4;
+      },
+      cell: m => {
+        const v = !m.loaded ? 0 : (m.daysIdle !== null && m.daysIdle > 30) ? 1
+                : m.setup < 3 ? 2 : m.joined === 0 ? 3 : m.perMonth >= 10 ? 5 : 4;
+        return ['<span class="small">—</span>',
+                '<span class="badge r">🔴 متوقفة</span>',
+                '<span class="badge y">🟡 إعداد ناقص</span>',
+                '<span class="badge y">🟠 بدون سكان</span>',
+                '<span class="badge g">🟢 شغّالة</span>',
+                '<span class="badge g">💚 نشطة جدًا</span>'][v];
+      } },
+  ];
+
+
+  /* ---------- ٣) عمود الإجراءات: "فتح" + قائمة ⋮ ---------- */
+
+  /* القائمة بتتنقل لطبقة فوق الصفحة كلها.
+     لو فضلت جوه الجدول، الحاوية اللي بتتمرّر بتقصّها فمتبانش. */
+  function closeRowMenus(){
+    const layer = document.getElementById('rowMenuLayer');
+    if (layer) layer.remove();
+  }
+  window.closeRowMenus = closeRowMenus;
+
+  window.toggleRowMenu = function(id, ev){
+    const src = document.getElementById(id);
+    const already = document.getElementById('rowMenuLayer');
+    closeRowMenus();
+    if (already && already.dataset.src === id) return;      // نفس الزرار = قفل
+    if (!src) return;
+
+    const btn = (ev && ev.currentTarget) || document.activeElement ||
+                src.parentElement.querySelector('button[title="خيارات أكتر"]');
+    const r = btn && btn.getBoundingClientRect ? btn.getBoundingClientRect() : { bottom:80, right:200, left:120 };
+
+    const layer = document.createElement('div');
+    layer.id = 'rowMenuLayer';
+    layer.dataset.src = id;
+    layer.style.cssText =
+      'position:fixed;z-index:99000;min-width:210px;background:var(--panel);' +
+      'border:1px solid var(--line);border-radius:12px;padding:6px;' +
+      'box-shadow:0 14px 34px rgba(0,0,0,.20);direction:rtl;text-align:start';
+    layer.innerHTML = src.innerHTML;
+
+    document.body.appendChild(layer);
+    // بنحطها تحت الزرار، ولو مفيش مكان تحت بنطلّعها فوقه
+    const h = layer.offsetHeight || 180, w = layer.offsetWidth || 210;
+    let top = r.bottom + 6;
+    if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+    let left = r.right - w;
+    if (left < 8) left = 8;
+    if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
+    layer.style.top = top + 'px';
+    layer.style.left = left + 'px';
+  };
+
+  document.addEventListener('click', e => {
+    if (e.target.closest && (e.target.closest('#rowMenuLayer') || e.target.closest('.row-menu-wrap'))) return;
+    closeRowMenus();
+  });
+  window.addEventListener('scroll', closeRowMenus, true);
+  window.addEventListener('resize', closeRowMenus);
+
+  /* بناخد أزرار العمود الأصلي ونعيد ترتيبها */
+  function compactActions(html, rowId){
+    const btns = String(html).match(/<button[\s\S]*?<\/button>/g) || [];
+    if (btns.length <= 1) return html;
+
+    const label = b => b.replace(/<[^>]*>/g,'').trim();
+    const openIdx = btns.findIndex(b => /فتح/.test(label(b)));
+    const primary = openIdx >= 0 ? btns[openIdx] : btns[0];
+    const rest = btns.filter((_,i) => i !== (openIdx >= 0 ? openIdx : 0));
+    if (!rest.length) return html;
+
+    const mid = 'rm_' + String(rowId).replace(/[^\w]/g,'') + '_' + Math.random().toString(36).slice(2,6);
+    const items = rest.map(b => {
+      const onclick = (b.match(/onclick="([^"]*)"/) || [])[1] || '';
+      const isRed = /class="[^"]*\bred\b/.test(b);
+      let txt = label(b);
+      const title = (b.match(/title="([^"]*)"/) || [])[1];
+      if (txt.length <= 2 && title) txt = title;      // زرار بأيقونة بس
+      if (/^🔑/.test(txt) && txt.length <= 3) txt = '🔑 إعادة تعيين كلمة السر';
+      return `<button class="btn ghost" style="display:block;width:100%;text-align:start;border:0;
+                padding:8px 10px;margin:0;${isRed?'color:var(--red)':''}"
+                onclick="closeRowMenus();${onclick.replace(/"/g,'&quot;')}">${txt}</button>`;
+    }).join('');
+
+    return `<div class="flexrow row-menu-wrap" style="gap:4px;position:relative;justify-content:flex-start">
+      ${primary}
+      <button class="btn sm ghost" style="padding:4px 9px;font-size:16px;line-height:1"
+        title="خيارات أكتر" onclick="toggleRowMenu('${mid}', event)">⋮</button>
+      <div id="${mid}" class="row-menu" style="display:none;position:absolute;z-index:70;
+           top:calc(100% + 5px);inset-inline-end:0;min-width:190px;background:var(--panel);
+           border:1px solid var(--line);border-radius:11px;box-shadow:0 10px 28px rgba(0,0,0,.16);
+           padding:5px;text-align:start">${items}</div>
+    </div>`;
+  }
+
+
+  /* ============================================================
+     ٤) عرض مبسّط: أعمدة أساسية + بطاقة تفاصيل كاملة
+     ============================================================ */
+
+  /* الأعمدة اللي تظهر افتراضيًا — الباقي في البطاقة */
+  const ESSENTIALS = ['name','code','apCount','status','health','setupPct','joined','adminLogin','lastAct','x'];
+
+  function applyDefaultVisibility(tableId, cols){
+    const visKey = tableId + '_vis';
+    try{
+      if (localStorage.getItem(tableId + '_colsTouched') === '1') return;   // المستخدم عدّل بنفسه
+    }catch(e){}
+    if (window.__bldVisDone) return;
+    window.__bldVisDone = true;
+    window[visKey] = cols.map(c => c.key).filter(k => ESSENTIALS.includes(k));
+  }
+
+  /* لو المستخدم فتح مخصّص الأعمدة، نحترم اختياره بعد كده */
+  const origCust = window.openColumnCustomizer;
+  if (origCust && !origCust.__bld){
+    const w2 = function(){
+      try{ localStorage.setItem('sysBldTable_colsTouched','1'); }catch(e){}
+      return origCust.apply(this, arguments);
+    };
+    w2.__bld = true;
+    window.openColumnCustomizer = w2;
+  }
+
+  window.showAllBldCols = function(tableId){
+    const cfg = window.__tableConfigs && window.__tableConfigs[tableId];
+    if (!cfg) return;
+    window[tableId + '_vis'] = cfg.columns.map(c => c.key);
+    try{ localStorage.setItem(tableId + '_colsTouched','1'); }catch(e){}
+    if (window.renderSysContent) renderSysContent(); else renderContent();
+  };
+  window.showEssentialBldCols = function(tableId){
+    const cfg = window.__tableConfigs && window.__tableConfigs[tableId];
+    if (!cfg) return;
+    window[tableId + '_vis'] = cfg.columns.map(c => c.key).filter(k => ESSENTIALS.includes(k));
+    try{ localStorage.removeItem(tableId + '_colsTouched'); }catch(e){}
+    if (window.renderSysContent) renderSysContent(); else renderContent();
+  };
+
+  /* ---------- بطاقة العمارة ---------- */
+
+  const F = (label, val) => val === '' || val === null || val === undefined
+    ? '' : `<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px dashed var(--line)">
+        <span class="small" style="color:var(--muted);min-width:130px">${esc2(label)}</span>
+        <span class="small" style="flex:1"><b>${val}</b></span></div>`;
+
+
+  /* فتح نافذة تانية بعد ما البطاقة تتقفل — من غير التأخير ده
+     النافذة الجديدة بتتقفل مع القديمة فمتبانش. */
+  window.bldCardGo = function(fnName, arg){
+    closeModal();
+    setTimeout(() => {
+      const f = window[fnName];
+      if (typeof f === 'function') f(arg);
+      else showMessage('الإجراء ده مش متاح دلوقتي');
+    }, 120);
+  };
+
+  /* بيانات تواصل رئيس الاتحاد — تعديل سريع */
+  window.openBuildingContact = function(bid){
+    const b = ((window.REG && REG.buildings) || []).find(x => x.id === bid);
+    if (!b) return;
+    openModal(`
+      <h3>📞 بيانات التواصل — ${esc2(b.name||'')}</h3>
+      <p class="small mtop">بتستخدمها في تذكير التجديد والتواصل مع رئيس الاتحاد.</p>
+      <div class="field2 mtop"><label>اسم رئيس الاتحاد</label>
+        <input id="bcName" value="${esc2(b.adminName||'')}"></div>
+      <div class="grid g2">
+        <div class="field2"><label>مفتاح الدولة</label>
+          <input id="bcCC" value="${esc2(b.contactPhoneCountry||'+20')}" dir="ltr"></div>
+        <div class="field2"><label>الموبايل / واتساب</label>
+          <input id="bcPhone" value="${esc2(b.contactPhone||'')}" dir="ltr"></div>
+      </div>
+      <div class="field2"><label>البريد الإلكتروني</label>
+        <input id="bcEmail" value="${esc2(b.adminEmail||'')}" dir="ltr"></div>
+      <div class="field2"><label>صفحة فيسبوك (اختياري)</label>
+        <input id="bcFb" value="${esc2(b.facebookUrl||'')}" dir="ltr" placeholder="https://facebook.com/..."></div>
+      <div class="modal-actions">
+        <button class="btn primary" onclick="saveBuildingContact('${bid}')">💾 حفظ</button>
+        <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+      </div>`, true);
+  };
+
+  window.saveBuildingContact = function(bid){
+    const b = ((window.REG && REG.buildings) || []).find(x => x.id === bid);
+    if (!b) return;
+    const g = i => (document.getElementById(i)||{}).value || '';
+    b.adminName = g('bcName').trim();
+    b.contactPhoneCountry = g('bcCC').trim() || '+20';
+    b.contactPhone = g('bcPhone').replace(/[^\d]/g,'');
+    b.adminEmail = g('bcEmail').trim();
+    b.facebookUrl = g('bcFb').trim();
+    saveRegistry();
+    closeModal();
+    if (window.toast) toast('اتحفظت بيانات التواصل');
+    if (window.renderSysContent) renderSysContent();
+  };
+
+
+  /* ---------- تعطيل / تفعيل العمارة بسبب وتاريخ ---------- */
+
+  window.openSuspendModal = function(bid){
+    const b = ((window.REG && REG.buildings) || []).find(x => x.id === bid);
+    if (!b) return;
+    const lic = window.ensureLicense ? ensureLicense(b) : (b.license || {});
+    const isOff = lic.status === 'suspended';
+    const sus = lic.suspension || {};
+
+    if (isOff){
+      openModal(`
+        <h3>▶️ إعادة تفعيل ${esc2(b.name||'')}</h3>
+        <div class="card mtop" style="border:1px solid var(--red)">
+          <b>العمارة موقوفة حاليًا</b>
+          <p class="small mtop">السبب: ${esc2(sus.reason || 'مش مسجّل')}</p>
+          <p class="small">تاريخ الإيقاف: ${esc2((sus.at||'').slice(0,10) || '—')}</p>
+          ${sus.until ? `<p class="small">مفترض ينتهي: ${esc2(sus.until)}</p>` : ''}
+          ${sus.by ? `<p class="small" style="color:var(--muted)">أوقفها: ${esc2(sus.by)}</p>` : ''}
+        </div>
+        <p class="small mtop">رئيس الاتحاد والسكان مش بيقدروا يستخدموا العمارة وهي موقوفة.</p>
+        <div class="modal-actions">
+          <button class="btn primary" onclick="applySuspend('${bid}',false)">▶️ فعّلها تاني</button>
+          <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+        </div>`, true);
+      return;
+    }
+
+    const reasons = ['عدم سداد الاشتراك','مخالفة شروط الاستخدام','بطلب من رئيس الاتحاد',
+                     'بيانات غير صحيحة','إيقاف مؤقت للمراجعة','سبب آخر'];
+    openModal(`
+      <h3>⏸️ تعطيل ${esc2(b.name||'')}</h3>
+      <p class="small mtop">لما تعطّلها، رئيس الاتحاد والسكان هيشوفوا رسالة إن الاشتراك موقوف
+      ومش هيقدروا يستخدموا البرنامج. <b>البيانات كلها بتفضل محفوظة.</b></p>
+
+      <div class="field2 mtop2"><label>سبب التعطيل</label>
+        <select id="spReason" onchange="document.getElementById('spOtherWrap').style.display=this.value==='سبب آخر'?'block':'none'">
+          ${reasons.map(r => `<option>${r}</option>`).join('')}
+        </select></div>
+      <div class="field2" id="spOtherWrap" style="display:none"><label>اكتب السبب</label>
+        <input id="spOther" placeholder="السبب بالتفصيل"></div>
+
+      <div class="grid g2">
+        <div class="field2"><label>تاريخ التعطيل</label>
+          <input id="spAt" type="date" value="${window.todayISO?todayISO():''}"></div>
+        <div class="field2"><label>مفترض ينتهي (اختياري)</label>
+          <input id="spUntil" type="date"></div>
+      </div>
+
+      <div class="field2"><label>ملاحظة داخلية (اختياري)</label>
+        <input id="spNote" placeholder="مش بتظهر للعميل"></div>
+
+      <div class="modal-actions">
+        <button class="btn red" onclick="applySuspend('${bid}',true)">⏸️ عطّل العمارة</button>
+        <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+      </div>`, true);
+  };
+
+  window.applySuspend = function(bid, off){
+    const b = ((window.REG && REG.buildings) || []).find(x => x.id === bid);
+    if (!b) return;
+    const lic = window.ensureLicense ? ensureLicense(b) : (b.license = b.license || {});
+    const g = i => (document.getElementById(i) || {}).value || '';
+
+    if (off){
+      let reason = g('spReason');
+      if (reason === 'سبب آخر') reason = g('spOther').trim() || 'سبب آخر';
+      lic.status = 'suspended';
+      lic.suspension = {
+        reason,
+        at: g('spAt') || (window.todayISO ? todayISO() : ''),
+        until: g('spUntil') || '',
+        note: g('spNote').trim(),
+        by: (window.REG && REG.sysOwner && REG.sysOwner.name) || 'صاحب البرنامج',
+      };
+    }else{
+      lic.status = (lic.endDate && lic.endDate < (window.todayISO?todayISO():'')) ? 'expired'
+                 : (lic.plan && /trial|promo/.test(String(lic.plan)) ? 'trial' : 'active');
+      lic.suspension = Object.assign({}, lic.suspension || {}, {
+        liftedAt: window.todayISO ? todayISO() : '',
+      });
+    }
+
+    try{
+      if (window.logLicenseEvent)
+        logLicenseEvent(bid, off ? ('إيقاف الاشتراك — ' + lic.suspension.reason) : 'إعادة تفعيل الاشتراك');
+    }catch(e){}
+    saveRegistry();
+    closeModal();
+    if (window.toast) toast(off ? '⏸️ اتعطّلت العمارة' : '▶️ اترجّعت العمارة للخدمة');
+    if (window.renderSysContent) renderSysContent();
+  };
+
+  window.openBuildingCard = function(bid){
+    const b = ((window.REG && REG.buildings) || []).find(x => x.id === bid);
+    if (!b) return;
+    const m = metrics(b);
+    const lic = window.ensureLicense ? ensureLicense(b) : (b.license || {});
+    const st  = window.licenseState ? licenseState(lic) : { label: lic.status || '' };
+
+    const health = !m.loaded ? '—'
+      : (m.daysIdle !== null && m.daysIdle > 30) ? '<span class="badge r">🔴 متوقفة</span>'
+      : m.setup < 3 ? '<span class="badge y">🟡 إعداد ناقص</span>'
+      : m.joined === 0 ? '<span class="badge y">🟠 بدون سكان</span>'
+      : m.perMonth >= 10 ? '<span class="badge g">💚 نشطة جدًا</span>'
+      : '<span class="badge g">🟢 شغّالة</span>';
+
+    openModal(`
+      <h3>🏢 ${esc2(b.name || '')} <span class="small" style="color:var(--muted)">${esc2(b.code || '')}</span></h3>
+
+      <div class="flexrow mtop" style="flex-wrap:wrap;gap:7px">
+        ${health}
+        <span class="badge ${st.badge || 'n'}">${esc2(st.label || '')}</span>
+        ${m.loaded ? `<span class="badge n">اكتمال الإعداد ${m.setup*20}%</span>` : ''}
+      </div>
+
+      ${lic.status==='suspended' ? `
+        <div class="card mtop" style="border:1px solid var(--red);background:#FFF6F5">
+          <b style="color:var(--red)">⏸️ العمارة موقوفة</b>
+          <p class="small mtop">السبب: <b>${esc2((lic.suspension||{}).reason || 'مش مسجّل')}</b>
+            ${(lic.suspension||{}).at ? ` · من ${esc2(lic.suspension.at)}` : ''}
+            ${(lic.suspension||{}).until ? ` · لحد ${esc2(lic.suspension.until)}` : ''}</p>
+          ${(lic.suspension||{}).note ? `<p class="small" style="color:var(--muted)">${esc2(lic.suspension.note)}</p>` : ''}
+        </div>` : ''}
+
+      <div class="grid g2 mtop2">
+        <div class="card">
+          <b>📊 مؤشرات الاستخدام</b>
+          <div class="mtop">
+            ${F('إجمالي الوحدات', m.loaded ? m.aps : (b.apartmentsCount || '—'))}
+            ${F('وحدات مفتوحة', m.loaded ? m.open : '')}
+            ${F('وحدات بأرقام موبايل', m.loaded ? `${m.withPhone} من ${m.aps}` : '')}
+            ${F('اشتراكات محدّدة', m.loaded ? `${m.withFee} من ${m.open}` : '')}
+            ${F('دعوات مستنية', m.loaded ? m.invited : '')}
+            ${F('وحدات عندها حساب', m.loaded ? m.joined : '')}
+            ${F('نسبة انضمام السكان', m.loaded && m.aps ? Math.round(m.joined/m.aps*100)+'%' : '')}
+            ${F('الحركات المالية', m.loaded ? m.moves : '')}
+            ${F('متوسط الحركات شهريًا', m.loaded ? m.perMonth : '')}
+            ${F('آخر نشاط', m.lastAct ? `${m.lastAct} <span class="small">(${m.daysIdle} يوم)</span>` : 'مفيش')}
+            ${F('آخر دخول للأدمن', b.lastAdminLoginAt
+              ? (window.fmtDateTime ? fmtDateTime(b.lastAdminLoginAt) : String(b.lastAdminLoginAt).slice(0,16)) +
+                (b.lastAdminLoginName ? ` <span class="small">(${esc2(b.lastAdminLoginName)})</span>` : '')
+              : 'مدخلش لسه')}
+          </div>
+        </div>
+
+        <div class="card">
+          <b>🪪 الاشتراك</b>
+          <div class="mtop">
+            ${F('الخطة', window.planName ? planName(lic.plan) : (lic.plan || '—'))}
+            ${F('تاريخ البدء', lic.startDate || '—')}
+            ${F('تاريخ الانتهاء', lic.endDate || 'بلا نهاية')}
+            ${F('المتبقّي', st.daysLeft !== null && st.daysLeft !== undefined ? st.daysLeft + ' يوم' : '')}
+            ${F('حد الوحدات', lic.maxApartments || 'غير محدود')}
+          </div>
+          <b class="mtop2" style="display:block">👤 رئيس الاتحاد</b>
+          <div class="mtop">
+            ${F('الاسم', esc2(b.adminName || '—'))}
+            ${F('الموبايل', `<span dir="ltr">${esc2((b.contactPhoneCountry||'')+' '+(b.contactPhone||''))}</span>`)}
+            ${F('البريد', `<span dir="ltr">${esc2(b.adminEmail || '—')}</span>`)}
+            ${b.facebookUrl ? F('فيسبوك', `<a href="${esc2(b.facebookUrl)}" target="_blank" rel="noopener">📘 الصفحة ↗</a>`) : ''}
+          </div>
+          <b class="mtop2" style="display:block">📍 الموقع</b>
+          <div class="mtop">
+            ${F('المدينة', esc2(b.city || '—'))}
+            ${F('المحافظة', esc2(b.governorate || '—'))}
+            ${F('العنوان', esc2(b.address || '—'))}
+            ${F('تاريخ الإنشاء', (b.createdAt || '').slice(0,10))}
+          </div>
+        </div>
+      </div>
+
+      <div class="flexrow mtop2" style="flex-wrap:wrap;gap:8px">
+        <button class="btn primary" onclick="bldCardGo('impersonateBuilding','${b.id}')">🏢 افتح العمارة</button>
+        <button class="btn gold" onclick="bldCardGo('openLicenseManage','${b.id}')">🪪 الاشتراك</button>
+        ${b.contactPhone || b.adminPhoneRaw
+          ? `<a class="btn ghost" target="_blank" onclick="closeModal()"
+               href="${window.renewalWhatsAppLink ? renewalWhatsAppLink(b) : '#'}">💬 تذكير تجديد</a>` : ''}
+        <button class="btn ghost" onclick="bldCardGo('renameBuildingPrompt','${b.id}')">✏️ تعديل الاسم</button>
+        <button class="btn ghost" onclick="bldCardGo('openBuildingContact','${b.id}')">📞 بيانات التواصل</button>
+        <button class="btn ${lic.status==='suspended'?'primary':'red'}"
+          onclick="bldCardGo('openSuspendModal','${b.id}')">
+          ${lic.status==='suspended' ? '▶️ إعادة تفعيل' : '⏸️ تعطيل العمارة'}</button>
+      </div>
+      <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`, true);
+  };
+
+  /* العمارات التجريبية بتتخفي افتراضيًا — دي جلسات زوّار مش عملاء،
+     ووجودها بيلخبط العدّادات والقوايم. */
+  window.showDemoBuildings = function(on){
+    try{ localStorage.setItem('emartna_show_demos', on ? '1' : '0'); }catch(e){}
+    if (window.renderSysContent) renderSysContent();
+  };
+  function demosShown(){
+    try{ return localStorage.getItem('emartna_show_demos') === '1'; }catch(e){ return false; }
+  }
+  const isDemoRec = b => !!(b && (b.isDemo || b.is_demo ||
+    /\(تجريبية\)/.test(String(b.name || ''))));
+  window.__isDemoRec = isDemoRec;
+
+  /* بنحقن الأعمدة في نداء sortableTable لجدول العمارات */
+  const origSortable = window.sortableTable;
+  if (origSortable) window.sortableTable = function(id, rows, cols, groupBy, opts){
+    if ((id === 'sysBldTable' || id === 'supportBldTable') && Array.isArray(rows) && Array.isArray(cols)){
+      if (!demosShown()) rows = rows.filter(b => !isDemoRec(b));
+      const cache = new Map();
+      const M = b => { if (!cache.has(b.id)) cache.set(b.id, metrics(b)); return cache.get(b.id); };
+      const extra = EXTRA_COLS.map(c => ({
+        key: c.key, label: c.label,
+        value: b => c.value(M(b)),
+        cell:  b => c.cell(M(b)),
+      }));
+
+      /* آخر دخول لرئيس الاتحاد — بيتقرا من سجل العمارة مباشرة
+         مش من المؤشرات، عشان القيمة جاية من الخادم. */
+      const daysSince = v => v ? Math.floor((Date.now() - new Date(v).getTime())/86400000) : null;
+      extra.push({
+        key:'adminLogin', label:'آخر دخول للأدمن',
+        value: b => b.lastAdminLoginAt || '',
+        cell: b => {
+          const v = b.lastAdminLoginAt;
+          if (!v) return '<span class="small" style="color:var(--muted)">مدخلش لسه</span>';
+          const d = daysSince(v);
+          const txt = window.fmtDate ? fmtDate(String(v).slice(0,10)) : String(v).slice(0,10);
+          const rel = d === 0 ? 'النهاردة' : d === 1 ? 'إمبارح' : 'من ' + d + ' يوم';
+          const cls = d <= 3 ? 'g' : d <= 14 ? 'y' : 'r';
+          return `${esc2(txt)}<br><span class="badge ${cls}">${rel}</span>` +
+                 (b.lastAdminLoginName
+                   ? `<div class="small" style="color:var(--muted)">${esc2(b.lastAdminLoginName)}</div>` : '');
+        },
+      });
+
+      let last = cols[cols.length-1] && !cols[cols.length-1].value ? cols.pop() : null;
+      cols = cols.concat(extra);
+      if (last){
+        const origCell = last.cell;
+        cols.push(Object.assign({}, last, {
+          key: last.key || 'x',
+          label: last.label || 'إجراءات',
+          cell: b => `<div class="flexrow" style="gap:5px;justify-content:flex-start">
+              <button class="btn sm primary" onclick="openBuildingCard('${b.id}')">تفاصيل</button>
+              ${compactActions(origCell ? origCell(b) : '', b.id || b.code || 'x')}
+            </div>`,
+        }));
+      }
+      if (id === 'sysBldTable') applyDefaultVisibility(id, cols);
+      measurePins();
+    }
+    return origSortable.call(this, id, rows, cols, groupBy, opts);
+  };
+
+  /* شريط التثبيت في الشاشتين */
+  ['pageSysDashboard','pageSupportBuildingsView'].forEach(name => {
+    const orig = window[name];
+    if (typeof orig !== 'function') return;
+    window[name] = function(){
+      const html = orig.apply(this, arguments);
+      measurePins();
+      return tableRoomCss() + pinStyle() + pinBar() + html;
+    };
+  });
+
+  console.log('[عمارتنا] أعمدة العمارات الثابتة والمؤشرات جاهزة');
 })();
 
 })();
@@ -9976,1298 +12448,6 @@
   setTimeout(() => { try{ loadServerCities(); }catch(e){} }, 2500);
 
   console.log('[عمارتنا] مدن المحافظات جاهزة');
-})();
-
-})();
-
-/* ═══ emartna-excel.js ═══ */
-(function(){
-/* ============================================================
-   عمارتنا — تحديث بالإكسل: الشقق والملاك · المستخدمون
-   ------------------------------------------------------------
-   لكل شاشة: تنزيل قالب معبّى بكل الأعمدة والبيانات الحالية،
-   تعديل خارجي، ورفع بمراجعة كاملة قبل الاعتماد:
-     ✅ هيتحدّث   ⚪ من غير تغيير   ❌ خطأ + سببه + رقم السطر
-   ============================================================ */
-
-(function(){
-  'use strict';
-
-  const esc2 = s => (window.esc ? esc(s) : String(s == null ? '' : s));
-  const unit = a => (window.unitLabel ? unitLabel(a) : ('وحدة ' + (a ? a.number : '')));
-  const YES  = ['نعم','yes','true','1','✓'];
-  const isYes = v => YES.includes(String(v == null ? '' : v).trim().toLowerCase());
-
-  const noXLSX = () => {
-    if (typeof XLSX === 'undefined'){
-      showMessage('تعذر تحميل مكتبة إكسيل — اتأكد من الإنترنت وحاول تاني.');
-      return true;
-    }
-    return false;
-  };
-
-  function download(rows, cols, sheet, fileName, widths){
-    const ws = XLSX.utils.aoa_to_sheet([cols, ...rows]);
-    ws['!cols'] = (widths || cols.map(() => 16)).map(w => ({ wch:w }));
-    // إكسيل بيفتح الشيت من الشمال افتراضيًا، فالأعمدة العربية بتبان مقلوبة
-    // للعين. السطر ده بيخلي الورقة تفتح من اليمين زي القراءة العربية.
-    ws['!views'] = [{ RTL: true }];
-    ws['!freeze'] = { xSplit:'0', ySplit:'1' };
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, sheet);
-    XLSX.writeFile(wb, fileName + ' - ' + (window.todayISO ? todayISO() : '') + '.xlsx');
-  }
-
-  /* بصمة مبسطة للعنوان — عشان نقارن رغم فروق المسافات */
-  const norm = h => String(h == null ? '' : h).replace(/\s+/g,'').trim();
-
-  function headerProblem(got, expected){
-    const g = got.map(norm), e = expected.map(norm);
-    if (g.length < e.length - 1)
-      return `الملف ده فيه ${got.length} عمود، والقالب المطلوب فيه ${expected.length}.`;
-    for (let i = 0; i < e.length; i++){
-      if (g[i] !== e[i])
-        return `ترتيب الأعمدة مختلف: العمود رقم ${i+1} المفروض يكون "${expected[i]}" ` +
-               `ولقيت "${got[i] || '(فاضي)'}".`;
-    }
-    return null;
-  }
-
-  function readSheet(file, onRows, host, expectedCols){
-    const reader = new FileReader();
-    reader.onload = e => {
-      try{
-        const wb = XLSX.read(e.target.result, { type:'array' });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:false });
-        const body = rows.slice(1).filter(r => r.some(c => String(c).trim() !== ''));
-        if (!body.length){
-          host.innerHTML = '<p class="small mtop" style="color:var(--red)">الملف فاضي — مفيش صفوف بيانات.</p>';
-          return;
-        }
-        if (expectedCols){
-          const problem = headerProblem(rows[0] || [], expectedCols);
-          if (problem){
-            host.innerHTML = `
-              <div class="card mtop2" style="border:1px solid var(--red)">
-                <h3 style="color:var(--red)">❌ الملف ده مش القالب الصح</h3>
-                <p class="small mtop">${esc2(problem)}</p>
-                <p class="small">نزّل القالب من الزرار اللي فوق، عدّل عليه، وارفعه —
-                من غير ما تغيّر أسماء الأعمدة ولا ترتيبها ولا تمسح أي عمود.</p>
-                <p class="small" style="color:var(--muted)">الأعمدة المطلوبة بالترتيب:<br>
-                ${expectedCols.map((c,i) => (i+1) + '. ' + esc2(c)).join(' · ')}</p>
-              </div>`;
-            return;
-          }
-        }
-        onRows(body);
-      }catch(err){
-        host.innerHTML = `<p class="small mtop" style="color:var(--red)">تعذّرت قراءة الملف: ${esc2(err.message)}</p>`;
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  }
-
-  function normPhone(raw, cc){
-    let d = String(raw == null ? '' : raw).trim().replace(/[\s\-()]/g,'');
-    if (!d) return '';
-    if (/^\d+$/.test(d) && d.length === 10 && cc === '+20') d = '0' + d;   // إكسيل بيبلع الصفر
-    return d;
-  }
-  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-
-  /* ============================================================
-     المراجعة المشتركة
-     ============================================================ */
-
-  function renderPreview(hostId, results, applyFn, columns){
-    const upd  = results.filter(x => x.status === 'update');
-    const same = results.filter(x => x.status === 'same');
-    const bad  = results.filter(x => x.status === 'error');
-
-    const changeRows = upd.slice(0,200).map(x => `
-      <tr>
-        <td class="small">${x.line}</td>
-        <td class="small"><b>${esc2(x.label)}</b></td>
-        <td class="small">${x.changes.map(c =>
-          `${esc2(c.field)}: <span style="color:var(--muted)">${esc2(c.from || '—')}</span> ← <b>${esc2(c.to || '—')}</b>`
-        ).join('<br>')}</td>
-      </tr>`).join('');
-
-    document.getElementById(hostId).innerHTML = `
-      <div class="grid g3 mtop2">
-        <div class="card"><h3 style="color:var(--accent)">${upd.length}</h3><p class="small">هيتحدّثوا</p></div>
-        <div class="card"><h3 style="color:var(--muted)">${same.length}</h3><p class="small">من غير تغيير</p></div>
-        <div class="card"><h3 style="color:${bad.length?'var(--red)':'var(--muted)'}">${bad.length}</h3><p class="small">فيهم خطأ</p></div>
-      </div>
-
-      ${bad.length ? `
-      <div class="card mtop2" style="border:1px solid var(--red)">
-        <h3 style="color:var(--red)">❌ سطور فيها أخطاء — مش هتتحدّث</h3>
-        <div class="table-wrap mtop" style="max-height:220px;overflow:auto">
-          <table><thead><tr><th>السطر</th><th>السجل</th><th>الخطأ</th></tr></thead>
-          <tbody>${bad.map(x => `<tr><td class="small"><b>${x.line}</b></td>
-            <td class="small">${esc2(x.label)}</td>
-            <td class="small" style="color:var(--red)">${esc2(x.why)}</td></tr>`).join('')}</tbody>
-        </table></div>
-        <p class="small mtop">صلّح السطور دي في الملف وارفعه تاني — الباقي تقدر تعتمده دلوقتي.</p>
-      </div>` : ''}
-
-      ${upd.length ? `
-      <div class="card mtop2">
-        <h3>✅ التغييرات اللي هتتم</h3>
-        <div class="table-wrap mtop" style="max-height:320px;overflow:auto">
-          <table><thead><tr><th>السطر</th><th>السجل</th><th>التغييرات</th></tr></thead>
-          <tbody>${changeRows}</tbody></table></div>
-        ${upd.length > 200 ? `<p class="small mtop">(معروض أول ٢٠٠ من ${upd.length})</p>` : ''}
-      </div>` : '<p class="small mtop2">مفيش أي تغييرات في الملف ده.</p>'}
-
-      <div class="flexrow mtop2">
-        <button class="btn primary" ${upd.length?'':'disabled'} onclick="${applyFn}()">
-          💾 اعتمد تحديث ${upd.length} سجل</button>
-      </div>`;
-  }
-
-  function finishMessage(kind, done, bad, extra){
-    closeModal();
-    if (window.renderContent) renderContent();
-    showMessage(`✅ تم تحديث ${done} ${kind}` + (extra || '') +
-      (bad ? `\n\n⚠️ فيه ${bad} سطر ما اتحدّثش بسبب أخطاء — صلّحهم في الملف وارفعه تاني.` : ''));
-  }
-
-  /* ============================================================
-     ١) الشقق والملاك
-     ============================================================ */
-
-  const AP_COLS = ['رمز الوحدة (لا تغيّره)','رقم الوحدة','الرقم المعروض (اختياري)',
-    'المبنى/الفيلا','النوع (شقة/محل)',
-    'الاستخدام','الدور','اسم المالك','اسم المستأجر','مفتاح الدولة','رقم الجوال',
-    'البريد الإلكتروني','الاشتراك الشهري','رصيد افتتاحي','مغلقة (نعم/لا)','ملاحظات',
-    'الرصيد الحالي (للعرض فقط)'];
-
-  window.downloadApUpdateTemplate = function(){
-    if (noXLSX()) return;
-    const rows = (D.apartments || []).slice()
-      .sort((a,b) => (Number(a.number)||0) - (Number(b.number)||0))
-      .map(a => [ a.id, a.number, a.label || '', a.blockName || '',
-                  a.type === 'shop' ? 'محل' : 'شقة',
-                  a.usageType || '', a.floor || '',
-                  a.ownerName || '', a.tenantName || '',
-                  a.phoneCountry || '+20', String(a.phone || ''), a.email || '',
-                  Number(a.monthlyFee) || 0, Number(a.openingBalance) || 0,
-                  a.closed ? 'نعم' : 'لا', a.notes || '',
-                  (window.apBalance ? apBalance(a.id) : '') ]);
-    download(rows, AP_COLS, 'الشقق والملاك', 'الشقق والملاك',
-      [14,10,16,14,12,12,14,20,18,10,15,24,14,12,12,22,16]);
-  };
-
-  function checkApRow(r, i, seen){
-    const line = i + 2;
-    const code = String(r[0] || '').trim();
-    const ap = code ? (D.apartments || []).find(a => a.id === code) : null;
-    if (!ap) return { line, status:'error', label:String(r[1] || code || '—'),
-      why: code ? 'مفيش وحدة بالرمز "' + code + '" — الرمز اتغيّر أو الوحدة اتحذفت'
-                : 'عمود "رمز الوحدة" فاضي — مينفعش نعرف الوحدة' };
-
-    const label = unit(ap);
-    const num   = String(r[1] || '').trim();
-    const uLabel = String(r[2] || '').trim();     // الرقم المعروض
-    const type  = String(r[4] || '').trim();
-    const cc    = String(r[9] || '+20').trim() || '+20';
-    const phone = normPhone(r[10], cc);
-    const email = String(r[11] || '').trim();
-    const feeRaw= String(r[12] ?? '').trim();
-    const openRaw=String(r[13] ?? '').trim();
-
-    if (!num || !/^\d+$/.test(num))
-      return { line, status:'error', label, why:'رقم الوحدة لازم يكون رقم' };
-    if (seen.has(num))
-      return { line, status:'error', label, why:'رقم الوحدة ده متكرر في السطر ' + seen.get(num) };
-    seen.set(num, line);
-
-    if (!String(r[7] || '').trim())
-      return { line, status:'error', label, why:'اسم المالك مطلوب' };
-    if (type && !['شقة','محل'].includes(type))
-      return { line, status:'error', label, why:'النوع لازم يكون "شقة" أو "محل"' };
-    if (phone && !/^\d{7,15}$/.test(phone))
-      return { line, status:'error', label, why:'رقم الجوال فيه حروف أو طوله غير معقول' };
-    if (email && !EMAIL_RE.test(email))
-      return { line, status:'error', label, why:'صيغة البريد الإلكتروني غلط' };
-    if (feeRaw !== '' && (isNaN(Number(feeRaw)) || Number(feeRaw) < 0))
-      return { line, status:'error', label, why:'الاشتراك الشهري لازم يكون رقم موجب أو صفر' };
-    if (openRaw !== '' && isNaN(Number(openRaw)))
-      return { line, status:'error', label, why:'الرصيد الافتتاحي لازم يكون رقم' };
-
-    const next = {
-      number: Number(num),
-      label: uLabel,
-      blockName: String(r[3] || '').trim(),
-      type: type === 'محل' ? 'shop' : 'apartment',
-      usageType: String(r[5] || '').trim(),
-      floor: String(r[6] || '').trim(),
-      ownerName: String(r[7] || '').trim(),
-      tenantName: String(r[8] || '').trim(),
-      phoneCountry: cc, phone, email,
-      monthlyFee: feeRaw === '' ? Number(ap.monthlyFee) || 0 : Number(feeRaw),
-      openingBalance: openRaw === '' ? Number(ap.openingBalance) || 0 : Number(openRaw),
-      closed: isYes(r[14]),
-      notes: String(r[15] || '').trim(),
-    };
-
-    const LBL = { number:'رقم الوحدة', label:'الرقم المعروض', blockName:'المبنى', type:'النوع', usageType:'الاستخدام',
-      floor:'الدور', ownerName:'المالك', tenantName:'المستأجر', phoneCountry:'مفتاح الدولة',
-      phone:'الجوال', email:'البريد', monthlyFee:'الاشتراك', openingBalance:'رصيد افتتاحي',
-      closed:'مغلقة', notes:'ملاحظات' };
-
-    const changes = [];
-    Object.keys(next).forEach(k => {
-      const before = k === 'closed' ? (ap[k] ? 'نعم' : 'لا') : String(ap[k] ?? '');
-      const after  = k === 'closed' ? (next[k] ? 'نعم' : 'لا') : String(next[k] ?? '');
-      if (before !== after) changes.push({ field: LBL[k], from: before, to: after });
-    });
-
-    return changes.length
-      ? { line, ap, label, status:'update', next, changes }
-      : { line, ap, label, status:'same' };
-  }
-
-  window.openApUpdateImport = function(){
-    const n = (D.apartments || []).length;
-    openModal(`
-      <h3>📊 تحديث بيانات الشقق والملاك بالإكسل</h3>
-      <p class="small mtop">
-        ١) نزّل القالب — هيتحمّل <b>معبّى بكل بيانات الـ${n} وحدة</b>.<br>
-        ٢) عدّل اللي عايزه: رقم الوحدة · النوع · الدور · المالك · المستأجر · الجوال ·
-        البريد · الاشتراك · الرصيد الافتتاحي · مغلقة · ملاحظات.<br>
-        ٣) ارفع الملف وراجع قبل الاعتماد.
-      </p>
-      <p class="small" style="color:var(--red)">
-        ⚠️ متغيّرش عمود "رمز الوحدة" ولا تمسح صفوف. عمود "الرصيد الحالي" للعرض بس — بيتحسب من الحركات.
-      </p>
-      <button class="btn gold mtop" onclick="downloadApUpdateTemplate()">⬇️ تحميل القالب معبّى</button>
-      <div class="field2 mtop2"><label>ارفع الملف بعد التعديل (.xlsx)</label>
-        <input type="file" id="apImportFile" accept=".xlsx,.xls,.csv" onchange="handleApUpdateUpload(this)"></div>
-      <div id="apImpPreview"></div>
-      <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`, true);
-  };
-
-  window.handleApUpdateUpload = function(input){
-    const file = input.files[0];
-    if (!file || noXLSX()) return;
-    const host = document.getElementById('apImpPreview');
-    readSheet(file, body => {
-      const seen = new Map();
-      const results = body.map((r,i) => checkApRow(r, i, seen));
-      window.__apImp = results;
-      renderPreview('apImpPreview', results, 'applyApUpdateImport');
-    }, host, AP_COLS);
-  };
-
-  window.applyApUpdateImport = function(){
-    const upd = (window.__apImp || []).filter(x => x.status === 'update');
-    if (!upd.length) return;
-    let n = 0;
-    for (const x of upd){ Object.assign(x.ap, x.next); n++; }
-    try{ if (window.logActivity) logActivity('تحديث الوحدات', n + ' وحدة من ملف إكسيل'); }catch(e){}
-    save();
-    finishMessage('وحدة', n, (window.__apImp || []).filter(x => x.status === 'error').length);
-  };
-
-  /* ============================================================
-     ٢) المستخدمون
-     ============================================================ */
-
-  const ROLE_AR = { admin:'رئيس اتحاد', accountant:'محاسب', manager:'إداري',
-                    owner:'صاحب شقة', tenant:'مستأجر' };
-  const AR_ROLE = Object.fromEntries(Object.entries(ROLE_AR).map(([k,v]) => [v,k]));
-
-  const US_COLS = ['معرّف المستخدم (لا تغيّره)','اسم الدخول','الاسم','الوحدة',
-    'الصلاحية (رئيس اتحاد/محاسب/إداري/صاحب شقة/مستأجر)',
-    'مفتاح الدولة','رقم الجوال','البريد الإلكتروني','نشط (نعم/لا)'];
-
-  window.downloadUsersUpdateTemplate = function(){
-    if (noXLSX()) return;
-    const aps = D.apartments || [];
-    const rows = (D.users || []).map(u => {
-      const ap = aps.find(a => a.id === u.apartmentId);
-      return [ u.id, u.username || '', u.name || '', ap ? unit(ap) : '(إدارة)',
-               ROLE_AR[u.role] || u.role || '', u.phoneCountry || '+20',
-               String(u.phone || ''), u.email || '',
-               u.active === false ? 'لا' : 'نعم' ];
-    });
-    download(rows, US_COLS, 'المستخدمون', 'المستخدمون', [16,18,20,14,26,10,15,24,12]);
-  };
-
-  function checkUserRow(r, i, seen){
-    const line = i + 2;
-    const id = String(r[0] || '').trim();
-    const u = id ? (D.users || []).find(x => x.id === id) : null;
-    if (!u) return { line, status:'error', label:String(r[2] || id || '—'),
-      why: id ? 'مفيش مستخدم بالمعرّف ده — اتحذف أو الرمز اتغيّر'
-              : 'عمود "معرّف المستخدم" فاضي' };
-
-    const label = (u.name || u.username || '—');
-    const name  = String(r[2] || '').trim();
-    const roleAr= String(r[4] || '').trim();
-    const cc    = String(r[5] || '+20').trim() || '+20';
-    const phone = normPhone(r[6], cc);
-    const email = String(r[7] || '').trim();
-
-    if (!name) return { line, status:'error', label, why:'اسم المستخدم مطلوب' };
-    if (roleAr && !AR_ROLE[roleAr])
-      return { line, status:'error', label,
-               why:'الصلاحية لازم تكون: ' + Object.keys(AR_ROLE).join(' / ') };
-    if (phone && !/^\d{7,15}$/.test(phone))
-      return { line, status:'error', label, why:'رقم الجوال فيه حروف أو طوله غير معقول' };
-    if (phone && seen.has(cc + phone))
-      return { line, status:'error', label, why:'الرقم ده متكرر في السطر ' + seen.get(cc + phone) };
-    if (phone) seen.set(cc + phone, line);
-    if (email && !EMAIL_RE.test(email))
-      return { line, status:'error', label, why:'صيغة البريد الإلكتروني غلط' };
-
-    const role = roleAr ? AR_ROLE[roleAr] : u.role;
-    const active = String(r[8] || '').trim() === '' ? (u.active !== false) : isYes(r[8]);
-
-    // مانسمحش بإلغاء آخر رئيس اتحاد
-    if (u.role === 'admin' && (role !== 'admin' || !active)){
-      const admins = (D.users || []).filter(x => x.role === 'admin' && x.active !== false);
-      if (admins.length <= 1)
-        return { line, status:'error', label,
-                 why:'ده آخر رئيس اتحاد — مينفعش تغيّر صلاحيته أو توقفه' };
-    }
-
-    const next = { name, role, phoneCountry:cc, phone, email, active };
-    const LBL = { name:'الاسم', role:'الصلاحية', phoneCountry:'مفتاح الدولة',
-                  phone:'الجوال', email:'البريد', active:'نشط' };
-    const changes = [];
-    Object.keys(next).forEach(k => {
-      const before = k === 'active' ? (u.active === false ? 'لا' : 'نعم')
-                   : k === 'role'   ? (ROLE_AR[u.role] || u.role || '')
-                   : String(u[k] ?? '');
-      const after  = k === 'active' ? (next[k] ? 'نعم' : 'لا')
-                   : k === 'role'   ? (ROLE_AR[next.role] || next.role || '')
-                   : String(next[k] ?? '');
-      if (before !== after) changes.push({ field: LBL[k], from: before, to: after });
-    });
-
-    return changes.length
-      ? { line, u, label, status:'update', next, changes }
-      : { line, u, label, status:'same' };
-  }
-
-  window.openUsersUpdateImport = function(){
-    const n = (D.users || []).length;
-    openModal(`
-      <h3>📊 تحديث بيانات المستخدمين بالإكسل</h3>
-      <p class="small mtop">
-        ١) نزّل القالب — <b>معبّى بالـ${n} مستخدم</b> الحاليين.<br>
-        ٢) عدّل: الاسم · الصلاحية · الجوال · البريد · نشط.<br>
-        ٣) ارفع وراجع قبل الاعتماد.
-      </p>
-      <p class="small" style="color:var(--red)">
-        ⚠️ "معرّف المستخدم" و"اسم الدخول" و"الوحدة" للربط بس — متغيّرهمش.
-      </p>
-      <button class="btn gold mtop" onclick="downloadUsersUpdateTemplate()">⬇️ تحميل القالب معبّى</button>
-      <div class="field2 mtop2"><label>ارفع الملف بعد التعديل (.xlsx)</label>
-        <input type="file" id="usImportFile" accept=".xlsx,.xls,.csv" onchange="handleUsersUpdateUpload(this)"></div>
-      <div id="usImpPreview"></div>
-      <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`, true);
-  };
-
-  window.handleUsersUpdateUpload = function(input){
-    const file = input.files[0];
-    if (!file || noXLSX()) return;
-    const host = document.getElementById('usImpPreview');
-    readSheet(file, body => {
-      const seen = new Map();
-      const results = body.map((r,i) => checkUserRow(r, i, seen));
-      window.__usImp = results;
-      renderPreview('usImpPreview', results, 'applyUsersUpdateImport');
-    }, host, US_COLS);
-  };
-
-  window.applyUsersUpdateImport = function(){
-    const upd = (window.__usImp || []).filter(x => x.status === 'update');
-    if (!upd.length) return;
-    let n = 0;
-    for (const x of upd){
-      Object.assign(x.u, x.next);
-      // الصلاحيات بتتبع الدور الجديد
-      if (window.CLOUD_ROLES && CLOUD_ROLES[x.next.role])
-        x.u.permissions = CLOUD_ROLES[x.next.role].perms;
-      // بيانات التواصل تتحدّث في الوحدة المرتبطة كمان
-      const ap = (D.apartments || []).find(a => a.id === x.u.apartmentId);
-      if (ap && x.next.phone){ ap.phoneCountry = x.next.phoneCountry; ap.phone = x.next.phone; }
-      if (ap && x.next.email) ap.email = x.next.email;
-      n++;
-    }
-    try{ if (window.logActivity) logActivity('تحديث المستخدمين', n + ' مستخدم من ملف إكسيل'); }catch(e){}
-    save();
-    finishMessage('مستخدم', n, (window.__usImp || []).filter(x => x.status === 'error').length);
-  };
-
-  /* ============================================================
-     الأزرار في الشاشتين
-     ============================================================ */
-
-  /* قائمة إكسل واحدة تجمع كل العمليات بدل أزرار متفرقة */
-  window.toggleExcelMenu = function(id){
-    const m = document.getElementById(id);
-    if (!m) return;
-    const open = m.style.display === 'block';
-    document.querySelectorAll('.excel-menu').forEach(x => x.style.display = 'none');
-    m.style.display = open ? 'none' : 'block';
-  };
-  document.addEventListener('click', e => {
-    if (e.target.closest && e.target.closest('.excel-wrap')) return;
-    document.querySelectorAll('.excel-menu').forEach(x => x.style.display = 'none');
-  });
-
-  function excelMenu(id, items){
-    return `<span class="excel-wrap" style="position:relative;display:inline-block">
-      <button class="btn gold" onclick="toggleExcelMenu('${id}')">📊 إكسل ▾</button>
-      <div id="${id}" class="excel-menu" style="display:none;position:absolute;z-index:60;
-           top:calc(100% + 6px);inset-inline-end:0;min-width:280px;background:var(--panel);
-           border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.14);
-           padding:6px;text-align:start">
-        ${items.map(it => `
-          <button class="btn ghost" style="display:block;width:100%;text-align:start;border:0;
-                  padding:9px 10px;margin:0" onclick="toggleExcelMenu('${id}');${it.fn}">
-            <b>${it.icon} ${it.label}</b>
-            <div class="small" style="color:var(--muted);font-weight:400">${it.hint}</div>
-          </button>`).join('')}
-      </div></span>`;
-  }
-
-  /* لفّ آمن: لو الشاشة اتعرّفت بعدينا (ترتيب تحميل الملفات)، اللفّة
-     بتفضل شغالة — بنمسك أي إعادة تعريف بـsetter. */
-  function wrapPage(name, transform){
-    let raw = window[name];
-    const wrapper = function(){
-      const html = typeof raw === 'function' ? raw.apply(this, arguments) : '';
-      return transform(html);
-    };
-    /* ⚠️ كنا بنستخدم getter/setter هنا، وده كان بيعمل حلقة لا نهائية:
-       أي ملف يقرا الدالة بياخد لفّتنا، وبيحطها كأصل جوه لفّته،
-       فلفّتنا تنادي لفّته اللي تنادي لفّتنا… لحد ما الشاشة تقع.
-       الاستبدال المباشر + المراقبة أأمن. */
-    {
-      wrapper.__excelWrapped = true;
-      window[name] = wrapper;
-      let tries = 0;
-      const t = setInterval(() => {
-        if (++tries > 20) return clearInterval(t);
-        const cur = window[name];
-        if (cur === wrapper) return;
-        // مهم: لو الملف اللي بعدنا لفّ لفّتنا (مش استبدلها)، منرجعش
-        // لفّتنا فوقه — ده كان بيعمل حلقة لا نهائية وبيوقّع الشاشة.
-        if (typeof cur === 'function' && !cur.__excelWrapped){
-          const probe = cur.toString();
-          if (probe.includes('__excelWrapped') || probe.includes('apply(this, arguments)')){
-            // لفّة تانية فوقنا — نسيبها ونوقف المراقبة
-            return clearInterval(t);
-          }
-        }
-        raw = cur; window[name] = wrapper;
-      }, 500);
-    }
-  }
-
-  /* الشقق: القائمة بتتحط جنب أزرار الإضافة والاستيراد الموجودة */
-  wrapPage('pageApartments', function(html){
-    const importBtn = '<button class="btn ghost" onclick="openImportApartmentsModal()">📥 استيراد من إكسيل</button>';
-    const menu = excelMenu('apExcelMenu', [
-      { icon:'✏️', label:'تحديث بيانات موجودة', fn:'openApUpdateImport()',
-        hint:'نزّل بياناتك معبّاة · عدّلها · ارفعها بمراجعة' },
-      { icon:'➕', label:'إضافة وحدات جديدة',   fn:'openImportApartmentsModal()',
-        hint:'نموذج فاضي لإضافة وحدات دفعة واحدة' },
-      { icon:'⬇️', label:'تصدير الجدول الحالي', fn:"exportSortableTableToExcel('apTable')",
-        hint:'بنفس الفلاتر والأعمدة الظاهرة قدامك' },
-    ]);
-    return html.includes(importBtn)
-      ? html.replace(importBtn, menu)
-      : `<div class="flexrow" style="margin-bottom:10px">${menu}</div>` + html;
-  });
-
-  /* المستخدمون */
-  wrapPage('pageUsers', function(html){
-    const menu = excelMenu('usExcelMenu', [
-      { icon:'✏️', label:'تحديث بيانات المستخدمين', fn:'openUsersUpdateImport()',
-        hint:'الأسماء · الصلاحيات · الجوالات · البريد' },
-      { icon:'⬇️', label:'تصدير الجدول الحالي', fn:"exportSortableTableToExcel('usersTable')",
-        hint:'بنفس الفلاتر والأعمدة الظاهرة قدامك' },
-    ]);
-    // بندوّر على زرار "مستخدم إداري" مهما كانت المسافات حواليه
-    const m = html.match(/<button class="btn ghost" onclick="openUserModal\(\)">[^<]*<\/button>/);
-    return m
-      ? html.replace(m[0], m[0] + menu)
-      : `<div class="flexrow" style="margin-bottom:10px">${menu}</div>` + html;
-  });
-
-
-  /* ============================================================
-     تحسين شاشات الاستيراد القديمة (عمارات · فريق دعم · أرقام تسويق · وحدات)
-     نفس الحماية: ورقة من اليمين + رفض أي ملف أعمدته مش مطابقة
-     ============================================================ */
-
-  const LEGACY = [
-    { tpl:'downloadBuildingsTemplate',  cols:'BUILDINGS_IMPORT_COLUMNS',  sheet:'العمارات' },
-    { tpl:'downloadStaffTemplate',      cols:'STAFF_IMPORT_COLUMNS',      sheet:'فريق الدعم' },
-    { tpl:'downloadLeadsTemplate',      cols:'LEADS_IMPORT_COLUMNS',      sheet:'أرقام التسويق' },
-    { tpl:'downloadApartmentsTemplate', cols:'APARTMENTS_IMPORT_COLUMNS', sheet:'الوحدات' },
-  ];
-
-  // الورقة تفتح من اليمين في كل قوالب البرنامج
-  if (typeof XLSX !== 'undefined' && XLSX.utils && !XLSX.utils.__rtlPatched){
-    const orig = XLSX.utils.aoa_to_sheet;
-    XLSX.utils.aoa_to_sheet = function(){
-      const ws = orig.apply(this, arguments);
-      ws['!views'] = [{ RTL: true }];
-      ws['!freeze'] = { xSplit:'0', ySplit:'1' };
-      return ws;
-    };
-    XLSX.utils.__rtlPatched = true;
-  }
-
-  /* لفّ دوال التحقق القديمة: لو الرأس غلط، نوقف قبل أي قراءة */
-  function guardLegacyImport(handlerName, getCols, label){
-    const orig = window[handlerName];
-    if (typeof orig !== 'function') return;
-    window[handlerName] = function(input){
-      const file = input && input.files && input.files[0];
-      // الأعمدة معرّفة بـconst في الصفحة (مش على window) — بنجيبها بدالة
-      let expected = null;
-      try{ expected = getCols(); }catch(e){}
-      if (!file || !expected || typeof XLSX === 'undefined') return orig.apply(this, arguments);
-      const self = this, args = arguments;
-      const r = new FileReader();
-      r.onload = e => {
-        try{
-          const wb = XLSX.read(e.target.result, { type:'array' });
-          const ws = wb.Sheets[wb.SheetNames[0]];
-          const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:false });
-          const problem = headerProblem(rows[0] || [], expected);
-          if (problem){
-            input.value = '';
-            return showMessage(
-              `❌ الملف ده مش نموذج "${label}".\n\n${problem}\n\n` +
-              'نزّل النموذج من الزرار اللي فوق واملأه من غير ما تغيّر أسماء الأعمدة ولا ترتيبها.');
-          }
-          orig.apply(self, args);
-        }catch(err){
-          showMessage('تعذّرت قراءة الملف: ' + err.message);
-        }
-      };
-      r.readAsArrayBuffer(file);
-    };
-  }
-
-  // بنلفّ الدوال اللي بتستقبل الملف في الشاشات القديمة
-  [['handleBuildingsFileUpload',  () => BUILDINGS_IMPORT_COLUMNS,  'استيراد العمارات'],
-   ['handleStaffFileUpload',      () => STAFF_IMPORT_COLUMNS,      'استيراد فريق الدعم'],
-   ['handleLeadsFileUpload',      () => LEADS_IMPORT_COLUMNS,      'استيراد أرقام التسويق'],
-   ['handleApartmentsFileUpload', () => APARTMENTS_IMPORT_COLUMNS, 'استيراد الوحدات'],
-  ].forEach(([fn,gc,lb]) => guardLegacyImport(fn, gc, lb));
-
-
-  /* ============================================================
-     المكتبات الخارجية بتتحمّل عند الطلب — بنلفّ كل دالة بتستخدمها
-     عشان تستنى التحميل الأول بدل ما تفشل.
-     ============================================================ */
-  (function lazyLibs(){
-    const XLSX_FNS = ['downloadApartmentsTemplate','downloadBuildingsTemplate',
-      'downloadLeadsTemplate','downloadStaffTemplate','exportSortableTableToExcel',
-      'handleApartmentsFileUpload','handleBuildingsFileUpload','handleLeadsFileUpload',
-      'handleStaffFileUpload','downloadApUpdateTemplate','downloadUsersUpdateTemplate',
-      'handleApUpdateUpload','handleUsersUpdateUpload','printSortableTable'];
-
-    XLSX_FNS.forEach(name => {
-      const orig = window[name];
-      if (typeof orig !== 'function') return;
-      window[name] = function(){
-        if (typeof XLSX !== 'undefined') return orig.apply(this, arguments);
-        const self = this, args = arguments;
-        if (window.toast) toast('بيحمّل مكتبة إكسيل…');
-        return window.ensureXLSX()
-          .then(() => orig.apply(self, args))
-          .catch(err => showMessage(err.message || 'تعذّر تحميل مكتبة إكسيل'));
-      };
-    });
-
-    // QR في بطاقة الدعاية
-    ['renderPromoQR','openPromoCard','downloadPromoCard'].forEach(name => {
-      const orig = window[name];
-      if (typeof orig !== 'function') return;
-      window[name] = function(){
-        if (typeof QRCode !== 'undefined') return orig.apply(this, arguments);
-        const self = this, args = arguments;
-        return window.ensureQRCode()
-          .then(() => orig.apply(self, args))
-          .catch(() => orig.apply(self, args));
-      };
-    });
-  })();
-
-  console.log('[عمارتنا] تحديث الشقق والمستخدمين بالإكسل جاهز');
-})();
-
-})();
-
-/* ═══ emartna-bldcols.js ═══ */
-(function(){
-/* ============================================================
-   عمارتنا — جدول كل العمارات: أعمدة ثابتة + مؤشرات استهداف
-   ------------------------------------------------------------
-   ١) تثبيت أول عمودين (اسم العمارة + الكود) أثناء التمرير
-      الأفقي، مع إمكانية إلغاء التثبيت بضغطة.
-   ٢) أعمدة جديدة تساعد صاحب البرنامج يستهدف كل عمارة:
-      نسبة اكتمال البيانات · الأرقام المسجّلة · الدعوات ·
-      الحسابات المفعّلة · الحركات ومتوسطها الشهري · آخر نشاط.
-   ============================================================ */
-
-(function(){
-  'use strict';
-
-  const esc2 = s => (window.esc ? esc(s) : String(s == null ? '' : s));
-  const PIN_KEY = 'emartna_pin_cols';
-
-  const pinned = () => { try{ return localStorage.getItem(PIN_KEY) !== '0'; }catch(e){ return true; } };
-  window.togglePinnedCols = function(){
-    try{ localStorage.setItem(PIN_KEY, pinned() ? '0' : '1'); }catch(e){}
-    if (window.renderSysContent) renderSysContent(); else renderContent();
-  };
-
-  /* ---------- ١) تثبيت الأعمدة ---------- */
-
-  function tableRoomCss(){
-    return `<style id="bldRoomCss">
-      /* مساحة أوسع وصفوف أوضح لجدول العمارات */
-      #sysBldTable_wrap .table-wrap, #supportBldTable_wrap .table-wrap{
-        max-height:none; min-height:340px;
-      }
-      #sysBldTable_wrap .table-wrap td, #supportBldTable_wrap .table-wrap td{
-        padding:11px 10px; font-size:13px;
-      }
-      #sysBldTable_wrap .table-wrap th, #supportBldTable_wrap .table-wrap th{
-        padding:10px; font-size:12.5px;
-      }
-      #sysBldTable_wrap .table-wrap tbody tr:hover td,
-      #supportBldTable_wrap .table-wrap tbody tr:hover td{ background:var(--hover,#F3F8F7); }
-    </style>`;
-  }
-
-  function pinStyle(){
-    if (!pinned()) return '';
-    // الحاوية اللي بتتحرك أفقيًا اسمها .table-wrap جوه #<id>_wrap
-    return `<style id="pinColsCss">
-      /* أول عمودين بيفضلوا مكانهم أثناء التمرير الأفقي */
-      #sysBldTable_wrap .table-wrap th:nth-child(1), #sysBldTable_wrap .table-wrap td:nth-child(1),
-      #supportBldTable_wrap .table-wrap th:nth-child(1), #supportBldTable_wrap .table-wrap td:nth-child(1){
-        position:sticky; inset-inline-start:0; z-index:3;
-        background:var(--panel); box-shadow:3px 0 6px -3px rgba(0,0,0,.16);
-      }
-      #sysBldTable_wrap .table-wrap th:nth-child(2), #sysBldTable_wrap .table-wrap td:nth-child(2),
-      #supportBldTable_wrap .table-wrap th:nth-child(2), #supportBldTable_wrap .table-wrap td:nth-child(2){
-        position:sticky; inset-inline-start:var(--pin1,150px); z-index:2;
-        background:var(--panel); box-shadow:3px 0 6px -3px rgba(0,0,0,.10);
-      }
-      #sysBldTable_wrap .table-wrap thead th, #supportBldTable_wrap .table-wrap thead th{
-        position:sticky; top:0; z-index:4; background:var(--tablehead,#F4F1E8);
-      }
-      #sysBldTable_wrap .table-wrap thead th:nth-child(1),
-      #supportBldTable_wrap .table-wrap thead th:nth-child(1){ z-index:6; }
-      #sysBldTable_wrap .table-wrap thead th:nth-child(2),
-      #supportBldTable_wrap .table-wrap thead th:nth-child(2){ z-index:5; }
-    </style>`;
-  }
-
-  function pinBar(){
-    const on = pinned();
-    let full = false;
-    try{ full = localStorage.getItem('sysBldTable_colsTouched') === '1'; }catch(e){}
-    return `<div class="flexrow mtop" style="gap:8px;flex-wrap:wrap">
-      <button class="btn sm ${demosShown()?'primary':'ghost'}"
-        onclick="showDemoBuildings(${demosShown()?'false':'true'})"
-        title="جلسات الزوّار المؤقتة">
-        ${demosShown()?'🧪 التجريبية ظاهرة':'🧪 إظهار التجريبية'}</button>
-      <span style="display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden">
-        <button class="btn sm ${full?'ghost':'primary'}" style="border-radius:0"
-          onclick="showEssentialBldCols('sysBldTable')">📋 عرض مبسّط</button>
-        <button class="btn sm ${full?'primary':'ghost'}" style="border-radius:0"
-          onclick="showAllBldCols('sysBldTable')">📊 كل الأعمدة</button>
-      </span>
-      <button class="btn sm ${on?'primary':'ghost'}" onclick="togglePinnedCols()">
-        ${on ? '📌 العمودين مثبّتين' : '📍 تثبيت اسم العمارة والكود'}</button>
-      <span class="small" style="color:var(--muted)">
-        ${on ? 'اسم العمارة والكود بيفضلوا ظاهرين وإنت بتتحرك يمين وشمال'
-             : 'الأعمدة كلها بتتحرك مع بعض'}</span>
-    </div>`;
-  }
-
-  /* بنقيس عرض أول عمود عشان نظبط مكان التاني */
-  function measurePins(){
-    if (!pinned()) return;
-    setTimeout(() => {
-      ['sysBldTable','supportBldTable'].forEach(id => {
-        const wrap = document.getElementById(id + '_wrap');
-        if (!wrap) return;
-        const th = wrap.querySelector('.table-wrap thead th:nth-child(1)');
-        if (th) wrap.style.setProperty('--pin1', th.offsetWidth + 'px');
-      });
-    }, 60);
-  }
-
-  /* ---------- ٢) مؤشرات كل عمارة ---------- */
-
-  function metrics(b){
-    const d = (window.loadBuildingData && loadBuildingData(b.id)) || null;
-    if (!d) return { loaded:false };
-    const aps = d.apartments || [];
-    const users = d.users || [];
-    const open = aps.filter(a => !a.closed);
-    const withPhone = aps.filter(a => a.phone).length;
-    const withFee = open.filter(a => Number(a.monthlyFee) > 0).length;
-    const invited = users.filter(u => u.apartmentId && u.inviteStatus === 'pending').length;
-    const joined = users.filter(u => u.apartmentId && u.inviteStatus !== 'pending').length;
-    const moves = (d.ledger || []).length + (d.expenses || []).length;
-
-    const dates = (d.ledger || []).map(x => x.date).filter(Boolean).sort();
-    const first = dates[0], last = dates[dates.length - 1];
-    let months = 1;
-    if (first && last){
-      const a = new Date(first), z = new Date(last);
-      months = Math.max(1, (z.getFullYear()-a.getFullYear())*12 + (z.getMonth()-a.getMonth()) + 1);
-    }
-    const lastAct = [last, ...(d.activityLog||[]).map(x => (x.date||'').slice(0,10))]
-      .filter(Boolean).sort().pop() || '';
-    const daysIdle = lastAct
-      ? Math.round((Date.now() - new Date(lastAct).getTime()) / 86400000) : null;
-
-    // نسبة اكتمال الإعداد — نفس منطق معالج البداية
-    const setup = [
-      !!(d.building && d.building.name && d.building.city),
-      aps.length > 0,
-      aps.length > 0 && withFee === open.length,
-      (d.ledger || []).some(l => l.type === 'شهري'),
-      (invited + joined) > 0,
-    ].filter(Boolean).length;
-
-    return { loaded:true, aps:aps.length, open:open.length, withPhone, withFee,
-             invited, joined, moves, perMonth: Math.round(moves / months),
-             lastAct, daysIdle, setup, users: users.length };
-  }
-
-  const EXTRA_COLS = [
-    { key:'setupPct', label:'اكتمال الإعداد',
-      value: m => m.loaded ? m.setup*20 : -1,
-      cell: m => !m.loaded ? '<span class="small">—</span>' :
-        `<span class="badge ${m.setup>=5?'g':m.setup>=3?'y':'r'}">${m.setup*20}%</span>` },
-
-    { key:'withPhone', label:'وحدات بأرقام',
-      value: m => m.loaded ? m.withPhone : -1,
-      cell: m => !m.loaded ? '—' :
-        `${m.withPhone} <span class="small" style="color:var(--muted)">من ${m.aps}</span>` },
-
-    { key:'invited', label:'دعوات مستنية',
-      value: m => m.loaded ? m.invited : -1,
-      cell: m => !m.loaded ? '—' : (m.invited ? `<span class="badge y">${m.invited}</span>` : '0') },
-
-    { key:'joined', label:'وحدات عندها حساب',
-      value: m => m.loaded ? m.joined : -1,
-      cell: m => !m.loaded ? '—' :
-        `<span class="badge ${m.joined?'g':'n'}">${m.joined}</span>` },
-
-    { key:'adoption', label:'نسبة انضمام السكان',
-      value: m => m.loaded && m.aps ? Math.round(m.joined/m.aps*100) : -1,
-      cell: m => (!m.loaded || !m.aps) ? '—' :
-        `<span class="badge ${m.joined/m.aps>=.5?'g':m.joined?'y':'r'}">${Math.round(m.joined/m.aps*100)}%</span>` },
-
-    { key:'moves', label:'الحركات المالية',
-      value: m => m.loaded ? m.moves : -1,
-      cell: m => m.loaded ? String(m.moves) : '—' },
-
-    { key:'perMonth', label:'متوسط الحركات شهريًا',
-      value: m => m.loaded ? m.perMonth : -1,
-      cell: m => !m.loaded ? '—' :
-        `<span class="badge ${m.perMonth>=20?'g':m.perMonth>=5?'y':'n'}">${m.perMonth}</span>` },
-
-    { key:'lastAct', label:'آخر نشاط',
-      value: m => m.lastAct || '',
-      cell: m => !m.lastAct ? '<span class="small" style="color:var(--muted)">مفيش</span>' :
-        `${esc2(m.lastAct)} <span class="badge ${m.daysIdle<=7?'g':m.daysIdle<=30?'y':'r'}">${m.daysIdle} يوم</span>` },
-
-    { key:'health', label:'حالة الاستخدام',
-      value: m => {
-        if (!m.loaded) return 0;
-        if (m.daysIdle !== null && m.daysIdle > 30) return 1;   // متوقفة
-        if (m.setup < 3) return 2;                              // متعثّرة
-        if (m.joined === 0) return 3;                           // بدون سكان
-        if (m.perMonth >= 10) return 5;                         // نشطة
-        return 4;
-      },
-      cell: m => {
-        const v = !m.loaded ? 0 : (m.daysIdle !== null && m.daysIdle > 30) ? 1
-                : m.setup < 3 ? 2 : m.joined === 0 ? 3 : m.perMonth >= 10 ? 5 : 4;
-        return ['<span class="small">—</span>',
-                '<span class="badge r">🔴 متوقفة</span>',
-                '<span class="badge y">🟡 إعداد ناقص</span>',
-                '<span class="badge y">🟠 بدون سكان</span>',
-                '<span class="badge g">🟢 شغّالة</span>',
-                '<span class="badge g">💚 نشطة جدًا</span>'][v];
-      } },
-  ];
-
-
-  /* ---------- ٣) عمود الإجراءات: "فتح" + قائمة ⋮ ---------- */
-
-  /* القائمة بتتنقل لطبقة فوق الصفحة كلها.
-     لو فضلت جوه الجدول، الحاوية اللي بتتمرّر بتقصّها فمتبانش. */
-  function closeRowMenus(){
-    const layer = document.getElementById('rowMenuLayer');
-    if (layer) layer.remove();
-  }
-  window.closeRowMenus = closeRowMenus;
-
-  window.toggleRowMenu = function(id, ev){
-    const src = document.getElementById(id);
-    const already = document.getElementById('rowMenuLayer');
-    closeRowMenus();
-    if (already && already.dataset.src === id) return;      // نفس الزرار = قفل
-    if (!src) return;
-
-    const btn = (ev && ev.currentTarget) || document.activeElement ||
-                src.parentElement.querySelector('button[title="خيارات أكتر"]');
-    const r = btn && btn.getBoundingClientRect ? btn.getBoundingClientRect() : { bottom:80, right:200, left:120 };
-
-    const layer = document.createElement('div');
-    layer.id = 'rowMenuLayer';
-    layer.dataset.src = id;
-    layer.style.cssText =
-      'position:fixed;z-index:99000;min-width:210px;background:var(--panel);' +
-      'border:1px solid var(--line);border-radius:12px;padding:6px;' +
-      'box-shadow:0 14px 34px rgba(0,0,0,.20);direction:rtl;text-align:start';
-    layer.innerHTML = src.innerHTML;
-
-    document.body.appendChild(layer);
-    // بنحطها تحت الزرار، ولو مفيش مكان تحت بنطلّعها فوقه
-    const h = layer.offsetHeight || 180, w = layer.offsetWidth || 210;
-    let top = r.bottom + 6;
-    if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
-    let left = r.right - w;
-    if (left < 8) left = 8;
-    if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
-    layer.style.top = top + 'px';
-    layer.style.left = left + 'px';
-  };
-
-  document.addEventListener('click', e => {
-    if (e.target.closest && (e.target.closest('#rowMenuLayer') || e.target.closest('.row-menu-wrap'))) return;
-    closeRowMenus();
-  });
-  window.addEventListener('scroll', closeRowMenus, true);
-  window.addEventListener('resize', closeRowMenus);
-
-  /* بناخد أزرار العمود الأصلي ونعيد ترتيبها */
-  function compactActions(html, rowId){
-    const btns = String(html).match(/<button[\s\S]*?<\/button>/g) || [];
-    if (btns.length <= 1) return html;
-
-    const label = b => b.replace(/<[^>]*>/g,'').trim();
-    const openIdx = btns.findIndex(b => /فتح/.test(label(b)));
-    const primary = openIdx >= 0 ? btns[openIdx] : btns[0];
-    const rest = btns.filter((_,i) => i !== (openIdx >= 0 ? openIdx : 0));
-    if (!rest.length) return html;
-
-    const mid = 'rm_' + String(rowId).replace(/[^\w]/g,'') + '_' + Math.random().toString(36).slice(2,6);
-    const items = rest.map(b => {
-      const onclick = (b.match(/onclick="([^"]*)"/) || [])[1] || '';
-      const isRed = /class="[^"]*\bred\b/.test(b);
-      let txt = label(b);
-      const title = (b.match(/title="([^"]*)"/) || [])[1];
-      if (txt.length <= 2 && title) txt = title;      // زرار بأيقونة بس
-      if (/^🔑/.test(txt) && txt.length <= 3) txt = '🔑 إعادة تعيين كلمة السر';
-      return `<button class="btn ghost" style="display:block;width:100%;text-align:start;border:0;
-                padding:8px 10px;margin:0;${isRed?'color:var(--red)':''}"
-                onclick="closeRowMenus();${onclick.replace(/"/g,'&quot;')}">${txt}</button>`;
-    }).join('');
-
-    return `<div class="flexrow row-menu-wrap" style="gap:4px;position:relative;justify-content:flex-start">
-      ${primary}
-      <button class="btn sm ghost" style="padding:4px 9px;font-size:16px;line-height:1"
-        title="خيارات أكتر" onclick="toggleRowMenu('${mid}', event)">⋮</button>
-      <div id="${mid}" class="row-menu" style="display:none;position:absolute;z-index:70;
-           top:calc(100% + 5px);inset-inline-end:0;min-width:190px;background:var(--panel);
-           border:1px solid var(--line);border-radius:11px;box-shadow:0 10px 28px rgba(0,0,0,.16);
-           padding:5px;text-align:start">${items}</div>
-    </div>`;
-  }
-
-
-  /* ============================================================
-     ٤) عرض مبسّط: أعمدة أساسية + بطاقة تفاصيل كاملة
-     ============================================================ */
-
-  /* الأعمدة اللي تظهر افتراضيًا — الباقي في البطاقة */
-  const ESSENTIALS = ['name','code','apCount','status','health','setupPct','joined','adminLogin','lastAct','x'];
-
-  function applyDefaultVisibility(tableId, cols){
-    const visKey = tableId + '_vis';
-    try{
-      if (localStorage.getItem(tableId + '_colsTouched') === '1') return;   // المستخدم عدّل بنفسه
-    }catch(e){}
-    if (window.__bldVisDone) return;
-    window.__bldVisDone = true;
-    window[visKey] = cols.map(c => c.key).filter(k => ESSENTIALS.includes(k));
-  }
-
-  /* لو المستخدم فتح مخصّص الأعمدة، نحترم اختياره بعد كده */
-  const origCust = window.openColumnCustomizer;
-  if (origCust && !origCust.__bld){
-    const w2 = function(){
-      try{ localStorage.setItem('sysBldTable_colsTouched','1'); }catch(e){}
-      return origCust.apply(this, arguments);
-    };
-    w2.__bld = true;
-    window.openColumnCustomizer = w2;
-  }
-
-  window.showAllBldCols = function(tableId){
-    const cfg = window.__tableConfigs && window.__tableConfigs[tableId];
-    if (!cfg) return;
-    window[tableId + '_vis'] = cfg.columns.map(c => c.key);
-    try{ localStorage.setItem(tableId + '_colsTouched','1'); }catch(e){}
-    if (window.renderSysContent) renderSysContent(); else renderContent();
-  };
-  window.showEssentialBldCols = function(tableId){
-    const cfg = window.__tableConfigs && window.__tableConfigs[tableId];
-    if (!cfg) return;
-    window[tableId + '_vis'] = cfg.columns.map(c => c.key).filter(k => ESSENTIALS.includes(k));
-    try{ localStorage.removeItem(tableId + '_colsTouched'); }catch(e){}
-    if (window.renderSysContent) renderSysContent(); else renderContent();
-  };
-
-  /* ---------- بطاقة العمارة ---------- */
-
-  const F = (label, val) => val === '' || val === null || val === undefined
-    ? '' : `<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px dashed var(--line)">
-        <span class="small" style="color:var(--muted);min-width:130px">${esc2(label)}</span>
-        <span class="small" style="flex:1"><b>${val}</b></span></div>`;
-
-
-  /* فتح نافذة تانية بعد ما البطاقة تتقفل — من غير التأخير ده
-     النافذة الجديدة بتتقفل مع القديمة فمتبانش. */
-  window.bldCardGo = function(fnName, arg){
-    closeModal();
-    setTimeout(() => {
-      const f = window[fnName];
-      if (typeof f === 'function') f(arg);
-      else showMessage('الإجراء ده مش متاح دلوقتي');
-    }, 120);
-  };
-
-  /* بيانات تواصل رئيس الاتحاد — تعديل سريع */
-  window.openBuildingContact = function(bid){
-    const b = ((window.REG && REG.buildings) || []).find(x => x.id === bid);
-    if (!b) return;
-    openModal(`
-      <h3>📞 بيانات التواصل — ${esc2(b.name||'')}</h3>
-      <p class="small mtop">بتستخدمها في تذكير التجديد والتواصل مع رئيس الاتحاد.</p>
-      <div class="field2 mtop"><label>اسم رئيس الاتحاد</label>
-        <input id="bcName" value="${esc2(b.adminName||'')}"></div>
-      <div class="grid g2">
-        <div class="field2"><label>مفتاح الدولة</label>
-          <input id="bcCC" value="${esc2(b.contactPhoneCountry||'+20')}" dir="ltr"></div>
-        <div class="field2"><label>الموبايل / واتساب</label>
-          <input id="bcPhone" value="${esc2(b.contactPhone||'')}" dir="ltr"></div>
-      </div>
-      <div class="field2"><label>البريد الإلكتروني</label>
-        <input id="bcEmail" value="${esc2(b.adminEmail||'')}" dir="ltr"></div>
-      <div class="field2"><label>صفحة فيسبوك (اختياري)</label>
-        <input id="bcFb" value="${esc2(b.facebookUrl||'')}" dir="ltr" placeholder="https://facebook.com/..."></div>
-      <div class="modal-actions">
-        <button class="btn primary" onclick="saveBuildingContact('${bid}')">💾 حفظ</button>
-        <button class="btn ghost" onclick="closeModal()">إلغاء</button>
-      </div>`, true);
-  };
-
-  window.saveBuildingContact = function(bid){
-    const b = ((window.REG && REG.buildings) || []).find(x => x.id === bid);
-    if (!b) return;
-    const g = i => (document.getElementById(i)||{}).value || '';
-    b.adminName = g('bcName').trim();
-    b.contactPhoneCountry = g('bcCC').trim() || '+20';
-    b.contactPhone = g('bcPhone').replace(/[^\d]/g,'');
-    b.adminEmail = g('bcEmail').trim();
-    b.facebookUrl = g('bcFb').trim();
-    saveRegistry();
-    closeModal();
-    if (window.toast) toast('اتحفظت بيانات التواصل');
-    if (window.renderSysContent) renderSysContent();
-  };
-
-
-  /* ---------- تعطيل / تفعيل العمارة بسبب وتاريخ ---------- */
-
-  window.openSuspendModal = function(bid){
-    const b = ((window.REG && REG.buildings) || []).find(x => x.id === bid);
-    if (!b) return;
-    const lic = window.ensureLicense ? ensureLicense(b) : (b.license || {});
-    const isOff = lic.status === 'suspended';
-    const sus = lic.suspension || {};
-
-    if (isOff){
-      openModal(`
-        <h3>▶️ إعادة تفعيل ${esc2(b.name||'')}</h3>
-        <div class="card mtop" style="border:1px solid var(--red)">
-          <b>العمارة موقوفة حاليًا</b>
-          <p class="small mtop">السبب: ${esc2(sus.reason || 'مش مسجّل')}</p>
-          <p class="small">تاريخ الإيقاف: ${esc2((sus.at||'').slice(0,10) || '—')}</p>
-          ${sus.until ? `<p class="small">مفترض ينتهي: ${esc2(sus.until)}</p>` : ''}
-          ${sus.by ? `<p class="small" style="color:var(--muted)">أوقفها: ${esc2(sus.by)}</p>` : ''}
-        </div>
-        <p class="small mtop">رئيس الاتحاد والسكان مش بيقدروا يستخدموا العمارة وهي موقوفة.</p>
-        <div class="modal-actions">
-          <button class="btn primary" onclick="applySuspend('${bid}',false)">▶️ فعّلها تاني</button>
-          <button class="btn ghost" onclick="closeModal()">إلغاء</button>
-        </div>`, true);
-      return;
-    }
-
-    const reasons = ['عدم سداد الاشتراك','مخالفة شروط الاستخدام','بطلب من رئيس الاتحاد',
-                     'بيانات غير صحيحة','إيقاف مؤقت للمراجعة','سبب آخر'];
-    openModal(`
-      <h3>⏸️ تعطيل ${esc2(b.name||'')}</h3>
-      <p class="small mtop">لما تعطّلها، رئيس الاتحاد والسكان هيشوفوا رسالة إن الاشتراك موقوف
-      ومش هيقدروا يستخدموا البرنامج. <b>البيانات كلها بتفضل محفوظة.</b></p>
-
-      <div class="field2 mtop2"><label>سبب التعطيل</label>
-        <select id="spReason" onchange="document.getElementById('spOtherWrap').style.display=this.value==='سبب آخر'?'block':'none'">
-          ${reasons.map(r => `<option>${r}</option>`).join('')}
-        </select></div>
-      <div class="field2" id="spOtherWrap" style="display:none"><label>اكتب السبب</label>
-        <input id="spOther" placeholder="السبب بالتفصيل"></div>
-
-      <div class="grid g2">
-        <div class="field2"><label>تاريخ التعطيل</label>
-          <input id="spAt" type="date" value="${window.todayISO?todayISO():''}"></div>
-        <div class="field2"><label>مفترض ينتهي (اختياري)</label>
-          <input id="spUntil" type="date"></div>
-      </div>
-
-      <div class="field2"><label>ملاحظة داخلية (اختياري)</label>
-        <input id="spNote" placeholder="مش بتظهر للعميل"></div>
-
-      <div class="modal-actions">
-        <button class="btn red" onclick="applySuspend('${bid}',true)">⏸️ عطّل العمارة</button>
-        <button class="btn ghost" onclick="closeModal()">إلغاء</button>
-      </div>`, true);
-  };
-
-  window.applySuspend = function(bid, off){
-    const b = ((window.REG && REG.buildings) || []).find(x => x.id === bid);
-    if (!b) return;
-    const lic = window.ensureLicense ? ensureLicense(b) : (b.license = b.license || {});
-    const g = i => (document.getElementById(i) || {}).value || '';
-
-    if (off){
-      let reason = g('spReason');
-      if (reason === 'سبب آخر') reason = g('spOther').trim() || 'سبب آخر';
-      lic.status = 'suspended';
-      lic.suspension = {
-        reason,
-        at: g('spAt') || (window.todayISO ? todayISO() : ''),
-        until: g('spUntil') || '',
-        note: g('spNote').trim(),
-        by: (window.REG && REG.sysOwner && REG.sysOwner.name) || 'صاحب البرنامج',
-      };
-    }else{
-      lic.status = (lic.endDate && lic.endDate < (window.todayISO?todayISO():'')) ? 'expired'
-                 : (lic.plan && /trial|promo/.test(String(lic.plan)) ? 'trial' : 'active');
-      lic.suspension = Object.assign({}, lic.suspension || {}, {
-        liftedAt: window.todayISO ? todayISO() : '',
-      });
-    }
-
-    try{
-      if (window.logLicenseEvent)
-        logLicenseEvent(bid, off ? ('إيقاف الاشتراك — ' + lic.suspension.reason) : 'إعادة تفعيل الاشتراك');
-    }catch(e){}
-    saveRegistry();
-    closeModal();
-    if (window.toast) toast(off ? '⏸️ اتعطّلت العمارة' : '▶️ اترجّعت العمارة للخدمة');
-    if (window.renderSysContent) renderSysContent();
-  };
-
-  window.openBuildingCard = function(bid){
-    const b = ((window.REG && REG.buildings) || []).find(x => x.id === bid);
-    if (!b) return;
-    const m = metrics(b);
-    const lic = window.ensureLicense ? ensureLicense(b) : (b.license || {});
-    const st  = window.licenseState ? licenseState(lic) : { label: lic.status || '' };
-
-    const health = !m.loaded ? '—'
-      : (m.daysIdle !== null && m.daysIdle > 30) ? '<span class="badge r">🔴 متوقفة</span>'
-      : m.setup < 3 ? '<span class="badge y">🟡 إعداد ناقص</span>'
-      : m.joined === 0 ? '<span class="badge y">🟠 بدون سكان</span>'
-      : m.perMonth >= 10 ? '<span class="badge g">💚 نشطة جدًا</span>'
-      : '<span class="badge g">🟢 شغّالة</span>';
-
-    openModal(`
-      <h3>🏢 ${esc2(b.name || '')} <span class="small" style="color:var(--muted)">${esc2(b.code || '')}</span></h3>
-
-      <div class="flexrow mtop" style="flex-wrap:wrap;gap:7px">
-        ${health}
-        <span class="badge ${st.badge || 'n'}">${esc2(st.label || '')}</span>
-        ${m.loaded ? `<span class="badge n">اكتمال الإعداد ${m.setup*20}%</span>` : ''}
-      </div>
-
-      ${lic.status==='suspended' ? `
-        <div class="card mtop" style="border:1px solid var(--red);background:#FFF6F5">
-          <b style="color:var(--red)">⏸️ العمارة موقوفة</b>
-          <p class="small mtop">السبب: <b>${esc2((lic.suspension||{}).reason || 'مش مسجّل')}</b>
-            ${(lic.suspension||{}).at ? ` · من ${esc2(lic.suspension.at)}` : ''}
-            ${(lic.suspension||{}).until ? ` · لحد ${esc2(lic.suspension.until)}` : ''}</p>
-          ${(lic.suspension||{}).note ? `<p class="small" style="color:var(--muted)">${esc2(lic.suspension.note)}</p>` : ''}
-        </div>` : ''}
-
-      <div class="grid g2 mtop2">
-        <div class="card">
-          <b>📊 مؤشرات الاستخدام</b>
-          <div class="mtop">
-            ${F('إجمالي الوحدات', m.loaded ? m.aps : (b.apartmentsCount || '—'))}
-            ${F('وحدات مفتوحة', m.loaded ? m.open : '')}
-            ${F('وحدات بأرقام موبايل', m.loaded ? `${m.withPhone} من ${m.aps}` : '')}
-            ${F('اشتراكات محدّدة', m.loaded ? `${m.withFee} من ${m.open}` : '')}
-            ${F('دعوات مستنية', m.loaded ? m.invited : '')}
-            ${F('وحدات عندها حساب', m.loaded ? m.joined : '')}
-            ${F('نسبة انضمام السكان', m.loaded && m.aps ? Math.round(m.joined/m.aps*100)+'%' : '')}
-            ${F('الحركات المالية', m.loaded ? m.moves : '')}
-            ${F('متوسط الحركات شهريًا', m.loaded ? m.perMonth : '')}
-            ${F('آخر نشاط', m.lastAct ? `${m.lastAct} <span class="small">(${m.daysIdle} يوم)</span>` : 'مفيش')}
-            ${F('آخر دخول للأدمن', b.lastAdminLoginAt
-              ? (window.fmtDateTime ? fmtDateTime(b.lastAdminLoginAt) : String(b.lastAdminLoginAt).slice(0,16)) +
-                (b.lastAdminLoginName ? ` <span class="small">(${esc2(b.lastAdminLoginName)})</span>` : '')
-              : 'مدخلش لسه')}
-          </div>
-        </div>
-
-        <div class="card">
-          <b>🪪 الاشتراك</b>
-          <div class="mtop">
-            ${F('الخطة', window.planName ? planName(lic.plan) : (lic.plan || '—'))}
-            ${F('تاريخ البدء', lic.startDate || '—')}
-            ${F('تاريخ الانتهاء', lic.endDate || 'بلا نهاية')}
-            ${F('المتبقّي', st.daysLeft !== null && st.daysLeft !== undefined ? st.daysLeft + ' يوم' : '')}
-            ${F('حد الوحدات', lic.maxApartments || 'غير محدود')}
-          </div>
-          <b class="mtop2" style="display:block">👤 رئيس الاتحاد</b>
-          <div class="mtop">
-            ${F('الاسم', esc2(b.adminName || '—'))}
-            ${F('الموبايل', `<span dir="ltr">${esc2((b.contactPhoneCountry||'')+' '+(b.contactPhone||''))}</span>`)}
-            ${F('البريد', `<span dir="ltr">${esc2(b.adminEmail || '—')}</span>`)}
-            ${b.facebookUrl ? F('فيسبوك', `<a href="${esc2(b.facebookUrl)}" target="_blank" rel="noopener">📘 الصفحة ↗</a>`) : ''}
-          </div>
-          <b class="mtop2" style="display:block">📍 الموقع</b>
-          <div class="mtop">
-            ${F('المدينة', esc2(b.city || '—'))}
-            ${F('المحافظة', esc2(b.governorate || '—'))}
-            ${F('العنوان', esc2(b.address || '—'))}
-            ${F('تاريخ الإنشاء', (b.createdAt || '').slice(0,10))}
-          </div>
-        </div>
-      </div>
-
-      <div class="flexrow mtop2" style="flex-wrap:wrap;gap:8px">
-        <button class="btn primary" onclick="bldCardGo('impersonateBuilding','${b.id}')">🏢 افتح العمارة</button>
-        <button class="btn gold" onclick="bldCardGo('openLicenseManage','${b.id}')">🪪 الاشتراك</button>
-        ${b.contactPhone || b.adminPhoneRaw
-          ? `<a class="btn ghost" target="_blank" onclick="closeModal()"
-               href="${window.renewalWhatsAppLink ? renewalWhatsAppLink(b) : '#'}">💬 تذكير تجديد</a>` : ''}
-        <button class="btn ghost" onclick="bldCardGo('renameBuildingPrompt','${b.id}')">✏️ تعديل الاسم</button>
-        <button class="btn ghost" onclick="bldCardGo('openBuildingContact','${b.id}')">📞 بيانات التواصل</button>
-        <button class="btn ${lic.status==='suspended'?'primary':'red'}"
-          onclick="bldCardGo('openSuspendModal','${b.id}')">
-          ${lic.status==='suspended' ? '▶️ إعادة تفعيل' : '⏸️ تعطيل العمارة'}</button>
-      </div>
-      <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`, true);
-  };
-
-  /* العمارات التجريبية بتتخفي افتراضيًا — دي جلسات زوّار مش عملاء،
-     ووجودها بيلخبط العدّادات والقوايم. */
-  window.showDemoBuildings = function(on){
-    try{ localStorage.setItem('emartna_show_demos', on ? '1' : '0'); }catch(e){}
-    if (window.renderSysContent) renderSysContent();
-  };
-  function demosShown(){
-    try{ return localStorage.getItem('emartna_show_demos') === '1'; }catch(e){ return false; }
-  }
-  const isDemoRec = b => !!(b && (b.isDemo || b.is_demo ||
-    /\(تجريبية\)/.test(String(b.name || ''))));
-  window.__isDemoRec = isDemoRec;
-
-  /* بنحقن الأعمدة في نداء sortableTable لجدول العمارات */
-  const origSortable = window.sortableTable;
-  if (origSortable) window.sortableTable = function(id, rows, cols, groupBy, opts){
-    if ((id === 'sysBldTable' || id === 'supportBldTable') && Array.isArray(rows) && Array.isArray(cols)){
-      if (!demosShown()) rows = rows.filter(b => !isDemoRec(b));
-      const cache = new Map();
-      const M = b => { if (!cache.has(b.id)) cache.set(b.id, metrics(b)); return cache.get(b.id); };
-      const extra = EXTRA_COLS.map(c => ({
-        key: c.key, label: c.label,
-        value: b => c.value(M(b)),
-        cell:  b => c.cell(M(b)),
-      }));
-
-      /* آخر دخول لرئيس الاتحاد — بيتقرا من سجل العمارة مباشرة
-         مش من المؤشرات، عشان القيمة جاية من الخادم. */
-      const daysSince = v => v ? Math.floor((Date.now() - new Date(v).getTime())/86400000) : null;
-      extra.push({
-        key:'adminLogin', label:'آخر دخول للأدمن',
-        value: b => b.lastAdminLoginAt || '',
-        cell: b => {
-          const v = b.lastAdminLoginAt;
-          if (!v) return '<span class="small" style="color:var(--muted)">مدخلش لسه</span>';
-          const d = daysSince(v);
-          const txt = window.fmtDate ? fmtDate(String(v).slice(0,10)) : String(v).slice(0,10);
-          const rel = d === 0 ? 'النهاردة' : d === 1 ? 'إمبارح' : 'من ' + d + ' يوم';
-          const cls = d <= 3 ? 'g' : d <= 14 ? 'y' : 'r';
-          return `${esc2(txt)}<br><span class="badge ${cls}">${rel}</span>` +
-                 (b.lastAdminLoginName
-                   ? `<div class="small" style="color:var(--muted)">${esc2(b.lastAdminLoginName)}</div>` : '');
-        },
-      });
-
-      let last = cols[cols.length-1] && !cols[cols.length-1].value ? cols.pop() : null;
-      cols = cols.concat(extra);
-      if (last){
-        const origCell = last.cell;
-        cols.push(Object.assign({}, last, {
-          key: last.key || 'x',
-          label: last.label || 'إجراءات',
-          cell: b => `<div class="flexrow" style="gap:5px;justify-content:flex-start">
-              <button class="btn sm primary" onclick="openBuildingCard('${b.id}')">تفاصيل</button>
-              ${compactActions(origCell ? origCell(b) : '', b.id || b.code || 'x')}
-            </div>`,
-        }));
-      }
-      if (id === 'sysBldTable') applyDefaultVisibility(id, cols);
-      measurePins();
-    }
-    return origSortable.call(this, id, rows, cols, groupBy, opts);
-  };
-
-  /* شريط التثبيت في الشاشتين */
-  ['pageSysDashboard','pageSupportBuildingsView'].forEach(name => {
-    const orig = window[name];
-    if (typeof orig !== 'function') return;
-    window[name] = function(){
-      const html = orig.apply(this, arguments);
-      measurePins();
-      return tableRoomCss() + pinStyle() + pinBar() + html;
-    };
-  });
-
-  console.log('[عمارتنا] أعمدة العمارات الثابتة والمؤشرات جاهزة');
 })();
 
 })();
