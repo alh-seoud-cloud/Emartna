@@ -453,6 +453,7 @@ async function paintRoom(){
                     padding:5px;flex-direction:column;gap:4px;min-width:130px;
                     box-shadow:0 6px 18px rgba(0,0,0,.14)">
                     ${canWrite?`<button class="btn sm ghost" onclick="replyRoom('${esc2(m.id)}')">↩️ رد</button>`:''}
+                    ${isMgr?`<button class="btn sm ghost" onclick="roomMsgInfo('${esc2(m.id)}')">ℹ️ مين قراها</button>`:''}
                     ${showDel?`<button class="btn sm red" onclick="delRoomMsg('${esc2(m.id)}',${mine})">🗑 حذف</button>`:''}
                   </span></span>`:''}
               </div>
@@ -546,6 +547,53 @@ window.sendMsg = async function(){
     await paintRoom();
   }catch(e){ showMessage(e.message || 'تعذّر الإرسال'); }
 };
+
+/* مين قرا الرسالة في الغرفة — لمدير الغرفة بس */
+window.roomMsgInfo = async function(id){
+  openModal('<h3>⏳ بنجيب التفاصيل...</h3>');
+  let rows = [];
+  try{
+    const { data, error } = await sb.rpc('room_message_read_info', { p_msg: id });
+    if (error) throw error;
+    rows = data || [];
+  }catch(e){ return showMessage(e.message || 'تعذّر جلب التفاصيل'); }
+
+  const read   = rows.filter(r => r.has_read && !r.is_sender);
+  const unread = rows.filter(r => !r.has_read && !r.is_sender);
+  const when = t => t ? new Date(t).toLocaleString('ar-EG',
+    { day:'numeric', month:'short', hour:'numeric', minute:'2-digit' }) : '—';
+  const line = (r, ok) => `<div class="flexrow" style="justify-content:space-between;
+    gap:8px;padding:6px 0;border-bottom:1px solid var(--line)">
+    <span style="flex:1;min-width:0">${esc2(r.name)}</span>
+    <span class="small" style="color:var(--muted)">${ok ? when(r.read_at) : 'لسه'}</span></div>`;
+
+  const total = read.length + unread.length;
+  const pct = total ? Math.round(read.length / total * 100) : 0;
+
+  openModal(`
+    <h3>ℹ️ مين قرا الرسالة</h3>
+    <div style="height:9px;background:var(--line);border-radius:5px;margin-top:12px;
+      overflow:hidden"><div style="width:${pct}%;height:100%;
+      background:var(--accent)"></div></div>
+    <p class="mtop"><b style="font-size:18px">${pct}%</b>
+      <span class="small" style="color:var(--muted)">— قراها ${read.length} من ${total}</span></p>
+
+    <div class="card mtop2"><b class="small">✅ قروها (${read.length})</b>
+      ${read.length ? read.map(r => line(r,true)).join('')
+        : '<p class="small mtop" style="color:var(--muted)">محدش لسه.</p>'}</div>
+
+    <div class="card mtop2" style="background:var(--tint-warning)">
+      <b class="small">⏳ ماقروهاش (${unread.length})</b>
+      ${unread.length ? unread.map(r => line(r,false)).join('')
+        : '<p class="small mtop" style="color:var(--muted)">الكل قراها 🎉</p>'}</div>
+
+    <p class="small mtop2" style="color:var(--muted)">
+      «قراها» يعني فتح المحادثة بعد وصول الرسالة — مش إنه قرا النص فعلًا.</p>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="paintRoomAgain()">رجوع للمحادثة</button>
+    </div>`, true);
+};
+window.paintRoomAgain = function(){ try{ closeModal(); openRoom(CUR.id); }catch(e){ closeModal(); } };
 
 window.delRoomMsg = function(id, mine){
   confirmAction(mine ? 'هل تريد حذف هذه الرسالة؟'
