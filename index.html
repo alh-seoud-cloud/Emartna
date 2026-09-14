@@ -1529,6 +1529,26 @@ function notificationRelevant(n,u){
   if(notificationOrphan(n))return false;
   return n.audience==='all'||(n.audience==='admins'&&isStaffRole(u.role))||n.audience===u.username;
 }
+/* شارة العدد على أيقونة التطبيق المثبّت (أندرويد وويندوز وماك).
+   بتشتغل لما البرنامج متثبّت كتطبيق — وبيتجاهلها المتصفح العادي
+   من غير خطأ. بنضيف عدد رسايل الشات غير المقروءة كمان. */
+window.refreshAppBadge = function(){
+  try{
+    if (!navigator.setAppBadge) return;
+    const u = window.currentUser && currentUser();
+    if (!u){ navigator.clearAppBadge && navigator.clearAppBadge(); return; }
+    let n = 0;
+    try{ n += unreadNotifications(u).length; }catch(e){}
+    try{ n += (window.chatUnreadCount ? chatUnreadCount() : 0); }catch(e){}
+    if (n > 0) navigator.setAppBadge(n);
+    else if (navigator.clearAppBadge) navigator.clearAppBadge();
+  }catch(e){}
+};
+/* بيتحدّث مع كل رسم وكل تغيير في الإشعارات */
+setInterval(() => { try{ refreshAppBadge(); }catch(e){} }, 20000);
+document.addEventListener('emartna:building-complete',
+  () => setTimeout(() => { try{ refreshAppBadge(); }catch(e){} }, 1500));
+
 function unreadNotifications(u){
   return (D.notifications||[]).filter(n=>notificationRelevant(n,u)&&!(n.readBy||[]).includes(u.username));
 }
@@ -1827,7 +1847,9 @@ function accName(accId){const acc=D.accounts.find(a=>a.id===accId);return acc?ac
 function accountBalance(accId){
   const acc=D.accounts.find(a=>a.id===accId); if(!acc)return 0;
   let bal=Number(acc.opening||0);
-  bal+=D.ledger.filter(l=>l.type==='دفعة'&&l.accountId===accId).reduce((s,l)=>s+Number(l.amount),0);
+  /* ⚠️ مساهمات المشاريع بتدخل الخزينة زيها زي الدفعات — كانت
+     مستثناة فالرصيد بيطلع سالب رغم إنه موجب فعليًا. */
+  bal+=D.ledger.filter(l=>(l.type==='دفعة'||l.type==='مشروع')&&l.accountId===accId).reduce((s,l)=>s+Number(l.amount),0);
   bal-=D.ledger.filter(l=>l.type==='صرف'&&l.accountId===accId).reduce((s,l)=>s+Number(l.amount),0);
   bal-=D.expenses.filter(e=>e.accountId===accId).reduce((s,e)=>s+Number(e.amount),0);
   bal+=D.transfers.filter(t=>t.to===accId).reduce((s,t)=>s+Number(t.amount),0);
@@ -6937,6 +6959,28 @@ function toggleNavGroup(key){
   const u=currentUser(); if(!u)return;
   nc.innerHTML=renderNavGroups(visibleNavGroups(u));
 }
+/* تفاصيل الاشتراك في آخر القائمة الجانبية — كانت بطاقة في لوحة
+   التحكم بتاخد مساحة من الأرقام اللي بيحتاجها كل يوم. */
+function licenseFootHTML(){
+  try{
+    const rec=findBuildingRec(activeBuildingId); if(!rec)return '';
+    const lic=ensureLicense(rec); if(!lic)return '';
+    const left=lic.endDate
+      ? Math.ceil((new Date(lic.endDate)-new Date(todayISO()))/86400000) : null;
+    const color=left===null?'var(--sidebar-muted)'
+      : left<0?'var(--red)' : left<=7?'var(--gold)' : 'var(--sidebar-text)';
+    const txt=left===null?'بلا نهاية' : left<0?'منتهي' : 'باقي '+left+' يوم';
+    return `<div onclick="go('license')" title="تفاصيل الاشتراك"
+      style="margin-top:10px;padding:8px 10px;border-radius:9px;cursor:pointer;
+        background:rgba(255,255,255,.06);border:1px solid var(--line)">
+      <div style="font-size:10.5px;color:var(--sidebar-muted)">🪪 اشتراكك</div>
+      <div style="font-size:13px;font-weight:700;color:${color}">${esc(txt)}</div>
+      <div style="font-size:10.5px;color:var(--sidebar-muted);white-space:nowrap;
+        overflow:hidden;text-overflow:ellipsis">${esc(planLabel(lic.plan))}</div>
+    </div>`;
+  }catch(e){ return ''; }
+}
+
 function shellHTML(u){
   const isAdmin=isStaffRole(u.role);
   const ap=isAdmin?null:myApartment();
@@ -6983,6 +7027,7 @@ function shellHTML(u){
       <div class="sidebar-foot">
       <span class="install-btn-slot" style="display:block;margin-bottom:8px"></span>
         <b>${esc(u.name)}</b>${isAdmin?roleLabelAr(u.role):unitLabel(ap)}
+        ${isAdmin?licenseFootHTML():''}
         <button class="btn sm ghost" style="margin-top:10px;width:100%;color:var(--sidebar-text);border-color:var(--sidebar-muted)" onclick="logout()">🚪 تسجيل الخروج</button>
       </div>
     </div>
@@ -7440,7 +7485,7 @@ function pageAdminDashboard(u){
     <div class="kpi ok"><div class="ic">💰</div><div class="lbl">إجمالي المحصّل</div><div class="val">${money(totalCollected())}</div></div>
     <div class="kpi owe"><div class="ic">💳</div><div class="lbl">إجمالي المصروفات</div><div class="val">${money(totalExpenses())}</div></div>
     <div class="kpi ${totalTreasury()>=0?'ok':'owe'}"><div class="ic">🏦</div><div class="lbl">إجمالي أرصدة الخزينة</div><div class="val">${money(totalTreasury())}</div></div>
-    ${licenseKpi}
+  
   </div>
   <div class="grid g2 mtop2">
     <div class="card">
@@ -11119,7 +11164,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.74';
+const APP_BUILD='1.76';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11251,25 +11296,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.74"></script>
-<script type="module" src="emartna-auth.js?v=1.74"></script>
-<script type="module" src="emartna-profile.js?v=1.74"></script>
-<script type="module" src="emartna-users.js?v=1.74"></script>
-<script type="module" src="emartna-platform.js?v=1.74"></script>
-<script type="module" src="emartna-contactlog.js?v=1.74"></script>
-<script type="module" src="emartna-permreport.js?v=1.74"></script>
-<script type="module" src="emartna-finops.js?v=1.74"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.74"></script>
-<script type="module" src="emartna-planscreens.js?v=1.74"></script>
+<script type="module" src="emartna-cloud.js?v=1.76"></script>
+<script type="module" src="emartna-auth.js?v=1.76"></script>
+<script type="module" src="emartna-profile.js?v=1.76"></script>
+<script type="module" src="emartna-users.js?v=1.76"></script>
+<script type="module" src="emartna-platform.js?v=1.76"></script>
+<script type="module" src="emartna-contactlog.js?v=1.76"></script>
+<script type="module" src="emartna-permreport.js?v=1.76"></script>
+<script type="module" src="emartna-finops.js?v=1.76"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.76"></script>
+<script type="module" src="emartna-planscreens.js?v=1.76"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=1.74"></script>
+<script type="module" src="emartna-perms.js?v=1.76"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=1.74"></script>
+<script type="module" src="emartna-bundle.js?v=1.76"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح

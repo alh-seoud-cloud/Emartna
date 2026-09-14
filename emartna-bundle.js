@@ -1,6 +1,4 @@
-/* عمارتنا — الحزمة الموحّدة (مولّدة آليًا)
-   44 ملف بالترتيب الأصلي. كل ملف في IIFE للعزل، واللي فيه await
-   علوي في async IIFE. ⚠️ ما تعدّلش هنا. */
+/* عمارتنا — الحزمة الموحّدة (مولّدة آليًا) — ما تعدّلش هنا */
 
 /* ═══ emartna-contacts.js ═══ */
 (function(){
@@ -2830,9 +2828,13 @@
         hit++;
         /* ملخّص خفيف للعرض — مش بديل عن بيانات العمارة الكاملة */
         b.__stats = {
-          units: r.units, collected: Number(r.collected)||0,
-          due: Number(r.due)||0, expenses: Number(r.expenses_total)||0,
-          balance: Number(r.balance)||0, accounts: r.accounts_count,
+          units: r.units, openUnits: r.open_units,
+          withPhone: r.with_phone, withFee: r.with_fee,
+          invited: r.invited, joined: r.joined, users: r.users_count,
+          collected: Number(r.collected)||0, due: Number(r.due)||0,
+          expenses: Number(r.expenses_total)||0, balance: Number(r.balance)||0,
+          moves: r.moves, monthsSpan: r.months_span,
+          accounts: r.accounts_count,
           lastActivity: r.last_activity, setupPct: r.setup_pct,
         };
       });
@@ -2886,7 +2888,11 @@
   /* زرار "فتح" لعمارة: حمّلها الأول لو مش متحمّلة */
   const origImpersonate = window.impersonateBuilding;
   if (origImpersonate) window.impersonateBuilding = function(buildingId){
-    if (window.loadBuildingData(buildingId)) return origImpersonate(buildingId);
+    /* ⚠️ loadBuildingData بترجّع الملخّص لما العمارة مش محمّلة —
+       فالشرط كان بينجح والعمارة بتتفتح بأرقام الجدول بدل بياناتها.
+       لازم نتأكد إنها بيانات حقيقية مش ملخّص. */
+    const cached = window.loadBuildingData(buildingId);
+    if (cached && !cached.__summary) return origImpersonate(buildingId);
     if (window.toast) toast('بيحمّل بيانات العمارة…');
     /* لو التحميل وقف من غير خطأ (شبكة بطيئة أو رد ناقص)، الرسالة
        كانت بتفضل معلّقة والمستخدم مش عارف حصل إيه. */
@@ -4818,7 +4824,7 @@
 
 })();
 
-/* ═══ emartna-ops.js (async) ═══ */
+/* ═══ emartna-ops.js ═══ */
 (async function(){
 /* ============================================================
    عمارتنا — وضع الصيانة + نسخ بيانات العمارة
@@ -5167,7 +5173,7 @@
 
 })();
 
-/* ═══ emartna-onboarding.js (async) ═══ */
+/* ═══ emartna-onboarding.js ═══ */
 (async function(){
 /* ============================================================
    عمارتنا — معالج البداية + تسليم إدارة العمارة
@@ -5563,6 +5569,26 @@
 
   function metrics(b){
     const d = (window.loadBuildingData && loadBuildingData(b.id)) || null;
+
+    /* العمارة مش محمّلة بالكامل: بنستخدم الملخّص اللي الخادم
+       حسبه (__stats) بدل ما نسيب الأعمدة فاضية. تحميل كل عمارة
+       عشان تعرض ٥ أرقام كان بياخد ثواني. */
+    if ((!d || d.__summary) && b.__stats){
+      const st = b.__stats;
+      const idle = st.lastActivity
+        ? Math.round((Date.now() - new Date(st.lastActivity).getTime())/86400000) : null;
+      /* نفس أسماء حقول النسخة الكاملة عشان الأعمدة تقراها زي ما هي */
+      return {
+        loaded:true, fromSummary:true,
+        aps: st.units, open: st.openUnits,
+        withPhone: st.withPhone, withFee: st.withFee,
+        invited: st.invited, joined: st.joined, users: st.users,
+        moves: st.moves,
+        perMonth: Math.round((st.moves||0) / Math.max(1, st.monthsSpan||1)),
+        setup: Math.round((st.setupPct||0)/20),
+        lastAct: st.lastActivity || '', daysIdle: idle,
+      };
+    }
     if (!d) return { loaded:false };
     const aps = d.apartments || [];
     const users = d.users || [];
@@ -6941,7 +6967,7 @@
 
 })();
 
-/* ═══ emartna-visits.js (async) ═══ */
+/* ═══ emartna-visits.js ═══ */
 (async function(){
 /* ============================================================
    عمارتنا — من فين جه الزائر
@@ -7446,7 +7472,7 @@
 
 })();
 
-/* ═══ emartna-promo.js (async) ═══ */
+/* ═══ emartna-promo.js ═══ */
 (async function(){
 /* ============================================================
    عمارتنا — بطاقة الدعاية: كود QR وبيانات التواصل
@@ -8813,7 +8839,7 @@
 
 })();
 
-/* ═══ emartna-leads.js (async) ═══ */
+/* ═══ emartna-leads.js ═══ */
 (async function(){
 /* ============================================================
    عمارتنا — تسجيل بيانات اللي بيجرّب + قمع المبيعات
@@ -11014,7 +11040,7 @@
 
 })();
 
-/* ═══ emartna-newbld.js (async) ═══ */
+/* ═══ emartna-newbld.js ═══ */
 (async function(){
 /* ============================================================
    عمارتنا — إنشاء العمارة على الخادم
@@ -12067,7 +12093,7 @@
 
 })();
 
-/* ═══ emartna-cities.js (async) ═══ */
+/* ═══ emartna-cities.js ═══ */
 (async function(){
 /* ============================================================
    عمارتنا — مدن مصر حسب المحافظة
