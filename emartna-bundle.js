@@ -398,29 +398,52 @@
     st.textContent = `
       @media (min-width:861px){
         body.nav-mini .sidebar{width:62px !important;overflow:visible}
-        /* النصوص تختفي والأيقونة تفضل في النص */
-        body.nav-mini .sidebar .nav-btn span:not(.ic),
-        body.nav-mini .sidebar .nav-group-header span:not(.ic),
+
+        /* ⚠️ البنود اسمها nav-subitem مش nav-btn، والعنوان ملفوف
+           في span.ghl — المحددات القديمة ماغطّتش الاتنين فالنصوص
+           فضلت ظاهرة مقطوعة. */
+        body.nav-mini .sidebar .nav-subitem > span:not(.ic),
+        body.nav-mini .sidebar .nav-btn > span:not(.ic),
+        body.nav-mini .sidebar .ghl > span:not(.ic),
         body.nav-mini .sidebar .nav-sec,
         body.nav-mini .sidebar .brand h1,
         body.nav-mini .sidebar .brand p,
         body.nav-mini .sidebar-foot b,
-        body.nav-mini .sidebar-foot > *:not(#fontBar):not(.install-btn-slot),
-        body.nav-mini .nav-group-arrow{display:none !important}
+        body.nav-mini .sidebar-foot > button,
+        body.nav-mini .sidebar-foot > div,
+        body.nav-mini .nav-group-arrow,
+        body.nav-mini #fontBar{display:none !important}
+
+        /* الأيقونة في النص */
+        body.nav-mini .sidebar .nav-subitem,
         body.nav-mini .sidebar .nav-btn,
-        body.nav-mini .sidebar .nav-group-header{
-          justify-content:center;padding:10px 0 !important;gap:0 !important}
+        body.nav-mini .sidebar .nav-group-header,
+        body.nav-mini .sidebar .ghl{
+          justify-content:center !important;
+          padding-inline:0 !important; gap:0 !important}
+        body.nav-mini .sidebar .nav-subitem{margin:2px 6px !important;
+          width:calc(100% - 12px) !important}
         body.nav-mini .sidebar .nav-group{margin:2px 4px !important}
         body.nav-mini .sidebar .brand{justify-content:center;padding:12px 0 !important}
-        body.nav-mini #fontBar{display:none !important}
-        /* تلميح باسم البند عند الوقوف عليه */
-        body.nav-mini .sidebar .nav-btn:hover::after{
+        body.nav-mini .sidebar .brand .mark{margin:0 auto}
+
+        /* الشارة تبقى نقطة صغيرة فوق الأيقونة */
+        body.nav-mini .sidebar .nav-subitem .badge,
+        body.nav-mini .sidebar .nav-subitem > s{
+          position:absolute;top:3px;inset-inline-end:6px;
+          min-width:8px;height:8px;padding:0;font-size:0;border-radius:99px}
+
+        /* اسم البند يظهر عند الوقوف */
+        body.nav-mini .sidebar .nav-subitem,
+        body.nav-mini .sidebar .nav-group-header{position:relative}
+        body.nav-mini .sidebar .nav-subitem:hover::after,
+        body.nav-mini .sidebar .nav-group-header:hover::after{
           content:attr(data-label);position:absolute;
-          inset-inline-end:68px;background:var(--panel);color:var(--text);
-          border:1px solid var(--line);border-radius:8px;padding:5px 10px;
+          inset-inline-end:62px;top:50%;transform:translateY(-50%);
+          background:var(--panel);color:var(--text);
+          border:1px solid var(--line);border-radius:8px;padding:5px 11px;
           font-size:12.5px;white-space:nowrap;z-index:900;
-          box-shadow:0 4px 12px rgba(0,0,0,.14)}
-        body.nav-mini .sidebar .nav-btn{position:relative}
+          box-shadow:0 4px 14px rgba(0,0,0,.16)}
       }`;
     document.head.appendChild(st);
   }

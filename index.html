@@ -6972,14 +6972,14 @@ function renderNavGroups(groups,navFn){
   return groups.map(g=>{
     const expanded=window.__navExpandedGroup===g.key;
     return `<div class="nav-group ${expanded?'expanded':''}" data-group="${g.key}">
-      <div class="nav-group-header" onclick="toggleNavGroup('${g.key}')">
+      <div class="nav-group-header" data-label="${esc(g.label)}" onclick="toggleNavGroup('${g.key}')">
         <span class="ghl"><span class="ic">${g.icon}</span><span>${g.label}</span></span>
         <span class="nav-group-arrow">◄</span>
       </div>
       <div class="nav-subitems">
         ${g.items.map(([page,ic,label])=>{
           const badge=page==='chat'?unreadChatCount(currentUser()):(page==='sysrenewals'?pendingRenewalsCount():(page==='systrash'?(REG.deletedBuildings||[]).length:(page==='sysproposals'?pendingProposalsCount():(page==='systickets'?pendingTicketsCount():(page==='support'?myOpenTicketsCount():(page==='mytasks'?myPendingTasksCount():0))))));
-          return `<div class="nav-subitem ${curPage===page?'active':''}" data-page="${page}" onclick="${navFn}('${page}')"><span class="ic">${ic}</span><span>${label}</span>${badge?`<span style="background:var(--red);color:#fff;border-radius:99px;font-size:10px;min-width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;margin-inline-start:auto">${badge>9?'9+':badge}</span>`:''}</div>`;
+          return `<div class="nav-subitem ${curPage===page?'active':''}" data-page="${page}" data-label="${esc(label)}" onclick="${navFn}('${page}')"><span class="ic">${ic}</span><span>${label}</span>${badge?`<span style="background:var(--red);color:#fff;border-radius:99px;font-size:10px;min-width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;margin-inline-start:auto">${badge>9?'9+':badge}</span>`:''}</div>`;
         }).join('')}
       </div>
     </div>`;
@@ -11310,7 +11310,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.84';
+const APP_BUILD='1.85';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11442,25 +11442,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.84"></script>
-<script type="module" src="emartna-auth.js?v=1.84"></script>
-<script type="module" src="emartna-profile.js?v=1.84"></script>
-<script type="module" src="emartna-users.js?v=1.84"></script>
-<script type="module" src="emartna-platform.js?v=1.84"></script>
-<script type="module" src="emartna-contactlog.js?v=1.84"></script>
-<script type="module" src="emartna-permreport.js?v=1.84"></script>
-<script type="module" src="emartna-finops.js?v=1.84"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.84"></script>
-<script type="module" src="emartna-planscreens.js?v=1.84"></script>
+<script type="module" src="emartna-cloud.js?v=1.85"></script>
+<script type="module" src="emartna-auth.js?v=1.85"></script>
+<script type="module" src="emartna-profile.js?v=1.85"></script>
+<script type="module" src="emartna-users.js?v=1.85"></script>
+<script type="module" src="emartna-platform.js?v=1.85"></script>
+<script type="module" src="emartna-contactlog.js?v=1.85"></script>
+<script type="module" src="emartna-permreport.js?v=1.85"></script>
+<script type="module" src="emartna-finops.js?v=1.85"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.85"></script>
+<script type="module" src="emartna-planscreens.js?v=1.85"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=1.84"></script>
+<script type="module" src="emartna-perms.js?v=1.85"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=1.84"></script>
+<script type="module" src="emartna-bundle.js?v=1.85"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
