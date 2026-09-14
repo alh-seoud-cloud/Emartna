@@ -4668,7 +4668,16 @@
   const esc2 = s => (window.esc ? esc(s) : String(s == null ? '' : s));
   const today = () => (window.todayISO ? todayISO() : new Date().toISOString().slice(0,10));
 
-  const DEFAULTS = { exp:3, act:3, payreq:12, treasury:3 };   // بالشهور
+  /* الافتراضي = الشهر الحالي لشاشات الحركات.
+     السبب مش تنظيم بس — ده مكسب أداء حقيقي: عمارة بسنتين بيانات
+     فيها ٧١٧٥ قيد، الشهر الحالي منهم ١٨٧ (أقل ٩٧٪). الرسم والفرز
+     والبحث كلهم بيشتغلوا على الأقل.
+     ⚠️ الفلتر بيقلّل المعروض بس — الأرصدة بتتحسب من كل التاريخ. */
+  const DEFAULTS = {
+    exp:1, act:1, payreq:1, treasury:1, collections:1, ledger:1,
+    /* التقارير والتحليلات: سنة — المقارنة محتاجة تاريخ أطول */
+    reports:12, analytics:12, aging:12,
+  };
   const STORE = 'emartna_period_prefs';
 
   function load(){
@@ -4681,7 +4690,9 @@
   function range(key){
     const pref = P[key];
     if (pref && pref.from !== undefined) return pref;
-    const months = DEFAULTS[key] ?? 3;
+    const months = DEFAULTS[key] ?? 1;
+    /* شهر واحد = الشهر الجاري من أول يوم فيه — مهما كان الشهر.
+       فلو احنا في ٩، بيفتح على ٩ لوحده بلا أي ضبط يدوي. */
     const d = new Date(); d.setMonth(d.getMonth() - months + 1);
     return { from: new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0,10), to: '' };
   }
@@ -4718,8 +4729,8 @@
           <input id="pt_${key}" type="date" value="${r.to}" onchange="applyPeriodDates('${key}')"></div>
       </div>
       <div class="flexrow mtop" style="flex-wrap:wrap;gap:6px">
-        ${b('آخر 3 شهور',3)} ${b('آخر 6 شهور',6)} ${b('آخر 12 شهر',12)}
-        ${b('السنة الحالية','year')} ${b('كل الفترة','all')}
+        ${b('الشهر الحالي',1)} ${b('آخر 3 شهور',3)} ${b('آخر 6 شهور',6)}
+        ${b('آخر 12 شهر',12)} ${b('السنة الحالية','year')} ${b('كل الفترة','all')}
       </div>
       <p class="small mtop" style="color:var(--muted)">
         معروض ${shown} من ${total}${hidden>0?` · ${hidden} مخفية برّه الفترة`:''}${note?` · ${note}`:''}
@@ -4728,6 +4739,7 @@
   }
 
   const inRange = (d, r) => (!r.from || (d||'') >= r.from) && (!r.to || (d||'') <= r.to);
+  window.inPeriodRange = inRange;   /* الجدول في index بيستخدمها */
 
   /* ---------- ١) المصروفات ---------- */
   const origExp = window.pageExpenses;
@@ -4741,6 +4753,33 @@
     try{ html = origExp.apply(this, arguments); } finally { D.expenses = backup; }
     return html.replace(/(<div class="flexrow">[\s\S]*?<\/div>)/,
       '$1' + bar('exp', keep.length, all.length));
+  };
+
+  /* ---------- شاشة التحصيل: أكبر شاشة في البرنامج ----------
+     ⚠️ حساسة: الجدول العلوي "كشف حساب الشقق" لازم يفضل على
+     **كل التاريخ** وإلا الأرصدة تبان غلط. الفلتر على سجل
+     الحركات السفلي بس.
+     بنفلتر بعد ما الشاشة تترسم — فالأرصدة بتتحسب من الأصل. */
+  const origColl = window.pageCollections;
+  if (origColl) window.pageCollections = function(){
+    const r = range('coll');
+    const all = D.ledger || [];
+    const keep = all.filter(l => inRange(l.date, r));
+    /* ⚠️ كشف حساب الشقق بيستخدم apCharges/apPayments اللي بتقرا
+       من D.ledger مباشرة — فلو قلّلناها الأرصدة تبان غلط.
+       الحل: نسيب D.ledger كاملة، ونفلتر صفوف الجدول السفلي بس
+       عن طريق علامة بيقراها الجدول. */
+    const backup = D.ledger;
+    window.__collPeriod = r;          // الجدول السفلي بيقراها
+    let html;
+    try{
+      html = origColl.apply(this, arguments);
+    } finally { D.ledger = backup; window.__collPeriod = null; }
+    /* الشريط فوق سجل الحركات مش فوق كشف الحساب */
+    return html.replace(
+      /(<div class="section-title"><h3>سجل كل الحركات)/,
+      bar('coll', keep.length, all.length,
+          'كشف حساب الشقق فوق بيحسب كل التاريخ') + '$1');
   };
 
   /* ---------- ٢) سجل النشاط ---------- */
