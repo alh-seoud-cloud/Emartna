@@ -7970,22 +7970,55 @@
           margin-inline-end:5px}
         .wp h3{font-size:18px;line-height:1.45;margin:12px 0 5px;color:var(--wp-ink)}
         .wp-lede{font-size:13px;line-height:1.7;color:#4A5B57;margin:0}
-        .wp-cta{display:block;width:100%;text-align:start;border-radius:11px;
-          padding:10px 13px;margin-top:8px;cursor:pointer;font:inherit;
-          border:1px solid var(--wp-line);background:#fff;color:var(--wp-ink)}
+        .wp-cta{display:block;width:100%;text-align:start;border-radius:12px;
+          padding:11px 14px;margin-top:8px;cursor:pointer;font:inherit;
+          border:1.5px solid var(--wp-line);background:#fff;color:var(--wp-ink);
+          transition:transform .15s,box-shadow .15s,border-color .15s}
         .wp-cta b{display:block;font-size:14.5px;margin-bottom:2px}
         .wp-cta span{font-size:12.5px;color:#6E7F7B}
-        .wp-cta.is-main{background:var(--wp-green);border-color:var(--wp-green);color:#fff}
+        .wp-cta:hover{transform:translateY(-1px);border-color:var(--wp-green)}
+
+        /* ===== التجربة هي الهدف الأول =====
+           كان العرض التجاري (الذهبي) بيشد العين أكتر من التجربة،
+           رغم إن الزائر اللي بيجرّب بيتحوّل لعميل أكتر بمرّات من
+           اللي بيقرا عرض. فبنخلّي التجربة هي اللي بتنبض. */
+        .wp-try{position:relative;margin-top:14px;padding:12px;
+          border-radius:14px;
+          background:linear-gradient(135deg,#F2FBF9,#E7F6F3);
+          border:1.5px solid var(--wp-green)}
+        .wp-try::before{content:'جرّب دلوقتي — من غير تسجيل';
+          position:absolute;top:-10px;inset-inline-start:14px;
+          background:var(--wp-green);color:#fff;font-size:11px;font-weight:700;
+          padding:3px 10px;border-radius:99px;
+          box-shadow:0 2px 6px rgba(15,122,111,.3)}
+        .wp-try .wp-cta{margin-top:0}
+        .wp-try .wp-cta + .wp-cta{margin-top:7px}
+
+        .wp-cta.is-main{background:var(--wp-green);border-color:var(--wp-green);
+          color:#fff;box-shadow:0 3px 12px rgba(15,122,111,.28);
+          animation:wpPulse 2.6s ease-in-out infinite}
         .wp-cta.is-main span{color:rgba(255,255,255,.86)}
+        .wp-cta.is-main:hover{animation:none;
+          box-shadow:0 5px 18px rgba(15,122,111,.36)}
+        @keyframes wpPulse{
+          0%,100%{box-shadow:0 3px 12px rgba(15,122,111,.28)}
+          50%    {box-shadow:0 3px 20px rgba(15,122,111,.48)}}
+        /* احترام تفضيل تقليل الحركة */
+        @media (prefers-reduced-motion:reduce){
+          .wp-cta.is-main{animation:none}}
         .wp-cta:focus-visible{outline:2px solid var(--wp-gold);outline-offset:2px}
-        .wp-offer{display:flex;gap:10px;align-items:center;margin-top:14px;
-          padding:10px 12px;border:1px solid var(--wp-gold);border-radius:12px;
-          background:#FFFBF2}
+        /* العرض التجاري بيهدى شوية: التجربة هي اللي المفروض تشد
+           العين الأول، والعرض يبان لمن بيدوّر عليه. */
+        .wp-offer{display:flex;gap:10px;align-items:center;margin-top:12px;
+          padding:9px 12px;border:1px solid #EADFC4;border-radius:12px;
+          background:#FFFCF6}
         .wp-offer div{flex:1;min-width:0}
         .wp-offer b{display:block;font-size:13.5px;color:#8A6414}
         .wp-offer span{font-size:12.5px;color:#6E7F7B}
-        .wp-offer button{border:0;background:var(--wp-gold);color:#fff;border-radius:9px;
-          padding:9px 14px;font:600 13.5px inherit;cursor:pointer;white-space:nowrap}
+        .wp-offer button{border:1.5px solid var(--wp-gold);background:transparent;
+          color:#8A6414;border-radius:9px;padding:8px 13px;
+          font:600 13px inherit;cursor:pointer;white-space:nowrap}
+        .wp-offer button:hover{background:var(--wp-gold);color:#fff}
         .wp-calc{display:block;width:100%;margin-top:10px;padding:10px;
           border:1px dashed var(--wp-green);border-radius:11px;background:#F4FAF9;
           color:var(--wp-green);font:600 13.5px inherit;cursor:pointer}
@@ -8017,14 +8050,16 @@
         <h3>${esc2(c.title)}</h3>
         <p class="wp-lede">${esc2(c.subtitle)}</p>
 
-        <button class="wp-cta is-main" onclick="welcomeGo('admin')">
-          <b>ادخل كرئيس اتحاد</b>
-          <span>التحصيل والمصروفات والتقارير على سنتين بيانات</span>
-        </button>
-        <button class="wp-cta" onclick="welcomeGo('owner')">
-          <b>ادخل كصاحب شقة</b>
-          <span>اللي الساكن بيشوفه: حسابه ومستحقاته</span>
-        </button>
+        <div class="wp-try">
+          <button class="wp-cta is-main" onclick="welcomeGo('admin')">
+            <b>🏢 ادخل كرئيس اتحاد</b>
+            <span>عمارة جاهزة بسنتين حركات — شوف التحصيل والتقارير</span>
+          </button>
+          <button class="wp-cta" onclick="welcomeGo('owner')">
+            <b>🏠 ادخل كصاحب شقة</b>
+            <span>اللي الساكن بيشوفه: حسابه ومستحقاته</span>
+          </button>
+        </div>
 
         <div class="wp-offer">
           <div>
