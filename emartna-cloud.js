@@ -340,20 +340,34 @@ window.addEventListener('offline', () => { cache.online = false; });
 
 /* قراءة كل صفوف جدول لعمارة معيّنة — على صفحات، عشان حد الـ١٠٠٠ صف */
 const PAGE = 1000;
+/* ⚠️ كان بيجيب الصفحات واحدة ورا التانية: عمارة ٦٠٠٠ قيد = ٧ رحلات
+   متسلسلة، وكل رحلة تأخيرها ٢٠٠ مللي على شبكة موبايل = ثانية ونص
+   استنى بلا داعي.
+   دلوقتي: نعدّ الصفوف الأول، وبعدين نجيب كل الصفحات بالتوازي. */
 async function fetchAllRows(table, buildingUuid){
-  const all = [];
-  for (let from = 0; ; from += PAGE){
-    const res = await sb.from(table).select('*')
+  const first = await sb.from(table).select('*', { count:'exact' })
+    .eq('building_id', buildingUuid)
+    .order('id', { ascending: true })
+    .range(0, PAGE - 1);
+  if (first.error) return { data: [], error: first.error };
+
+  const rows = first.data || [];
+  const total = Math.min(first.count || rows.length, 200000);
+  if (total <= PAGE) return { data: rows, error: null };
+
+  const pages = [];
+  for (let from = PAGE; from < total; from += PAGE){
+    pages.push(sb.from(table).select('*')
       .eq('building_id', buildingUuid)
       .order('id', { ascending: true })
-      .range(from, from + PAGE - 1);
-    if (res.error) return { data: all, error: res.error };
-    const batch = res.data || [];
-    all.push(...batch);
-    if (batch.length < PAGE) break;
-    if (all.length > 200000) break;   // صمام أمان
+      .range(from, from + PAGE - 1));
   }
-  return { data: all, error: null };
+  const res = await Promise.all(pages);
+  for (const r of res){
+    if (r.error) return { data: rows, error: r.error };
+    rows.push(...(r.data || []));
+  }
+  return { data: rows, error: null };
 }
 
 async function fetchBuilding(buildingUuid, legacyId){
@@ -378,10 +392,12 @@ async function fetchBuilding(buildingUuid, legacyId){
      والتقسيم لمرحلتين: اللي الشاشة الأولى محتاجاه فعلًا (CORE)
      بيتجاب ويترسم، والباقي بيكمّل في الخلفية — بدل ما المستخدم
      يستنى ١٦ جدول قبل ما يشوف أي حاجة. */
+  /* الأساسي = اللي الشاشة الأولى محتاجاه. ledgerAllocations اتأخّرت:
+     ٢٦٠٠ صف مش مطلوبين لعرض لوحة التحكم، وبتتحمّل ورا في الخلفية. */
   const CORE = ['accounts','apartments','projects','vendors','expenses',
-                'transfers','ledger','ledgerAllocations'];
-  const REST = ['maintenanceReports','meetings','polls','announcements',
-                'suggestions','paymentRequests','notifications',
+                'transfers','ledger'];
+  const REST = ['ledgerAllocations','maintenanceReports','meetings','polls',
+                'announcements','suggestions','paymentRequests','notifications',
                 'buildingChat','activityLog'];
   const order = CORE.concat(REST);
 
