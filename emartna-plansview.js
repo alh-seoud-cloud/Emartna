@@ -93,6 +93,8 @@
         value:() => '',
         cell: r => `<div class="flexrow" style="gap:4px">
           <button class="btn sm ghost" onclick="openPlanModal('${esc2(r.key)}')">تعديل</button>
+          <button class="btn sm ghost" title="الشاشات المتاحة في الباقة دي"
+            onclick="openPlanScreens('${esc2(r.key)}')">🎚️</button>
           <button class="btn sm ${r.active===false?'':'gold'}"
             onclick="togglePlanActive('${esc2(r.key)}')">
             ${r.active===false?'تفعيل':'تعطيل'}</button></div>` },
@@ -115,6 +117,7 @@
       ${v==='table'?'':'<button class="btn sm ghost" onclick="exportPlansXlsx()">📊 تصدير إكسل</button>'}
       <button class="btn sm ghost" onclick="openPlansImport()">📥 تحديث بالإكسل</button>
       <button class="btn sm ghost" onclick="openStorageOverview()">💾 المساحة</button>
+      <button class="btn sm ghost" onclick="openPlanScreens()">🎚️ شاشات الباقات</button>
       <button class="btn primary" onclick="openPlanModal()">+ خطة جديدة</button>
     </div>`;
   }
