@@ -417,12 +417,33 @@ tr:hover td{background:#faf8f2}
    السبب إن كل زرار عرضه ١٠٠٪ لما يتكسّر. الإصلاح: الأزرار تفضل
    جنب بعض وتتزحلق أفقيًا لو ضاقت — زي شريط التطبيقات. */
 /* ===== ترتيب شريط الإجراءات =====
-   الإجراء الرئيسي في مكان ثابت (آخر الشريط ناحية البداية)، عشان
-   المستخدم يلاقيه من غير ما يقرا. وباقي الأزرار مرتّبة بعده. */
-.card > .flexrow > .btn.primary,
-.content > .flexrow > .btn.primary{order:-1}
-.card > .flexrow > .btn.ghost,
-.content > .flexrow > .btn.ghost{order:1}
+   كان الرئيسي في مكان مختلف في كل شاشة — أحيانًا تالت وأحيانًا
+   مش موجود. فحص ٢١ شريط طلّع إن ٤ بس كانوا مرتّبين صح.
+
+   الترتيب الموحّد دلوقتي (من جهة البداية):
+     ١) الإجراء الرئيسي        — أول حاجة العين تشوفها
+     ٢) الإجراءات العادية      — بترتيبها في الكود
+     ٣) الخفيفة (ghost)        — أدوات مساعدة
+     ٤) الخطر (حذف/إيقاف)      — آخر حاجة، بعيد عن الضغط بالغلط
+
+   بنستخدم order فبيشتغل على كل الأشرطة من غير ما نلمس HTML. */
+.flexrow > .btn.primary{order:0}
+.flexrow > .btn{order:1}
+.flexrow > .btn.gold{order:2}
+.flexrow > .btn.ghost{order:3}
+.flexrow > .btn.red{order:4}
+.flexrow > .spacer{order:3}
+
+/* ⚠️ استثناء مهم: الأزرار اللي جوه صفوف الجداول والكروت الداخلية
+   (تفاصيل · تعديل · حذف لصف معيّن) ترتيبها مقصود ومالوش علاقة
+   بأهمية الشاشة — لو اتطبّق عليها الترتيب، "حذف" هيتنقل لمكان
+   مختلف في كل صف. بنستثنيها كلها. */
+table .flexrow > .btn,
+td .flexrow > .btn,
+.card .card .flexrow > .btn,
+.flexrow.no-order > .btn{order:0 !important}
+/* وأزرار الحجم الصغير جوه الجداول */
+table .flexrow > .btn.sm{order:0 !important}
 
 @media (max-width:640px){
   /* شريط إجراءات الشاشة: صف واحد بتمرير */
@@ -2387,7 +2408,7 @@ function tableSearchInput(tableId,val){
 function renderRoot(){
   if(window.__previewMode){
     document.getElementById('root').innerHTML=`<div style="position:sticky;top:0;z-index:50;background:var(--accent-dark);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.2)">
-      <span>👁️ معاينة الصفحة الرئيسية</span><div class="spacer"></div>
+      <span>👁️ معاينة</span><div class="spacer"></div>
       <button class="btn sm gold" onclick="exitPreviewMode()">🔙 العودة للوحة التحكم</button>
     </div>${landingHTML()}`;
     applyTheme();
@@ -4134,11 +4155,11 @@ function saveBrandColors(){
   saveRegistry();applyBrandColors();toast('تم حفظ الألوان في كل البرنامج');
 }
 function resetBrandColors(){
-  confirmAction('هل تريد استعادة الألوان الافتراضية؟',()=>{
+  confirmAction('هل تريد استعادة الافتراضي؟',()=>{
     const b=ensureBrandSettings();
     b.colorAccent=null;b.colorGold=null;b.colorDark=null;
     b.colorSidebarBg=null;b.colorIllusBuildings=null;b.colorIllusTrees=null;b.colorIllusShadows=null;
-    saveRegistry();applyBrandColors();toast('تم استعادة الألوان الافتراضية');renderSysContent();
+    saveRegistry();applyBrandColors();toast('تم استعادة الافتراضي');renderSysContent();
   });
 }
 /* طرق الدخول المتاحة — صاحب البرنامج بيفعّل ويعطّل.
@@ -4220,7 +4241,7 @@ function pageSysSettings(){
       <div class="field2"><label>لون الأشجار</label><input type="color" id="brandColorIllusTrees" value="${ensureBrandSettings().colorIllusTrees||'#CFE5DD'}" style="height:42px;padding:2px"></div>
       <div class="field2"><label>لون الظلال</label><input type="color" id="brandColorIllusShadows" value="${ensureBrandSettings().colorIllusShadows||'#EAF4F1'}" style="height:42px;padding:2px"></div>
     </div>
-    <div class="flexrow mtop2"><button class="btn primary" onclick="saveBrandColors()">💾 حفظ الألوان</button><button class="btn ghost" onclick="resetBrandColors()">استعادة الألوان الافتراضية</button></div>
+    <div class="flexrow mtop2"><button class="btn primary" onclick="saveBrandColors()">💾 حفظ الألوان</button><button class="btn ghost" onclick="resetBrandColors()">استعادة الافتراضي</button></div>
   </div>
   <div class="card content-narrow mtop2">
     ${bioAccountSectionHTML()}
@@ -4302,7 +4323,7 @@ function pageSysUsers(){
     {key:'email',label:'البريد الإلكتروني',value:r=>r.email,cell:r=>`<span class="small">${esc(r.email||'-')}</span>`},
     {key:'apartment',label:'الوحدة',value:r=>r.apLabel,cell:r=>esc(r.apLabel||'-')},
     {key:'active',label:'الحالة',value:r=>r.active?1:0,cell:r=>r.active?'<span class="badge g">نشط</span>':'<span class="badge r">معطّل</span>'},
-    {key:'x',label:'',value:null,cell:r=>`<div class="flexrow"><button class="btn sm" onclick="sysResetUserPassword('${r.buildingId}','${r.username}')">إعادة تعيين كلمة المرور</button><button class="btn sm ghost" onclick="sysToggleUserActive('${r.buildingId}','${r.username}')">${r.active?'تعطيل':'تفعيل'}</button></div>`}
+    {key:'x',label:'',value:null,cell:r=>`<div class="flexrow"><button class="btn sm" onclick="sysResetUserPassword('${r.buildingId}','${r.username}')">كلمة المرور</button><button class="btn sm ghost" onclick="sysToggleUserActive('${r.buildingId}','${r.username}')">${r.active?'تعطيل':'تفعيل'}</button></div>`}
   ];
   return `<p class="small">كل حسابات الدخول على كل العمارات المسجّلة على هذا الجهاز (${rows.length} حساب).</p>
   <div class="mtop">${sortableTable('sysUsersTable',rows,cols,null,{defaultKey:'building',exportName:'كل المستخدمين'})}</div>`;
@@ -5062,7 +5083,7 @@ function pageSupportStaff(){
       <div class="flexrow"><b style="flex:1">${esc(s.name)}</b>${s.active!==false?'<span class="badge g">مفعّل</span>':'<span class="badge n">معطّل</span>'}</div>
       <p class="small">اسم الدخول: ${esc(s.username)}</p>
       <p class="small mtop">الصلاحيات: 🎫 طلبات الدعم${SUPPORT_PERMISSION_GROUPS.filter(g=>staffHasPermission(s,g.key)).map(g=>' - '+g.label).join('')}</p>
-      <div class="flexrow mtop"><button class="btn sm ghost" onclick="openAddStaffModal('${s.id}')">✏️ تعديل البيانات</button><button class="btn sm ghost" onclick="openEditStaffPermissionsModal('${s.id}')">🔐 الصلاحيات</button><button class="btn sm ghost" onclick="toggleStaffActive('${s.id}')">${s.active!==false?'⏸️ تعطيل':'▶️ تفعيل'}</button><button class="btn sm ghost" onclick="openResetStaffPassModal('${s.id}')">🔑 كلمة المرور</button><button class="btn sm red" onclick="deleteStaffAccount('${s.id}')">🗑️ حذف</button></div>
+      <div class="flexrow mtop"><button class="btn sm ghost" onclick="openAddStaffModal('${s.id}')">✏️ تعديل</button><button class="btn sm ghost" onclick="openEditStaffPermissionsModal('${s.id}')">🔐 الصلاحيات</button><button class="btn sm ghost" onclick="toggleStaffActive('${s.id}')">${s.active!==false?'⏸️ تعطيل':'▶️ تفعيل'}</button><button class="btn sm ghost" onclick="openResetStaffPassModal('${s.id}')">🔑 كلمة المرور</button><button class="btn sm red" onclick="deleteStaffAccount('${s.id}')">🗑️ حذف</button></div>
     </div>`).join(''):'<p class="small">لسه معملتش أي حساب لفريق الدعم.</p>'}</div>`;
 }
 function openAddStaffModal(id){
@@ -5121,7 +5142,7 @@ function toggleStaffActive(id){
   saveRegistry();renderSysContent();
 }
 function openResetStaffPassModal(id){
-  openModal(`<h3>إعادة تعيين كلمة المرور</h3>
+  openModal(`<h3>كلمة المرور</h3>
     <div class="field2 mtop"><label>كلمة مرور جديدة</label>${pwField('stNewPass')}</div>
     <div class="modal-actions"><button class="btn primary" onclick="resetStaffPassword('${id}')">💾 حفظ</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
 }
@@ -5523,9 +5544,9 @@ function pageSysMarketingLeads(){
     <div class="kpi ok"><div class="ic">🔁</div><div class="lbl">جدّدوا</div><div class="val">${stats.renewed}</div></div>
   </div>
   <div class="flexrow mtop2">
-    <button class="btn ghost" onclick="downloadLeadsTemplate()">⬇️ تحميل نموذج استيراد</button>
-    <button class="btn ghost" onclick="openImportLeadsModal()">📥 استيراد أرقام بالجملة</button>
-    <button class="btn primary" onclick="openAddLeadModal()">+ إضافة رقم يدويًا</button>
+    <button class="btn ghost" onclick="downloadLeadsTemplate()">⬇️ نموذج</button>
+    <button class="btn ghost" onclick="openImportLeadsModal()">📥 استيراد بالجملة</button>
+    <button class="btn primary" onclick="openAddLeadModal()">+ رقم جديد</button>
   </div>
   ${sortableTable('leadsTable',leads,[
     {key:'name',label:'الاسم',value:l=>l.name||'',cell:l=>esc(l.name||'-')},
@@ -5544,7 +5565,7 @@ function pageSysMarketingLeads(){
 }
 function openAddLeadModal(id){
   const lead=id?ensureMarketingLeads().find(l=>l.id===id):null;
-  openModal(`<h3>${lead?'تعديل رقم':'+ إضافة رقم يدويًا'}</h3>
+  openModal(`<h3>${lead?'تعديل رقم':'+ رقم جديد'}</h3>
     <div class="field2 mtop"><label>الاسم (اختياري)</label><input id="leadName" value="${lead?esc(lead.name||''):''}"></div>
     <div class="grid g2">
       ${phoneField('leadPhoneCountry','leadPhone',lead?lead.phoneCountry:null,lead?esc(lead.phone):'','رقم الهاتف/واتساب',false)}
@@ -5648,7 +5669,7 @@ function downloadLeadsTemplate(){
   XLSX.writeFile(wb,'نموذج استيراد أرقام التسويق.xlsx');
 }
 function openImportLeadsModal(){
-  openModal(`<h3>📥 استيراد أرقام بالجملة</h3>
+  openModal(`<h3>📥 استيراد بالجملة</h3>
     <p class="small mtop">الأعمدة المطلوبة: <b>رقم الهاتف</b> فقط، والباقي اختياري.</p>
     <button class="btn sm gold mtop" onclick="downloadLeadsTemplate()">⬇️ تحميل نموذج فارغ</button>
     <div class="field2 mtop"><label>اختر ملف إكسيل (.xlsx)</label><input type="file" id="leadsImportFile" accept=".xlsx,.xls,.csv" onchange="handleLeadsFileUpload(this)"></div>
@@ -6215,8 +6236,8 @@ function pageSysLandingSettings(){
   </div>
   <div class="flexrow mtop2">
     <button class="btn primary" onclick="saveLandingSettings()">💾 حفظ التغييرات</button>
-    <button class="btn ghost" onclick="previewLandingPage()">👁️ معاينة الصفحة الرئيسية</button>
-    <button class="btn red" onclick="resetLandingSettings()">↩️ استعادة الإعدادات الافتراضية</button>
+    <button class="btn ghost" onclick="previewLandingPage()">👁️ معاينة</button>
+    <button class="btn" onclick="resetLandingSettings()">↩️ استعادة الافتراضي</button>
   </div>`;
 }
 function uploadHeroImage(input){
@@ -6628,8 +6649,8 @@ function openLicenseManage(buildingId){
         <div><b>حد الشقق:</b> ${lic.maxApartments?lic.maxApartments+' شقة':'غير محدود'}</div>
       </div>
       <div class="flexrow mtop">
-        ${curDef&&curDef.durationMonths?`<button class="btn sm gold" onclick="renewPlan('${buildingId}')">🔄 تجديد نفس الخطة (${curDef.durationMonths} شهر)</button>`:''}
-        <button class="btn sm" onclick="openCustomRenewModal('${buildingId}')">🛠️ تجديد / تعديل الفترة يدويًا</button>
+        ${curDef&&curDef.durationMonths?`<button class="btn sm gold" onclick="renewPlan('${buildingId}')">🔄 تجديد (${curDef.durationMonths} شهر)</button>`:''}
+        <button class="btn sm" onclick="openCustomRenewModal('${buildingId}')">🛠️ تعديل الفترة</button>
         <button class="btn sm primary" onclick="openRecordCollectionModal('${buildingId}')">💰 تسجيل تحصيل</button>
         <button class="btn sm ${lic.status==='suspended'?'primary':'red'}" onclick="toggleLicenseSuspend('${buildingId}')">${lic.status==='suspended'?'✅ إعادة تفعيل':'⛔ إيقاف الاشتراك'}</button>
       </div>
@@ -7362,7 +7383,7 @@ function tourClose(){
 }
 const SYS_HELP_CONTENT={
   sysdash:{title:'كل العمارات',steps:['الكروت فوق بتوريك عدد العملاء النشطين، التجريبيين، المنتهيين، وإجمالي الوحدات المُدارة.','زرار "⏰ هينتهي خلال 7 أيام" لفلترة العملاء اللي محتاجين متابعة تجديد.','زرار "💬 تذكير تجديد" جنب أي عمارة يفتح واتساب برسالة جاهزة لرئيس اتحادها.','زرار "⚙️ الأعمدة الظاهرة" لتخصيص الأعمدة اللي تهمك في الجدول.','دوس "فتح" لدخول أي عمارة كأنك رئيس اتحادها، أو "الاشتراك" لإدارة خطتها.']},
-  sysusers:{title:'كل المستخدمين',steps:['قائمة بكل حسابات الدخول عبر كل العمارات المسجّلة على هذا الجهاز.','زرار "إعادة تعيين كلمة المرور" لو عميل نسي كلمة مروره.','زرار "تعطيل/تفعيل" لإيقاف أو تشغيل أي حساب.']},
+  sysusers:{title:'كل المستخدمين',steps:['قائمة بكل حسابات الدخول عبر كل العمارات المسجّلة على هذا الجهاز.','زرار "كلمة المرور" لو عميل نسي كلمة مروره.','زرار "تعطيل/تفعيل" لإيقاف أو تشغيل أي حساب.']},
   syslicenses:{title:'التراخيص والاشتراكات',steps:['جدول مختصر بكل العمارات وحالة اشتراكها وتاريخ انتهائه.','دوس على أي عمارة لفتح تفاصيل اشتراكها الكاملة.']},
   sysplans:{title:'خطط الاشتراك والأسعار',steps:['كل كارت يمثل خطة: السعر قبل وبعد الخصم، مدة الاشتراك، وحدود الاستخدام.','"+ إضافة خطة جديدة" لإنشاء خطة بسعر ومدة مخصصة.','خانة "استخدمها للتسجيل الذاتي" تحدد أي خطة تتفعّل تلقائيًا للعملاء الجدد.']},
   sysrenewals:{title:'طلبات التجديد',steps:['كل طلبات تجديد الاشتراك من العملاء مع صورة إثبات التحويل.','دوس على الصورة لتكبيرها والتأكد منها.','"✅ موافقة وتفعيل" يفعّل الخطة المطلوبة فورًا، أو "رفض" مع سبب يوصل للعميل.']},
@@ -7374,7 +7395,7 @@ const SYS_HELP_CONTENT={
   sysreports:{title:'تقارير الفترات',steps:['اختار الفترة اللي عايز تشوفها (النهاردة، آخر 7 أيام، آخر 30 يوم، أو كل الفترة) من القائمة فوق.','هتشوف عمارات جديدة، حركات اشتراك، ونشاط تسويقي في نفس الفترة.','جدول "مصادر التسجيل" بيوضح مين جالك منين - لو حطيت رابط بصيغة ?src=facebook في أي إعلان، المصدر ده بيتسجل تلقائيًا لما حد يسجّل بيه.']},
   sysmessages:{title:'قوالب الرسائل',steps:['كل استخدام (دعوة عميل، عرض خاص، تذكير تجديد) ليه فئة منفصلة، وتقدر تضيف أكتر من رسالة جاهزة لكل فئة.','دوس "+ رسالة جديدة" وأنت بتكتب النص، اكتب { وهتظهرلك قائمة بكل المتغيرات المتاحة (زي اسم العمارة أو السعر) تختار منها.','الرسائل دي بتظهر كخيارات لما تبعت رسالة من شاشة الأرقام التسويقية أو قمع المبيعات، وبرضو تقدر تعدّل النص قبل الإرسال الفعلي.']},
   syspipeline:{title:'قمع المبيعات',steps:['كل عملائك مصنّفين تلقائيًا حسب مرحلتهم: تجريبي هيخلص قريب، تجريبي بارد (مفيش استخدام فعلي)، مدفوع محتاج تجديد، منتهي محتاج استرجاع.','دوس على اسم أي عمود (زي "المرحلة" أو "الخطة") عشان تفلتر الجدول وتشوف بس اللي محتاجين متابعة دلوقتي.','عمود "آخر تواصل تسويقي" بيوريك آخر مرة بعتّلهم فيها عرض أو رسالة، عشان متكررش عليهم من غير داعي.','زرار "💬 تواصل" لفتح واتساب مباشرة، أو "🎁 عرض خاص" لعمل عرض بسعر أو كود خصم مخصص.']},
-  sysleads:{title:'أرقام تسويقية',steps:['سجّل أرقام عملاء محتملين (من إعلان، معرض، توصية) قبل ما يسجّلوا في البرنامج أصلًا.','\"استيراد أرقام بالجملة\" من إكسيل، أو \"+ إضافة رقم يدويًا\" لرقم واحد.','زرار \"💬 إرسال\" يجهزلك رسالة دعوة جاهزة - تبعتها واتساب مباشرة أو تنسخها لرسالة عادية من موبايلك.','الحالة بتتحدّث تلقائيًا: جديد ← اتبعتله رسالة ← سجّل ← اشترى ← جدد - من غير أي تسجيل يدوي، البرنامج بيربط الرقم بالعميل لو سجّل بنفس الرقم.']},
+  sysleads:{title:'أرقام تسويقية',steps:['سجّل أرقام عملاء محتملين (من إعلان، معرض، توصية) قبل ما يسجّلوا في البرنامج أصلًا.','\"استيراد أرقام بالجملة\" من إكسيل، أو \"+ رقم جديد\" لرقم واحد.','زرار \"💬 إرسال\" يجهزلك رسالة دعوة جاهزة - تبعتها واتساب مباشرة أو تنسخها لرسالة عادية من موبايلك.','الحالة بتتحدّث تلقائيًا: جديد ← اتبعتله رسالة ← سجّل ← اشترى ← جدد - من غير أي تسجيل يدوي، البرنامج بيربط الرقم بالعميل لو سجّل بنفس الرقم.']},
   sysreferrals:{title:'برنامج الإحالة',steps:['كل عميل ليه كود إحالة تلقائي، وبياخد 30 يوم مجانًا لما حد يرقّي بكوده.','دوس على أي عميل في \"أكتر العملاء ترشيحًا\" لتشوف بالظبط مين استخدم كوده وهل اترقّى ولا لسه.']},
   syscoupons:{title:'أكواد الخصم',steps:['أكواد خصم مستقلة عن الإحالة - تقدر تستخدمها في حملات إعلانية أو عروض موسمية.','حدد نسبة الخصم، تاريخ انتهاء اختياري، وحد أقصى للاستخدام اختياري.','العميل بيكتب الكود وقت التسجيل، وبيظهرلك تذكير واضح في شاشة إدارة اشتراكه عشان تطبّق الخصم لما يرقّي.']},
   syslicensehistory:{title:'سجل حركات الاشتراكات',steps:['كل حركة تفعيل، تجديد، إيقاف، أو تعديل اشتراك حصلت مع أي عميل - في مكان واحد.','عمود \"بواسطة\" بيوضح مين عمل الحركة بالظبط - صاحب البرنامج أو أي عضو فريق دعم.']},
@@ -8775,8 +8796,8 @@ function pageBuilding(){
     <div class="field2"><label>ملاحظات عامة</label><textarea id="bNotes">${esc(b.notes)}</textarea></div>
     <div class="flexrow">
       <button class="btn primary" onclick="saveBuilding()">💾 حفظ البيانات</button>
-      <button class="btn gold" onclick="reassignFloors()">🏢 إعادة ترتيب الأدوار تلقائيًا</button>
-      <button class="btn ghost" onclick="applyGroundShopsPrompt()">🏪 تطبيق عدد المحلات على الدور الأرضي</button>
+      <button class="btn" onclick="reassignFloors()">🏢 ترتيب الأدوار</button>
+      <button class="btn ghost" onclick="applyGroundShopsPrompt()">🏪 محلات الأرضي</button>
     </div>
     <p class="small mtop">إعادة الترتيب التلقائي: الشقق 1-${b.groundFloorCount||4} = الدور الأرضي، وبعد كده كل ${b.apartmentsPerFloor||4} شقق = دور متكرر (الأول، الثاني...). أي تعديل يدوي سابق للأدوار هيتغيّر. زرار "تطبيق عدد المحلات" بيحوّل أول وحدات الدور الأرضي (برقم "عدد المحلات" اللي كتبته) لنوع "محل"، والباقي يفضل "شقة".</p>
   </div>
@@ -8991,7 +9012,7 @@ function tenantAccountSectionHTML(a){
     <p class="small mtop">لو الوحدة مؤجرة، تقدر تعمل حساب دخول منفصل للمستأجر (يشوف نفس بيانات الوحدة: إعلانات، استطلاعات، اجتماعات) بجانب حساب المالك، بدون ما يشوف حساب المالك أو يقدر يعدّل بياناته.</p>
     ${tenantUser?`
       <div class="mtop small">اسم دخول المستأجر: <code>${esc(tenantUser.username)}</code> - ${tenantUser.active?'<span class="badge g">نشط</span>':'<span class="badge r">معطّل</span>'}</div>
-      <div class="flexrow mtop"><button class="btn sm" onclick="resetTenantPassword('${tenantUser.id}')">تغيير كلمة المرور</button><button class="btn sm ghost" onclick="toggleTenantActive('${tenantUser.id}')">${tenantUser.active?'تعطيل الحساب':'تفعيل الحساب'}</button><button class="btn sm red" onclick="removeTenantAccount('${tenantUser.id}')">حذف حساب المستأجر</button></div>
+      <div class="flexrow mtop"><button class="btn sm" onclick="resetTenantPassword('${tenantUser.id}')">تغيير كلمة المرور</button><button class="btn sm ghost" onclick="toggleTenantActive('${tenantUser.id}')">${tenantUser.active?'تعطيل الحساب':'تفعيل الحساب'}</button><button class="btn sm red" onclick="removeTenantAccount('${tenantUser.id}')">حذف الحساب</button></div>
     `:`<button class="btn sm primary mtop" onclick="openAddTenantAccountModal('${a.id}')">➕ إنشاء حساب دخول للمستأجر</button>`}
   </div>`;
 }
@@ -9035,7 +9056,7 @@ function removeTenantAccount(userId){
   confirmDelete('حذف حساب دخول المستأجر نهائيًا؟ (بيانات الوحدة نفسها هتفضل زي ما هي)',()=>{
     const apId=u.apartmentId;
     D.users=D.users.filter(x=>x.id!==userId);
-    save();toast('تم حذف حساب المستأجر');
+    save();toast('تم حذف الحساب');
     openApartmentModal(apId);
   });
 }
@@ -9170,7 +9191,7 @@ function pageCollections(){
 }
 function openBulkRemindersModal(){
   const overdue=D.apartments.filter(a=>apBalance(a.id)>0).sort((a,b)=>apBalance(b.id)-apBalance(a.id));
-  openModal(`<h3>💬 تذكير جماعي بالمستحقات</h3>
+  openModal(`<h3>💬 تذكير جماعي</h3>
     <p class="small mtop">لأسباب أمان في واتساب، مش ممكن الإرسال التلقائي الجماعي من المتصفح - لكن هنا كل الشقق المتأخرة في قائمة واحدة، دوس "إرسال" جنب كل شقة (بيفتح واتساب برسالة جاهزة، تأكيد الإرسال بإيدك بس).</p>
     ${overdue.length?`<div class="mtop" style="max-height:380px;overflow-y:auto">${overdue.map(a=>`
       <div class="flexrow" style="padding:8px 0;border-bottom:1px solid var(--line)">
@@ -9461,7 +9482,7 @@ function pageProjectDetail(id){
       </select>
     </div>
     <p class="small mtop">${esc(p.description||'')}</p>
-    <div class="flexrow mtop"><button class="btn sm" onclick="openProjectModal('${p.id}')">✏️ تعديل بيانات المشروع</button><button class="btn sm gold" onclick="openGenerateChargeModalForProject('${p.id}')">🧾 تحديد مبلغ مطلوب من الشقق</button><button class="btn sm" onclick="openExpenseModal('${p.id}')">💳 إضافة مصروف على المشروع</button><button class="btn sm red" onclick="deleteProject('${p.id}')">حذف المشروع</button></div>
+    <div class="flexrow mtop"><button class="btn sm" onclick="openProjectModal('${p.id}')">✏️ تعديل</button><button class="btn sm gold" onclick="openGenerateChargeModalForProject('${p.id}')">🧾 مبلغ على الشقق</button><button class="btn sm" onclick="openExpenseModal('${p.id}')">💳 إضافة مصروف</button><button class="btn sm red" onclick="deleteProject('${p.id}')">حذف المشروع</button></div>
   </div>
   <div class="grid g4 mtop2">
     <div class="kpi"><div class="ic">🚪</div><div class="lbl">شقق مشمولة</div><div class="val">${st.unitsCount}</div></div>
@@ -9615,8 +9636,8 @@ function pageTreasury(){
     <div class="kpi"><div class="ic">➕</div><div class="lbl">حساب جديد</div><button class="btn sm primary mtop" onclick="openAccountModal()">إضافة حساب</button></div>
   </div>
   <div class="flexrow mtop2">
-    <button class="btn primary" onclick="openTransferModal()">🔁 تحويل بين الحسابات</button>
-    <button class="btn " onclick="openRefundModal()">↩️ صرف / استرداد لصاحب شقة</button>
+    <button class="btn primary" onclick="openTransferModal()">🔁 تحويل</button>
+    <button class="btn " onclick="openRefundModal()">↩️ صرف لصاحب شقة</button>
   </div>
   <div class="section-title"><h3>حركة الخزينة</h3></div>
   ${sortableTable('treasuryMovesTable',moves,[
@@ -10066,8 +10087,8 @@ function suggestionCardHTML(s,u,isAdmin){
     ${s.adminNote?`<p class="small" style="color:var(--gold-dark)"><b>ملاحظة الإدارة:</b> ${esc(s.adminNote)}</p>`:''}
     ${linkedPoll?`<p class="small" style="color:var(--accent-dark)">🗳️ فيه استطلاع رأي منشور على المقترح ده بالفعل</p>`:''}
     ${isAdmin?`<div class="flexrow mtop">
-      ${s.status==='pending'?`<button class="btn sm primary" onclick="approveSuggestion('${s.id}')">✅ موافقة ونشر</button><button class="btn sm ghost" onclick="rejectSuggestion('${s.id}')">رفض</button>`:''}
-      ${s.status==='approved'&&!linkedPoll?`<button class="btn sm gold" onclick="openPollModal('${esc(s.title).replace(/'/g,"\\'")}','${esc(s.text).replace(/'/g,"\\'")}','${s.id}')">🗳️ إنشاء استطلاع رأي على المقترح</button>`:''}
+      ${s.status==='pending'?`<button class="btn sm primary" onclick="approveSuggestion('${s.id}')">✅ موافقة</button><button class="btn sm ghost" onclick="rejectSuggestion('${s.id}')">رفض</button>`:''}
+      ${s.status==='approved'&&!linkedPoll?`<button class="btn sm gold" onclick="openPollModal('${esc(s.title).replace(/'/g,"\\'")}','${esc(s.text).replace(/'/g,"\\'")}','${s.id}')">🗳️ استطلاع رأي</button>`:''}
       <button class="btn sm red" onclick="confirmDelete('حذف هذا المقترح نهائيًا؟',()=>{D.suggestions=D.suggestions.filter(x=>x.id!=='${s.id}');save();toast('تم الحذف');renderContent();})">حذف</button>
     </div>`:''}
   </div>`;
@@ -10133,7 +10154,7 @@ function meetingCardHTML(m,u,isAdmin){
     ${m.agenda?`<p class="small mtop">${esc(m.agenda)}</p>`:''}
     ${m.outcomes?`<div class="card mtop" style="background:var(--tint-success)"><b class="small">✅ ما تم الاتفاق عليه:</b><p class="small mtop" style="white-space:pre-wrap">${esc(m.outcomes)}</p></div>`:''}
     ${isAdmin?`<div class="flexrow mtop">
-      ${m.status==='scheduled'?`<button class="btn sm" onclick="openMeetingModal('${m.id}')">تعديل</button><button class="btn sm primary" onclick="openMeetingOutcomeModal('${m.id}')">✅ تسجيل ما تم الاتفاق عليه</button><button class="btn sm ghost" onclick="cancelMeeting('${m.id}')">إلغاء الاجتماع</button>`:''}
+      ${m.status==='scheduled'?`<button class="btn sm" onclick="openMeetingModal('${m.id}')">تعديل</button><button class="btn sm primary" onclick="openMeetingOutcomeModal('${m.id}')">✅ تسجيل القرارات</button><button class="btn sm ghost" onclick="cancelMeeting('${m.id}')">إلغاء الاجتماع</button>`:''}
       <button class="btn sm red" onclick="confirmDelete('حذف هذا الاجتماع نهائيًا؟',()=>{D.meetings=D.meetings.filter(x=>x.id!=='${m.id}');save();toast('تم الحذف');renderContent();})">حذف</button>
     </div>`:''}
     <div class="section-title" style="margin:16px 0 6px"><h3 style="font-size:13px">التعليقات (${comments.length})</h3></div>
@@ -10643,8 +10664,8 @@ function openBackupModal(){
   openModal(`<h3>النسخ الاحتياطي</h3>
     <p class="small mtop">بيانات هذه العمارة محفوظة داخل متصفح هذا الجهاز فقط. يُنصح بأخذ نسخة احتياطية دوريًا.</p>
     <div class="flexrow mtop">
-      <button class="btn gold" onclick="exportBackup()">⬇️ تنزيل نسخة احتياطية (JSON)</button>
-      <button class="btn ghost" onclick="document.getElementById('importFile').click()">⬆️ استيراد نسخة احتياطية</button>
+      <button class="btn gold" onclick="exportBackup()">⬇️ تنزيل نسخة</button>
+      <button class="btn ghost" onclick="document.getElementById('importFile').click()">⬆️ استيراد نسخة</button>
       <input type="file" id="importFile" accept="application/json" class="hidden" onchange="importBackup(this.files[0])">
     </div>
     <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`);
@@ -11277,7 +11298,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.79';
+const APP_BUILD='1.80';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11409,25 +11430,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.79"></script>
-<script type="module" src="emartna-auth.js?v=1.79"></script>
-<script type="module" src="emartna-profile.js?v=1.79"></script>
-<script type="module" src="emartna-users.js?v=1.79"></script>
-<script type="module" src="emartna-platform.js?v=1.79"></script>
-<script type="module" src="emartna-contactlog.js?v=1.79"></script>
-<script type="module" src="emartna-permreport.js?v=1.79"></script>
-<script type="module" src="emartna-finops.js?v=1.79"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.79"></script>
-<script type="module" src="emartna-planscreens.js?v=1.79"></script>
+<script type="module" src="emartna-cloud.js?v=1.80"></script>
+<script type="module" src="emartna-auth.js?v=1.80"></script>
+<script type="module" src="emartna-profile.js?v=1.80"></script>
+<script type="module" src="emartna-users.js?v=1.80"></script>
+<script type="module" src="emartna-platform.js?v=1.80"></script>
+<script type="module" src="emartna-contactlog.js?v=1.80"></script>
+<script type="module" src="emartna-permreport.js?v=1.80"></script>
+<script type="module" src="emartna-finops.js?v=1.80"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.80"></script>
+<script type="module" src="emartna-planscreens.js?v=1.80"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=1.79"></script>
+<script type="module" src="emartna-perms.js?v=1.80"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=1.79"></script>
+<script type="module" src="emartna-bundle.js?v=1.80"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
