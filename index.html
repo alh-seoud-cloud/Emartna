@@ -2245,7 +2245,8 @@ function supportStaffShellHTML(staff){
   <div class="sidebar" id="sidebar">
     <div class="brand" style="cursor:pointer" onclick="goSupport('systickets')"><div class="mark">${appLogoSVG(38)}</div><div><h1>عمارتنا</h1><p>فريق الدعم الفني</p></div></div>
     ${pages.map(([page,ic,label])=>`<div class="nav-subitem ${curPage===page?'active':''}" data-page="${page}" onclick="goSupport('${page}')"><span class="ic">${ic}</span><span>${label}</span></div>`).join('')}
-    <div class="sidebar-foot"><b>${esc(staff.name)}</b>عضو فريق الدعم<button class="btn sm ghost" style="margin-top:10px;width:100%;color:var(--sidebar-text);border-color:var(--sidebar-muted)" onclick="logout()">🚪 خروج</button></div>
+    <div class="sidebar-foot">
+      <span class="install-btn-slot" style="display:block;margin-bottom:8px"></span><b>${esc(staff.name)}</b>عضو فريق الدعم<button class="btn sm ghost" style="margin-top:10px;width:100%;color:var(--sidebar-text);border-color:var(--sidebar-muted)" onclick="logout()">🚪 خروج</button></div>
   </div>
   <div class="sidebar-backdrop" onclick="closeSidebar()"></div>
   <div class="main">
@@ -2381,11 +2382,53 @@ function isStandaloneMode(){
 function isIOSDevice(){
   return /iPhone|iPad|iPod/.test(navigator.userAgent);
 }
+/* ⚠️ الزرار كان بيظهر بس لو المتصفح أطلق beforeinstallprompt —
+   والحدث ده مكانش بيتطلق أصلًا لأن الـmanifest كان Blob URL.
+   دلوقتي بيفضل ظاهر دايمًا: لو المتصفح جاهز بيثبّت بضغطة، وغير
+   كده بيوريه خطوات جهازه. */
 function installButtonHTML(){
   if(isStandaloneMode()||window.__appInstalled)return'';
-  if(window.__deferredInstallPrompt)return`<button class="btn ghost sm" onclick="triggerInstallPrompt()" title="تثبيت التطبيق على الشاشة الرئيسية">📲 تثبيت التطبيق</button>`;
-  if(isIOSDevice())return`<button class="btn ghost sm" onclick="showIOSInstallInstructions()" title="تثبيت التطبيق على الشاشة الرئيسية">📲 تثبيت التطبيق</button>`;
-  return'';
+  const fn = window.__deferredInstallPrompt ? 'triggerInstallPrompt()' : 'showInstallHelp()';
+  return `<button class="btn ghost sm" onclick="${fn}"
+    title="تثبيت البرنامج كتطبيق على جهازك">📲 ثبّت التطبيق</button>`;
+}
+
+/* إرشادات حسب الجهاز — لما المتصفح مايوفرش التثبيت بضغطة */
+function showInstallHelp(){
+  const ua = navigator.userAgent || '';
+  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  const android = /Android/i.test(ua);
+  const steps = ios ? [
+      'افتح الموقع في <b>Safari</b> (مش كروم).',
+      'دوس على زرار المشاركة <b>⬆️</b> تحت.',
+      'اختار <b>«إضافة إلى الشاشة الرئيسية»</b>.',
+      'دوس <b>«إضافة»</b> — هتلاقي الأيقونة مع تطبيقاتك.',
+    ] : android ? [
+      'افتح الموقع في <b>Chrome</b>.',
+      'دوس على <b>⋮</b> فوق على اليمين.',
+      'اختار <b>«تثبيت التطبيق»</b> أو «إضافة إلى الشاشة الرئيسية».',
+      'أكّد — هيفتح بملء الشاشة زي أي تطبيق.',
+    ] : [
+      'افتح الموقع في <b>Chrome</b> أو <b>Edge</b>.',
+      'هتلاقي أيقونة <b>التثبيت ⊕</b> في آخر شريط العنوان.',
+      'أو من <b>⋮</b> ← <b>«تثبيت عمارتنا»</b>.',
+      'هيتفتح في نافذة مستقلة زي أي برنامج على الجهاز.',
+    ];
+  openModal(`
+    <h3>📲 ثبّت عمارتنا على جهازك</h3>
+    <p class="small mtop">بيفتح بملء الشاشة من غير شريط عنوان، وبيشتغل أسرع
+      لأن ملفاته محفوظة على جهازك. <b>مش محتاج متجر ولا مساحة تُذكر.</b></p>
+    <div class="card mtop2" style="background:var(--tint)">
+      <b class="small">${ios?'📱 آيفون / آيباد':android?'🤖 أندرويد':'💻 ويندوز / ماك'}</b>
+      <ol style="margin:8px 0 0;padding-inline-start:18px;line-height:2">
+        ${steps.map(x=>`<li class="small">${x}</li>`).join('')}
+      </ol>
+    </div>
+    <p class="small mtop" style="color:var(--muted)">
+      بياناتك هي هي في الحالتين — التثبيت بيغيّر شكل الفتح بس.</p>
+    <div class="modal-actions">
+      <button class="btn primary" onclick="closeModal()">تمام</button>
+    </div>`);
 }
 function refreshInstallButtons(){
   document.querySelectorAll('.install-btn-slot').forEach(el=>{el.innerHTML=installButtonHTML();});
@@ -2605,6 +2648,7 @@ function loginHTML(){
     <div class="login-card">
       <div class="login-logo"><div class="mark">${appLogoSVG(92)}</div><h1>عمارتنا</h1><p>نظام إدارة اتحاد الملاك</p></div>
       <div style="text-align:center;margin-top:-8px"><a href="javascript:void(0)" onclick="goToLanding()" class="small">← الصفحة الرئيسية</a></div>
+      <div style="text-align:center;margin-top:6px" class="install-btn-slot"></div>
       <div class="login-error" id="loginErr"></div>
       <form id="loginForm" autocomplete="on">
       <div class="field"><label>رقم الموبايل أو الإيميل</label><input id="lgUser" name="username" autocomplete="username" inputmode="email" placeholder="مثال: 01012345678"></div>
@@ -3162,7 +3206,8 @@ function sysOwnerShellHTML(){
     <div class="sidebar" id="sidebar">
       <div class="brand" style="cursor:pointer" onclick="goSys('sysdash')"><div class="mark">${appLogoSVG(38)}</div><div><h1>عمارتنا</h1><p>مسؤول النظام</p></div></div>
       <div id="navContainer">${renderNavGroups(SYS_NAV_GROUPS,'goSys')}</div>
-      <div class="sidebar-foot"><b>مسؤول النظام</b>يدير كل العمارات<button class="btn sm ghost" style="margin-top:10px;width:100%;color:var(--sidebar-text);border-color:var(--sidebar-muted)" onclick="logout()">🚪 خروج</button></div>
+      <div class="sidebar-foot">
+      <span class="install-btn-slot" style="display:block;margin-bottom:8px"></span><b>مسؤول النظام</b>يدير كل العمارات<button class="btn sm ghost" style="margin-top:10px;width:100%;color:var(--sidebar-text);border-color:var(--sidebar-muted)" onclick="logout()">🚪 خروج</button></div>
     </div>
     <div class="main">
       <div class="top"><div class="flexrow"><button class="hamburger" id="hamBtn">☰</button><div class="tl" id="pageTitle">كل العمارات</div></div><div class="actions"><button class="btn ghost sm" onclick="openPageHelp()" title="مساعدة">❓</button><button class="btn ghost sm" onclick="openSysSmartSearch()">🔍 بحث ذكي</button>${modeToggleBtnHTML()}<div id="sysNotifBellWrap">${renderSysNotifBell()}</div><span class="small">${todayISO()}</span></div></div>
@@ -6710,6 +6755,7 @@ function shellHTML(u){
       <div id="navContainer">${renderNavGroups(groups)}</div>
       ${isSysOwnerAvailable()?`<div class="nav-sec"></div><button class="nav-btn" onclick="backToSysOwner()"><span class="ic">🏙️</span><span>كل العمارات</span></button>`:''}
       <div class="sidebar-foot">
+      <span class="install-btn-slot" style="display:block;margin-bottom:8px"></span>
         <b>${esc(u.name)}</b>${isAdmin?roleLabelAr(u.role):unitLabel(ap)}
         <button class="btn sm ghost" style="margin-top:10px;width:100%;color:var(--sidebar-text);border-color:var(--sidebar-muted)" onclick="logout()">🚪 تسجيل الخروج</button>
       </div>
@@ -10777,7 +10823,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.48';
+const APP_BUILD='1.49';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -10977,65 +11023,65 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.48"></script>
-<script type="module" src="emartna-auth.js?v=1.48"></script>
-<script type="module" src="emartna-profile.js?v=1.48"></script>
-<script type="module" src="emartna-users.js?v=1.48"></script>
-<script src="emartna-contacts.js?v=1.48"></script>
-<script type="module" src="emartna-platform.js?v=1.48"></script>
-<script type="module" src="emartna-contactlog.js?v=1.48"></script>
-<script type="module" src="emartna-permreport.js?v=1.48"></script>
-<script type="module" src="emartna-finops.js?v=1.48"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.48"></script>
-<script src="emartna-plansview.js?v=1.48"></script>
-<script src="emartna-uiprefs.js?v=1.48"></script>
-<script src="emartna-chatatt.js?v=1.48"></script>
-<script src="emartna-versionsxls.js?v=1.48"></script>
-<script type="module" src="emartna-planscreens.js?v=1.48"></script>
-<script type="module" src="emartna-recycle.js?v=1.48"></script>
-<script type="module" src="emartna-floors.js?v=1.48"></script>
-<script type="module" src="emartna-modal-size.js?v=1.48"></script>
-<script type="module" src="emartna-guard.js?v=1.48"></script>
-<script type="module" src="emartna-statement.js?v=1.48"></script>
-<script type="module" src="emartna-reports.js?v=1.48"></script>
-<script type="module" src="emartna-admin.js?v=1.48"></script>
-<script type="module" src="emartna-ui.js?v=1.48"></script>
-<script type="module" src="emartna-excel.js?v=1.48"></script>
-<script type="module" src="emartna-send.js?v=1.48"></script>
-<script type="module" src="emartna-pwa.js?v=1.48"></script>
-<script type="module" src="emartna-landing.js?v=1.48"></script>
-<script type="module" src="emartna-comm.js?v=1.48"></script>
-<script type="module" src="emartna-period.js?v=1.48"></script>
-<script type="module" src="emartna-fast.js?v=1.48"></script>
-<script type="module" src="emartna-ops.js?v=1.48"></script>
-<script type="module" src="emartna-onboarding.js?v=1.48"></script>
-<script type="module" src="emartna-bldcols.js?v=1.48"></script>
-<script type="module" src="emartna-reminder.js?v=1.48"></script>
-<script type="module" src="emartna-coupons.js?v=1.48"></script>
-<script type="module" src="emartna-videos.js?v=1.48"></script>
-<script type="module" src="emartna-colfit.js?v=1.48"></script>
-<script type="module" src="emartna-visits.js?v=1.48"></script>
-<script type="module" src="emartna-promo.js?v=1.48"></script>
-<script type="module" src="emartna-welcome.js?v=1.48"></script>
-<script src="emartna-idle.js?v=1.48"></script>
-<script type="module" src="emartna-offers.js?v=1.48"></script>
-<script type="module" src="emartna-dates.js?v=1.48"></script>
-<script type="module" src="emartna-paging.js?v=1.48"></script>
-<script type="module" src="emartna-leads.js?v=1.48"></script>
-<script type="module" src="emartna-live.js?v=1.48"></script>
-<script type="module" src="emartna-wa.js?v=1.48"></script>
-<script type="module" src="emartna-mobile.js?v=1.48"></script>
-<script type="module" src="emartna-numbering.js?v=1.48"></script>
-<script type="module" src="emartna-facade.js?v=1.48"></script>
-<script type="module" src="emartna-pricing.js?v=1.48"></script>
-<script type="module" src="emartna-newbld.js?v=1.48"></script>
-<script type="module" src="emartna-floorplan.js?v=1.48"></script>
-<script type="module" src="emartna-staff.js?v=1.48"></script>
-<script type="module" src="emartna-resaccess.js?v=1.48"></script>
-<script type="module" src="emartna-uitoggles.js?v=1.48"></script>
-<script type="module" src="emartna-cities.js?v=1.48"></script>
-<script type="module" src="emartna-perms.js?v=1.48"></script>
-<script type="module" src="emartna-lastlogin.js?v=1.48"></script>
+<script type="module" src="emartna-cloud.js?v=1.49"></script>
+<script type="module" src="emartna-auth.js?v=1.49"></script>
+<script type="module" src="emartna-profile.js?v=1.49"></script>
+<script type="module" src="emartna-users.js?v=1.49"></script>
+<script src="emartna-contacts.js?v=1.49"></script>
+<script type="module" src="emartna-platform.js?v=1.49"></script>
+<script type="module" src="emartna-contactlog.js?v=1.49"></script>
+<script type="module" src="emartna-permreport.js?v=1.49"></script>
+<script type="module" src="emartna-finops.js?v=1.49"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.49"></script>
+<script src="emartna-plansview.js?v=1.49"></script>
+<script src="emartna-uiprefs.js?v=1.49"></script>
+<script src="emartna-chatatt.js?v=1.49"></script>
+<script src="emartna-versionsxls.js?v=1.49"></script>
+<script type="module" src="emartna-planscreens.js?v=1.49"></script>
+<script type="module" src="emartna-recycle.js?v=1.49"></script>
+<script type="module" src="emartna-floors.js?v=1.49"></script>
+<script type="module" src="emartna-modal-size.js?v=1.49"></script>
+<script type="module" src="emartna-guard.js?v=1.49"></script>
+<script type="module" src="emartna-statement.js?v=1.49"></script>
+<script type="module" src="emartna-reports.js?v=1.49"></script>
+<script type="module" src="emartna-admin.js?v=1.49"></script>
+<script type="module" src="emartna-ui.js?v=1.49"></script>
+<script type="module" src="emartna-excel.js?v=1.49"></script>
+<script type="module" src="emartna-send.js?v=1.49"></script>
+<script type="module" src="emartna-pwa.js?v=1.49"></script>
+<script type="module" src="emartna-landing.js?v=1.49"></script>
+<script type="module" src="emartna-comm.js?v=1.49"></script>
+<script type="module" src="emartna-period.js?v=1.49"></script>
+<script type="module" src="emartna-fast.js?v=1.49"></script>
+<script type="module" src="emartna-ops.js?v=1.49"></script>
+<script type="module" src="emartna-onboarding.js?v=1.49"></script>
+<script type="module" src="emartna-bldcols.js?v=1.49"></script>
+<script type="module" src="emartna-reminder.js?v=1.49"></script>
+<script type="module" src="emartna-coupons.js?v=1.49"></script>
+<script type="module" src="emartna-videos.js?v=1.49"></script>
+<script type="module" src="emartna-colfit.js?v=1.49"></script>
+<script type="module" src="emartna-visits.js?v=1.49"></script>
+<script type="module" src="emartna-promo.js?v=1.49"></script>
+<script type="module" src="emartna-welcome.js?v=1.49"></script>
+<script src="emartna-idle.js?v=1.49"></script>
+<script type="module" src="emartna-offers.js?v=1.49"></script>
+<script type="module" src="emartna-dates.js?v=1.49"></script>
+<script type="module" src="emartna-paging.js?v=1.49"></script>
+<script type="module" src="emartna-leads.js?v=1.49"></script>
+<script type="module" src="emartna-live.js?v=1.49"></script>
+<script type="module" src="emartna-wa.js?v=1.49"></script>
+<script type="module" src="emartna-mobile.js?v=1.49"></script>
+<script type="module" src="emartna-numbering.js?v=1.49"></script>
+<script type="module" src="emartna-facade.js?v=1.49"></script>
+<script type="module" src="emartna-pricing.js?v=1.49"></script>
+<script type="module" src="emartna-newbld.js?v=1.49"></script>
+<script type="module" src="emartna-floorplan.js?v=1.49"></script>
+<script type="module" src="emartna-staff.js?v=1.49"></script>
+<script type="module" src="emartna-resaccess.js?v=1.49"></script>
+<script type="module" src="emartna-uitoggles.js?v=1.49"></script>
+<script type="module" src="emartna-cities.js?v=1.49"></script>
+<script type="module" src="emartna-perms.js?v=1.49"></script>
+<script type="module" src="emartna-lastlogin.js?v=1.49"></script>
 
 
 
