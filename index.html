@@ -1593,6 +1593,7 @@ function pushNotification(o){
   if(D.notifications.length>300)D.notifications=D.notifications.slice(-300);
   saveActive();
   showDeviceNotificationIfRelevant(n);
+  if(window.bumpAppBadge) bumpAppBadge();
 }
 function deviceNotificationsSupported(){return typeof Notification!=='undefined'}
 function deviceNotificationsEnabled(){return deviceNotificationsSupported()&&Notification.permission==='granted'}
@@ -1655,20 +1656,33 @@ function notificationRelevant(n,u){
 /* شارة العدد على أيقونة التطبيق المثبّت (أندرويد وويندوز وماك).
    بتشتغل لما البرنامج متثبّت كتطبيق — وبيتجاهلها المتصفح العادي
    من غير خطأ. بنضيف عدد رسايل الشات غير المقروءة كمان. */
+/* ⚠️ كان بينادي chatUnreadCount وهي مش موجودة — الاسم الصح
+   unreadChatCount(u). فرسايل الشات ماكانتش بتتحسب في الشارة. */
+window.appBadgeCount = function(){
+  try{
+    const u = window.currentUser && currentUser();
+    if (!u) return 0;
+    let n = 0;
+    try{ n += unreadNotifications(u).length; }catch(e){}
+    try{ n += (window.unreadChatCount ? unreadChatCount(u) : 0); }catch(e){}
+    return n;
+  }catch(e){ return 0; }
+};
+
 window.refreshAppBadge = function(){
   try{
     if (!navigator.setAppBadge) return;
-    const u = window.currentUser && currentUser();
-    if (!u){ navigator.clearAppBadge && navigator.clearAppBadge(); return; }
-    let n = 0;
-    try{ n += unreadNotifications(u).length; }catch(e){}
-    try{ n += (window.chatUnreadCount ? chatUnreadCount() : 0); }catch(e){}
+    const n = appBadgeCount();
+    /* صفر = نشيل الشارة خالص، مش نعرض صفر */
     if (n > 0) navigator.setAppBadge(n);
     else if (navigator.clearAppBadge) navigator.clearAppBadge();
   }catch(e){}
 };
-/* بيتحدّث مع كل رسم وكل تغيير في الإشعارات */
-setInterval(() => { try{ refreshAppBadge(); }catch(e){} }, 20000);
+/* تحديث سريع بعد أي تغيير في القراءة — من غير ما ننتظر الدورة */
+window.bumpAppBadge = function(){
+  setTimeout(() => { try{ refreshAppBadge(); }catch(e){} }, 120);
+};
+setInterval(() => { try{ refreshAppBadge(); }catch(e){} }, 15000);
 document.addEventListener('emartna:building-complete',
   () => setTimeout(() => { try{ refreshAppBadge(); }catch(e){} }, 1500));
 
@@ -1735,6 +1749,7 @@ function markAllNotifsRead(){
   const u=currentUser();
   myNotifications(u).forEach(n=>{n.readBy=n.readBy||[];if(!n.readBy.includes(u.username))n.readBy.push(u.username);});
   save(); toggleNotifPanel(); renderContent();
+  if(window.bumpAppBadge) bumpAppBadge();
 }
 function saveActive(){if(activeBuildingId)saveBuildingData(activeBuildingId,D)}
 function save(){saveActive()}
@@ -8164,6 +8179,7 @@ function pageBuildingChat(u){
       مختلفة عن المحادثة العامة اللي تحت</span></div>` : '';
   /* بعد ما الشاشة تترسم فعلًا — النداء جوه الرسم كان بيعمل حلقة */
   setTimeout(()=>markChatRead(), 700);
+  if(window.bumpAppBadge) bumpAppBadge();
   /* المحادثة تفتح على آخر رسالة زي أي تطبيق محادثة — كانت بتفتح
      من فوق فالمستخدم يقعد ينزّل كل مرة. */
   setTimeout(()=>{ const f=document.getElementById('chatFeed');
@@ -11310,7 +11326,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.85';
+const APP_BUILD='1.86';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11442,25 +11458,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.85"></script>
-<script type="module" src="emartna-auth.js?v=1.85"></script>
-<script type="module" src="emartna-profile.js?v=1.85"></script>
-<script type="module" src="emartna-users.js?v=1.85"></script>
-<script type="module" src="emartna-platform.js?v=1.85"></script>
-<script type="module" src="emartna-contactlog.js?v=1.85"></script>
-<script type="module" src="emartna-permreport.js?v=1.85"></script>
-<script type="module" src="emartna-finops.js?v=1.85"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.85"></script>
-<script type="module" src="emartna-planscreens.js?v=1.85"></script>
+<script type="module" src="emartna-cloud.js?v=1.86"></script>
+<script type="module" src="emartna-auth.js?v=1.86"></script>
+<script type="module" src="emartna-profile.js?v=1.86"></script>
+<script type="module" src="emartna-users.js?v=1.86"></script>
+<script type="module" src="emartna-platform.js?v=1.86"></script>
+<script type="module" src="emartna-contactlog.js?v=1.86"></script>
+<script type="module" src="emartna-permreport.js?v=1.86"></script>
+<script type="module" src="emartna-finops.js?v=1.86"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.86"></script>
+<script type="module" src="emartna-planscreens.js?v=1.86"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=1.85"></script>
+<script type="module" src="emartna-perms.js?v=1.86"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=1.85"></script>
+<script type="module" src="emartna-bundle.js?v=1.86"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
