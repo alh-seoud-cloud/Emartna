@@ -303,3 +303,161 @@
 
   console.log('[عمارتنا] واجهة العمارة جاهزة');
 })();
+
+
+/* ============================================================
+   تكبير وتصغير الواجهة + مظاهر
+   ------------------------------------------------------------
+   عمارة ٩٦ وحدة على ١٢ دور مابتدخلش في شاشة موبايل. التكبير
+   بيخلّي رئيس الاتحاد يشوف الصورة كاملة ويعرف الأحمر متجمّع فين —
+   وده الهدف الأساسي من الواجهة.
+
+   المظاهر بـCSS خالص من غير مكتبة 3D: مكتبة التلات أبعاد تزوّد
+   ١٥٠ ك.ب، وبتخلّي الأرقام العربية مايلة وصعبة القراءة، وأهداف
+   اللمس أصغر. الإحساس المجسّم بالظل بيدّي نفس الانطباع بتكلفة صفر.
+   ============================================================ */
+(function(){
+  'use strict';
+  const Z_KEY='emartna_facade_zoom', TH_KEY='emartna_facade_theme';
+  const MIN=0.45, MAX=1.6, STEP=0.12;
+  const THEMES=[
+    {key:'flat',label:'بسيط',icon:'▫️'},
+    {key:'depth',label:'مجسّم',icon:'🧱'},
+    {key:'night',label:'ليلي',icon:'🌙'},
+    {key:'blueprint',label:'مخطط',icon:'📐'},
+  ];
+  const zoom=()=>{const v=parseFloat(localStorage.getItem(Z_KEY));
+    return (v>=MIN&&v<=MAX)?v:1;};
+  const theme=()=>{try{return localStorage.getItem(TH_KEY)||'flat';}catch(e){return 'flat';}};
+
+  function styles(){
+    if(document.getElementById('facadeZoomStyles'))return;
+    const st=document.createElement('style');
+    st.id='facadeZoomStyles';
+    st.textContent=`
+      .bld-zoomer{overflow:auto;-webkit-overflow-scrolling:touch;border-radius:12px}
+      .bld-zoomer .bld-wrap{transform-origin:top center;transition:transform .18s ease}
+      .fz-bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+      .fz-btn{width:32px;height:32px;border:1px solid var(--line);border-radius:9px;
+        background:var(--card);color:var(--text);font-size:16px;font-weight:700;
+        cursor:pointer;line-height:1;display:flex;align-items:center;
+        justify-content:center;flex:0 0 auto}
+      .fz-btn:disabled{opacity:.35;cursor:default}
+      .fz-val{font-size:11.5px;color:var(--muted);min-width:42px;text-align:center}
+
+      .bld-wrap.th-depth .bld-unit{box-shadow:inset 0 -2px 0 rgba(0,0,0,.18),
+        0 1px 2px rgba(0,0,0,.12);border-radius:3px}
+      .bld-wrap.th-depth .bld-floor{background:linear-gradient(180deg,rgba(0,0,0,.035),transparent)}
+      .bld-wrap.th-depth .bld-roof{box-shadow:0 3px 6px rgba(0,0,0,.2)}
+
+      .bld-wrap.th-night{background:#16202b;border-radius:12px;padding:10px}
+      .bld-wrap.th-night .bld-floor{background:transparent}
+      .bld-wrap.th-night .bld-floor-label{color:#8fa3b8}
+      .bld-wrap.th-night .bld-unit{border:0;box-shadow:0 0 8px currentColor}
+      .bld-wrap.th-night .bld-roof{background:#0e1620}
+
+      .bld-wrap.th-blueprint{background:#0d2b45;border-radius:12px;padding:10px;
+        background-image:linear-gradient(rgba(255,255,255,.06) 1px,transparent 1px),
+          linear-gradient(90deg,rgba(255,255,255,.06) 1px,transparent 1px);
+        background-size:16px 16px}
+      .bld-wrap.th-blueprint .bld-floor{background:transparent}
+      .bld-wrap.th-blueprint .bld-floor-label{color:#a9cbe6}
+      .bld-wrap.th-blueprint .bld-unit{background:transparent !important;
+        border:1.5px solid currentColor;border-radius:2px}
+      .bld-wrap.th-blueprint .bld-roof{background:#a9cbe6;opacity:.7}
+      @media (max-width:640px){.fz-val{display:none}}`;
+    document.head.appendChild(st);
+  }
+
+  function apply(){
+    document.querySelectorAll('.bld-wrap').forEach(w=>{
+      w.style.transform='scale('+zoom()+')';
+      THEMES.forEach(t=>w.classList.remove('th-'+t.key));
+      w.classList.add('th-'+theme());
+      const box=w.closest('.bld-zoomer');
+      if(box){
+        /* الارتفاع يتظبط مع التصغير وإلا بيفضل فراغ تحت */
+        const h=w.scrollHeight*zoom();
+        box.style.height=Math.min(h+14, window.innerHeight*0.62)+'px';
+      }
+    });
+    const v=document.getElementById('fzVal');
+    if(v)v.textContent=Math.round(zoom()*100)+'%';
+    document.querySelectorAll('[data-fz-out]').forEach(b=>b.disabled=zoom()<=MIN+0.001);
+    document.querySelectorAll('[data-fz-in]').forEach(b=>b.disabled=zoom()>=MAX-0.001);
+  }
+
+  window.facadeZoom=function(d){
+    const v=Math.max(MIN,Math.min(MAX,zoom()+d*STEP));
+    try{localStorage.setItem(Z_KEY,String(v));}catch(e){} apply();
+  };
+  window.facadeFit=function(){
+    const w=document.querySelector('.bld-wrap'); if(!w)return;
+    const need=w.scrollHeight||1, have=window.innerHeight*0.58;
+    const v=Math.max(MIN,Math.min(MAX,have/need));
+    try{localStorage.setItem(Z_KEY,String(v));}catch(e){} apply();
+    if(window.toast)toast('العمارة كلها في الشاشة');
+  };
+  window.setFacadeTheme=function(k){
+    try{localStorage.setItem(TH_KEY,k);}catch(e){} apply();
+    if(window.toast)toast('المظهر: '+(THEMES.find(t=>t.key===k)||{}).label);
+  };
+
+  function barHTML(){
+    const t=theme();
+    return `<div class="fz-bar">
+      <button class="fz-btn" data-fz-out onclick="facadeZoom(-1)" title="تصغير">−</button>
+      <span class="fz-val" id="fzVal">${Math.round(zoom()*100)}%</span>
+      <button class="fz-btn" data-fz-in onclick="facadeZoom(1)" title="تكبير">+</button>
+      <button class="btn sm ghost" onclick="facadeFit()" title="العمارة كلها في الشاشة">⤢ ملء</button>
+      <div class="spacer"></div>
+      ${THEMES.map(x=>`<button class="btn sm ${t===x.key?'':'ghost'}"
+        style="padding:4px 9px" onclick="setFacadeTheme('${x.key}')"
+        title="${x.label}">${x.icon}</button>`).join('')}
+    </div>`;
+  }
+
+  /* القرص بإصبعين — مع منع تكبير الصفحة كلها */
+  function pinch(box){
+    if(box.__pinch)return; box.__pinch=true;
+    let d0=0,z0=1;
+    const dist=e=>Math.hypot(e.touches[0].clientX-e.touches[1].clientX,
+                             e.touches[0].clientY-e.touches[1].clientY);
+    box.addEventListener('touchstart',e=>{
+      if(e.touches.length!==2)return; d0=dist(e); z0=zoom();},{passive:true});
+    box.addEventListener('touchmove',e=>{
+      if(e.touches.length!==2||!d0)return;
+      e.preventDefault();
+      const v=Math.max(MIN,Math.min(MAX,z0*(dist(e)/d0)));
+      try{localStorage.setItem(Z_KEY,String(v));}catch(x){} apply();},{passive:false});
+    box.addEventListener('touchend',()=>{d0=0;},{passive:true});
+  }
+
+  /* بنغلّف بعد وحدة الواجهة — فبنستنّاها تخلّص لفّها الأول */
+  let n=0;
+  const wait=setInterval(()=>{
+    if(++n>80)return clearInterval(wait);
+    const f=window.buildingIllustration;
+    if(typeof f!=='function'||!f.__facade)return;
+    if(f.__zoom)return clearInterval(wait);
+    clearInterval(wait);
+    const wrapped=function(){
+      const html=f.apply(this,arguments);
+      if(typeof html!=='string')return html;
+      if(html.indexOf('bld-zoomer')>=0)return html;
+      return barHTML()+'<div class="bld-zoomer">'+html+'</div>';
+    };
+    wrapped.__zoom=true; wrapped.__facade=true;
+    window.buildingIllustration=wrapped;
+  },200);
+
+  styles();
+  setInterval(()=>{
+    const box=document.querySelector('.bld-zoomer'); if(!box)return;
+    pinch(box);
+    const w=box.querySelector('.bld-wrap');
+    if(w&&!w.style.transform)apply();
+  },700);
+  document.addEventListener('emartna:building-complete',()=>setTimeout(apply,700));
+  console.log('[عمارتنا] تكبير الواجهة جاهز');
+})();
