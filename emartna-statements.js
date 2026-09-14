@@ -4,6 +4,11 @@
    رئيس الاتحاد بيرفع كشف كل شهر ومعاه فواتيره، والسكان يفتحوه
    ويتطمّنوا. الملفات على السيرفر مش على الجهاز.
 
+   ⚠️ أسماء الدوال هنا بتبدأ بـExpStmt: فيه emartna-statement.js
+   (كشف حساب الوحدة) بيعرّف openStatement — والاسمين كانوا بيتصادموا
+   فالضغط على "عرض الكشف" كان بينادي الدالة التانية ويطلّع
+   "تعذّر فتح كشف الحساب".
+
    الصلاحيات بتتفحص في الخادم: إخفاء الأزرار مش حماية — أي محاولة
    إضافة أو حذف من غير صلاحية بتترفض على مستوى الصف.
    ============================================================ */
@@ -74,7 +79,7 @@
           <h3>📑 كشوف المصروفات الشهرية</h3>
           <p class="small mtop">كشف كل شهر ومعاه الفواتير والإيصالات.</p>
         </div>
-        ${can('add') ? `<button class="btn primary" onclick="openStatementModal()">
+        ${can('add') ? `<button class="btn primary" onclick="openExpStmtModal()">
           + كشف جديد</button>` : ''}
       </div>
       ${(can('add') && window.D && D.building && D.building.residentsSeeStatements === false)
@@ -87,7 +92,7 @@
     ${!LIST.length ? `<div class="card content-narrow mtop2" style="text-align:center;padding:30px">
       <div style="font-size:34px">📭</div>
       <p class="mtop">لسه مفيش كشوف مرفوعة.</p>
-      ${can('add') ? `<button class="btn primary mtop" onclick="openStatementModal()">
+      ${can('add') ? `<button class="btn primary mtop" onclick="openExpStmtModal()">
         ارفع أول كشف</button>` : ''}
     </div>` :
     years.map(y => `
@@ -105,12 +110,12 @@
             </div>
             <div class="flexrow" style="gap:6px">
               ${can('edit') ? `<button class="btn sm ${st.published?'ghost':'gold'}"
-                onclick="toggleStatementPublish('${esc2(st.id)}')"
+                onclick="toggleExpStmtPublish('${esc2(st.id)}')"
                 title="${st.published?'منشور للسكان — اضغط للإخفاء':'مخفي — اضغط للنشر'}">
                 ${st.published?'👁️ منشور':'🔒 مخفي'}</button>` : ''}
-              <button class="btn sm" onclick="openStatement('${esc2(st.id)}')">عرض الكشف</button>
+              <button class="btn sm" onclick="openExpStmt('${esc2(st.id)}')">عرض الكشف</button>
               ${can('delete') ? `<button class="btn sm red"
-                onclick="deleteStatement('${esc2(st.id)}')">🗑</button>` : ''}
+                onclick="deleteExpStmt('${esc2(st.id)}')">🗑</button>` : ''}
             </div>
           </div>`;
         }).join('')}
@@ -119,7 +124,7 @@
 
   /* ---------- عرض كشف ---------- */
 
-  window.openStatement = function(id){
+  window.openExpStmt = function(id){
     const st = (LIST||[]).find(x => x.id === id);
     if (!st) return;
     OPEN = st;
@@ -130,7 +135,7 @@
 
     const row = f => `<div class="flexrow mtop" style="gap:9px;align-items:center;
       padding:8px;border:1px solid var(--line);border-radius:9px;cursor:pointer"
-      onclick="openStatementFile('${esc2(f.path)}','${esc2(f.mime||'')}','${esc2(f.name)}')">
+      onclick="openExpStmtFile('${esc2(f.path)}','${esc2(f.mime||'')}','${esc2(f.name)}')">
       <span style="font-size:19px">${icon(f)}</span>
       <span style="flex:1;min-width:0">
         <span style="display:block;white-space:nowrap;overflow:hidden;
@@ -153,13 +158,13 @@
 
       <div class="modal-actions">
         ${can('edit') ? `<button class="btn ghost"
-          onclick="openStatementModal('${esc2(st.id)}')">✏️ تعديل</button>` : ''}
+          onclick="openExpStmtModal('${esc2(st.id)}')">✏️ تعديل</button>` : ''}
         <button class="btn primary" onclick="closeModal()">إغلاق</button>
       </div>`, true);
   };
 
   /* عرض الملف داخل البرنامج لو نوعه بيسمح */
-  window.openStatementFile = async function(path, mime, name){
+  window.openExpStmtFile = async function(path, mime, name){
     const s = sb(); if (!s) return;
     let url = null;
     try{
@@ -188,7 +193,7 @@
           : `<iframe src="${url}" style="width:100%;height:72vh;border:0"></iframe>`}
       </div>
       <div class="modal-actions">
-        <button class="btn primary" onclick="openStatement('${esc2(OPEN?OPEN.id:'')}')">رجوع</button>
+        <button class="btn primary" onclick="openExpStmt('${esc2(OPEN?OPEN.id:'')}')">رجوع</button>
       </div>`, true);
   };
 
@@ -196,7 +201,7 @@
 
   window.__stmtFiles = [];
 
-  window.openStatementModal = function(id){
+  window.openExpStmtModal = function(id){
     const st = id ? (LIST||[]).find(x => x.id === id) : null;
     const now = new Date();
     window.__stmtFiles = [];
@@ -234,7 +239,7 @@
 
       <div id="stProgress" class="small mtop" style="color:var(--muted)"></div>
       <div class="modal-actions">
-        <button class="btn primary" onclick="saveStatement(${st?`'${esc2(st.id)}'`:'null'})">
+        <button class="btn primary" onclick="saveExpStmt(${st?`'${esc2(st.id)}'`:'null'})">
           💾 حفظ</button>
         <button class="btn ghost" onclick="closeModal()">إلغاء</button>
       </div>`, true);
@@ -252,7 +257,7 @@
     return { path, name:file.name, mime:file.type, size:file.size, is_main:!!isMain };
   }
 
-  window.saveStatement = async function(id){
+  window.saveExpStmt = async function(id){
     const s = sb(), b = bUuid();
     if (!s || !b) return showMessage('مش متصل بالسحابة.');
     const title = (document.getElementById('stTitle').value || '').trim();
@@ -308,7 +313,7 @@
   };
 
   /* النشر: الكشف ممكن يتجهّز ويتراجع قبل ما السكان يشوفوه */
-  window.toggleStatementPublish = async function(id){
+  window.toggleExpStmtPublish = async function(id){
     const st = (LIST||[]).find(x => x.id === id); if (!st) return;
     try{
       const { error } = await sb().from('expense_statements')
@@ -320,7 +325,7 @@
     }catch(e){ showMessage(e.message || 'تعذّر التغيير'); }
   };
 
-  window.deleteStatement = function(id){
+  window.deleteExpStmt = function(id){
     const st = (LIST||[]).find(x => x.id === id); if (!st) return;
     confirmAction(`حذف «${st.title}»؟\n\nالملفات المرفوعة هتتشال معاه.`, async () => {
       try{
