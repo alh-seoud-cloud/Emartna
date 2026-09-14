@@ -2836,7 +2836,12 @@
           lastActivity: r.last_activity, setupPct: r.setup_pct,
         };
       });
-      if (hit && window.renderSysContent) renderSysContent();
+      /* إعادة رسم واحدة بعد ما البيانات توصل — مع علامة تمنع
+         الجلب من يشتغل تاني من الرسم ده. */
+      if (hit && window.renderSysContent){
+        statsFetchedAt = Date.now();
+        setTimeout(() => { try{ renderSysContent(); }catch(e){} }, 0);
+      }
     }catch(e){
       console.warn('[عمارتنا] تعذّر جلب ملخّص العمارات', e.message);
     } finally {
@@ -2860,11 +2865,21 @@
     }, 300);
   });
 
-  /* لوحة المنصة: حمّل الناقص في الخلفية أول ما تتفتح */
+  /* ⚠️ كان: كل رسم بينادي الجلب، والجلب بيعيد الرسم = حلقة.
+     ظهرت في Network كـ٩ نداءات متطابقة لـbuildings_overview في
+     أقل من ثانية، كل واحد ~٢٩٠ مللي.
+     دلوقتي: الملخّص بيتجاب مرة واحدة لكل جلسة، وبيتحدّث بعد
+     ٩٠ ثانية بس لو الشاشة لسه مفتوحة. */
+  let statsFetchedAt = 0;
+  const STATS_TTL = 90000;
+
   const origSysContent = window.renderSysContent;
   if (origSysContent) window.renderSysContent = function(){
     const out = origSysContent.apply(this, arguments);
-    setTimeout(loadMissingBuildings, 0);
+    if (Date.now() - statsFetchedAt > STATS_TTL){
+      statsFetchedAt = Date.now();
+      setTimeout(loadMissingBuildings, 0);
+    }
     return out;
   };
 
