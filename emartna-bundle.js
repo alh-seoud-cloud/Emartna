@@ -9993,6 +9993,7 @@
       /* فحص مزدوج: الأصلية ممكن تكون اتغلّفت من وحدة تانية بعدنا
          فالناتج يمرّ علينا مرتين. */
       if (html.indexOf('data-mob-toggle') >= 0) return html;
+      if (html.indexOf('m-toggle') >= 0) return html;
       if (html.indexOf('toggleMobileCards()') >= 0) return html;
       const btn = `<button class="btn sm ghost" data-mob-toggle
         onclick="toggleMobileCards()" title="تبديل بين الكروت والجدول">${
@@ -10105,7 +10106,12 @@
       return;
     }
     document.querySelectorAll('.table-toolbar').forEach(tb => {
+      /* ⚠️ فيه آليتان بتضيفوا نفس الزرار: تغليف دالة الرسم
+         (data-mob-toggle) والحقن المباشر (m-toggle). كل واحدة كانت
+         بتفحص علامتها هي بس، فالزرار كان بيتكرر.
+         دلوقتي بنفحص الاتنين. */
       if (tb.querySelector('.m-toggle')) return;
+      if (tb.querySelector('[data-mob-toggle]')) return;
       const b = document.createElement('button');
       b.className = 'btn sm ghost m-toggle';
       b.textContent = cardsOn() ? '📋 جدول' : '🔲 كروت';
