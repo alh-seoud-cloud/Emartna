@@ -7992,25 +7992,67 @@ function guardActionSilent(page,action){
    الإشراف — مش إخفاء في الواجهة. */
 /* خيارات الرسالة: الساكن يشوف "حذف" على رسالته هو بس.
    إخفاء الزرار مش حماية — الخادم بيرفض أي محاولة على رسالة غيره. */
+/* ⚠️ كان: canAny = !isMine — يعني رئيس الاتحاد مايقدرش يحذف
+   رسالته هو كإدارة، ولو صلاحية delete_own مش متاحة له بيترفض
+   تمامًا برسالة "مش بتاعتك".
+   الصح: صاحب صلاحية الإشراف يحذف أي رسالة — بما فيها رسالته. */
 function chatMsgMenu(m,isMine){
-  const canOwn = isMine && guardActionSilent('chat','delete_own');
-  const canAny = !isMine && guardActionSilent('chat','delete_any');
+  const mod      = guardActionSilent('chat','delete_any');
+  const canOwn   = isMine && (guardActionSilent('chat','delete_own') || mod);
+  const canAny   = mod;
   const canReply = guardActionSilent('chat','send');
   if(!canOwn && !canAny && !canReply) return '';
+
   const items=[];
-  if(canReply) items.push(`<button class="btn sm ghost" onclick="replyToChat('${esc(m.id)}')">↩️ رد</button>`);
-  if(canOwn)   items.push(`<button class="btn sm ghost" onclick="deleteMyChatMessage('${esc(m.id)}')">🗑 حذف رسالتي</button>`);
-  if(canAny)   items.push(`<button class="btn sm ghost" onclick="showMsgInfo('${esc(m.id)}')">ℹ️ مين قراها</button>`);
-  if(canAny)   items.push(`<button class="btn sm red"   onclick="deleteChatMessage('${esc(m.id)}')">🚫 حذف (إدارة)</button>`);
-  return `<span style="position:relative">
-    <span style="cursor:pointer;opacity:.55;font-size:15px;padding:0 4px"
-      onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='flex'?'none':'flex'">⋮</span>
-    <span style="display:none;position:absolute;inset-inline-end:0;top:20px;z-index:5;
-      background:var(--card);border:1px solid var(--line);border-radius:10px;padding:5px;
-      flex-direction:column;gap:4px;box-shadow:0 6px 18px rgba(0,0,0,.14);min-width:140px">
-      ${items.join('')}
-    </span></span>`;
+  if(canReply) items.push({ic:'↩️',lbl:'رد',fn:`replyToChat('${esc(m.id)}')`});
+  if(canOwn)   items.push({ic:'🗑',lbl:'حذف رسالتي',fn:`deleteMyChatMessage('${esc(m.id)}')`});
+  if(canAny)   items.push({ic:'ℹ️',lbl:'مين قراها',fn:`showMsgInfo('${esc(m.id)}')`});
+  /* الإدارة تحذف أي رسالة — ولو رسالتها، "حذف رسالتي" أوضح */
+  if(canAny && !isMine)
+    items.push({ic:'🚫',lbl:'حذف (إدارة)',fn:`deleteChatMessage('${esc(m.id)}')`,danger:true});
+
+  window.__chatMenus = window.__chatMenus || {};
+  const mid='cm_'+String(m.id).replace(/[^\w]/g,'');
+  window.__chatMenus[mid]=items;
+
+  return `<span style="cursor:pointer;opacity:.55;font-size:16px;padding:2px 5px"
+    onclick="openChatMsgMenu(event,'${mid}')">⋮</span>`;
 }
+
+/* ⚠️ القائمة كانت position:absolute جوه فقاعة الرسالة — فبتتقص
+   ونصها يختفي. دلوقتي بتتثبّت على مستوى الصفحة بموضع محسوب. */
+window.openChatMsgMenu = function(evt, mid){
+  evt.stopPropagation();
+  const old=document.getElementById('chatMsgMenu'); if(old)old.remove();
+  const items=(window.__chatMenus||{})[mid]||[];
+  if(!items.length) return;
+
+  const r=evt.currentTarget.getBoundingClientRect();
+  const el=document.createElement('div');
+  el.id='chatMsgMenu';
+  const W=Math.min(200, window.innerWidth-16);
+  let left=Math.min(Math.max(8, r.right-W), window.innerWidth-W-8);
+  el.style.cssText=`position:fixed;top:${r.bottom+6}px;left:${left}px;width:${W}px;
+    background:var(--card);border:1px solid var(--line);border-radius:11px;
+    padding:5px;z-index:900;display:flex;flex-direction:column;gap:2px;
+    box-shadow:0 8px 24px rgba(0,0,0,.18)`;
+  el.innerHTML=items.map(it=>`<button class="btn ghost"
+    style="width:100%;justify-content:flex-start;gap:9px;padding:9px 11px;
+      ${it.danger?'color:var(--red)':''}"
+    onclick="closeChatMsgMenu();${it.fn}">
+    <span style="font-size:15px">${it.ic}</span><span>${it.lbl}</span></button>`).join('');
+  document.body.appendChild(el);
+
+  /* لو مفيش مكان تحت، نفتحها فوق */
+  const h=el.offsetHeight;
+  if(r.bottom+6+h > window.innerHeight-8)
+    el.style.top = Math.max(8, r.top-h-6)+'px';
+
+  setTimeout(()=>document.addEventListener('click',closeChatMsgMenu,{once:true}),0);
+};
+window.closeChatMsgMenu=function(){
+  const m=document.getElementById('chatMsgMenu'); if(m)m.remove();
+};
 
 /* الرد: بنحتفظ بالرسالة الأصلية ونعرضها فوق خانة الكتابة */
 window.__replyTo = null;
@@ -8030,11 +8072,15 @@ window.cancelReply = function(){ window.__replyTo=null; renderContent(); };
 window.showMsgInfo = async function(localId){
   const m=(D.buildingChat||[]).find(x=>x.id===localId);
   if(!m) return;
-  if(!m.__uuid) return showMessage('الرسالة لسه بتتزامن — جرّب بعد ثانية.');
   openModal('<h3>⏳ بنجيب التفاصيل...</h3>');
   let rows=[];
   try{
-    const { data, error } = await CLOUD._sb.rpc('message_read_info',{ p_msg:m.__uuid });
+    /* بديل بالمعرّف المحلي لو الرسالة اترفعت لسه ومالهاش uuid */
+    const bU=CLOUD._cache.buildingUuid[activeBuildingId];
+    const { data, error } = m.__uuid
+      ? await CLOUD._sb.rpc('message_read_info',{ p_msg:m.__uuid })
+      : await CLOUD._sb.rpc('message_read_info_by_legacy',
+          { p_building:bU, p_legacy:String(m.id) });
     if(error) throw error;
     rows = data||[];
   }catch(e){ return showMessage(e.message||'تعذّر جلب التفاصيل'); }
@@ -11326,7 +11372,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.86';
+const APP_BUILD='1.87';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11458,25 +11504,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.86"></script>
-<script type="module" src="emartna-auth.js?v=1.86"></script>
-<script type="module" src="emartna-profile.js?v=1.86"></script>
-<script type="module" src="emartna-users.js?v=1.86"></script>
-<script type="module" src="emartna-platform.js?v=1.86"></script>
-<script type="module" src="emartna-contactlog.js?v=1.86"></script>
-<script type="module" src="emartna-permreport.js?v=1.86"></script>
-<script type="module" src="emartna-finops.js?v=1.86"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.86"></script>
-<script type="module" src="emartna-planscreens.js?v=1.86"></script>
+<script type="module" src="emartna-cloud.js?v=1.87"></script>
+<script type="module" src="emartna-auth.js?v=1.87"></script>
+<script type="module" src="emartna-profile.js?v=1.87"></script>
+<script type="module" src="emartna-users.js?v=1.87"></script>
+<script type="module" src="emartna-platform.js?v=1.87"></script>
+<script type="module" src="emartna-contactlog.js?v=1.87"></script>
+<script type="module" src="emartna-permreport.js?v=1.87"></script>
+<script type="module" src="emartna-finops.js?v=1.87"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.87"></script>
+<script type="module" src="emartna-planscreens.js?v=1.87"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=1.86"></script>
+<script type="module" src="emartna-perms.js?v=1.87"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=1.86"></script>
+<script type="module" src="emartna-bundle.js?v=1.87"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
