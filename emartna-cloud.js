@@ -345,27 +345,28 @@ const PAGE = 1000;
    استنى بلا داعي.
    دلوقتي: نعدّ الصفوف الأول، وبعدين نجيب كل الصفحات بالتوازي. */
 async function fetchAllRows(table, buildingUuid){
-  const first = await sb.from(table).select('*', { count:'exact' })
-    .eq('building_id', buildingUuid)
-    .order('id', { ascending: true })
-    .range(0, PAGE - 1);
-  if (first.error) return { data: [], error: first.error };
-
-  const rows = first.data || [];
-  const total = Math.min(first.count || rows.length, 200000);
-  if (total <= PAGE) return { data: rows, error: null };
-
-  const pages = [];
-  for (let from = PAGE; from < total; from += PAGE){
-    pages.push(sb.from(table).select('*')
+  /* ⚠️ الترحيل بـrange/OFFSET بيبقى أبطأ مع كل صفحة: الصفحة السابعة
+     بتعيد قراءة ٦٠٠٠ صف قبل ما توصل لبتاعتها.
+     قياس فعلي على ٦٨٠٠ قيد: 183→267→395→511→652→791→897 مللي
+     (٣٧٠٠ إجمالي). بالترحيل بالمفتاح: ~١٢٥ لكل صفحة (٨٥٧ إجمالي).
+     كل صفحة بتبدأ من بعد آخر معرّف، فالفهرس بيوصّلها على طول. */
+  const rows = [];
+  let after = null;
+  for (let guard = 0; guard < 300; guard++){
+    let q = sb.from(table).select('*')
       .eq('building_id', buildingUuid)
       .order('id', { ascending: true })
-      .range(from, from + PAGE - 1));
-  }
-  const res = await Promise.all(pages);
-  for (const r of res){
-    if (r.error) return { data: rows, error: r.error };
-    rows.push(...(r.data || []));
+      .limit(PAGE);
+    if (after) q = q.gt('id', after);
+
+    const res = await q;
+    if (res.error) return { data: rows, error: res.error };
+    const batch = res.data || [];
+    if (!batch.length) break;
+    rows.push(...batch);
+    if (batch.length < PAGE) break;
+    after = batch[batch.length - 1].id;
+    if (rows.length > 200000) break;      // صمام أمان
   }
   return { data: rows, error: null };
 }
