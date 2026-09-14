@@ -127,9 +127,25 @@
   window.permDefaultsFor = defaultsFor;
 
   /* صلاحيات مستخدم على شاشة معيّنة */
+  /* شاشات ليها قواعد خاصة تكسر افتراضي المجموعة.
+     كشوف المصروفات: الساكن "عرض فقط" — رغم إن add مسموح في
+     مجموعته عمومًا (للمقترحات والبلاغات). نفس الاستثناء موجود في
+     has_screen_perm على الخادم، ولازم الاتنين يتطابقوا وإلا
+     الزرار يبان والحفظ يترفض. */
+  const SCREEN_RULES = {
+    statements: {
+      owner:  a => ['view','print','export','att_view'].includes(a),
+      tenant: a => ['view','print','export','att_view'].includes(a),
+      manager:() => true,
+    },
+  };
+
   window.userCan = function(user, screenKey, action){
     const u = user || (window.currentUser && currentUser());
     if (!u) return false;
+
+    const rule = SCREEN_RULES[screenKey] && SCREEN_RULES[screenKey][u.role];
+    if (rule) return !!rule(action);
 
     // رئيس الاتحاد الأساسي: كل حاجة
     if (u.role === 'admin' && !u.permissions && !u.screenPerms) return true;
