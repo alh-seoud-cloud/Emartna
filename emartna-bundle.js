@@ -13471,6 +13471,11 @@
       ${sub?`<div class="small" style="color:var(--muted)">${sub}</div>`:''}</span>
     </button>`;
 
+    /* ⚠️ قوالب الرسائل دي تسويقية — بتاعة صاحب البرنامج وحده.
+       رئيس الاتحاد مالهوش دعوة بيها، ولو ظهرتله هيبعت نص موجّه
+       لعميل محتمل لساكن في عمارته. */
+    const isOwner = !!(window.isSysOwner && isSysOwner());
+
     el.innerHTML =
       `<div class="small" style="padding:7px 11px 5px;color:var(--muted);
         border-bottom:1px solid var(--line);margin-bottom:3px">
@@ -13478,9 +13483,9 @@
       item('📋','نسخ الرقم',`copyPhone('${esc2(pretty)}')`) +
       item('📞','اتصال',`location.href='tel:${esc2(digits(raw))}';closePhoneMenu()`) +
       item('💬','واتساب',`openWa('${num}','')`) +
-      item('📨','واتساب برسالة جاهزة',
+      (isOwner ? item('📨','واتساب برسالة جاهزة',
            `closePhoneMenu();pickPhoneTemplate('${num}','${esc2(name||'')}')`,
-           'تختار من قوالبك');
+           'تختار من قوالبك') : '');
 
     document.body.appendChild(el);
     const h = el.offsetHeight;
@@ -13509,6 +13514,8 @@
   /* ---------- اختيار قالب ---------- */
 
   window.pickPhoneTemplate = function(num, name){
+    /* حارس تاني: حتى لو حد نادى الدالة مباشرة */
+    if (!(window.isSysOwner && isSysOwner())) return;
     let list = [];
     try{ list = (window.ensureMessageTemplates ? ensureMessageTemplates() : []) || []; }
     catch(e){}

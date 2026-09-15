@@ -1783,6 +1783,9 @@ function getSession(){try{return JSON.parse(sessionStorage.getItem(SESSION_KEY))
 function setSession(o){sessionStorage.setItem(SESSION_KEY,JSON.stringify(o))}
 function clearSession(){sessionStorage.removeItem(SESSION_KEY)}
 function isSysOwner(){const s=getSession();return s&&s.type==='sysowner'}
+/* منشورة للوحدات — قائمة الرقم بتستخدمها عشان تخفي القوالب
+   التسويقية عن رئيس الاتحاد. */
+window.isSysOwner = isSysOwner;
 function currentUser(){const s=getSession();if(!s||s.type!=='building'||!D)return null;return D.users.find(x=>x.username===s.username&&x.active!==false)||null}
 function myApartment(){
   const u=currentUser(); if(!u)return null;
@@ -11811,7 +11814,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.07';
+const APP_BUILD='2.08';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12014,25 +12017,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.07"></script>
-<script type="module" src="emartna-auth.js?v=2.07"></script>
-<script type="module" src="emartna-profile.js?v=2.07"></script>
-<script type="module" src="emartna-users.js?v=2.07"></script>
-<script type="module" src="emartna-platform.js?v=2.07"></script>
-<script type="module" src="emartna-contactlog.js?v=2.07"></script>
-<script type="module" src="emartna-permreport.js?v=2.07"></script>
-<script type="module" src="emartna-finops.js?v=2.07"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.07"></script>
-<script type="module" src="emartna-planscreens.js?v=2.07"></script>
+<script type="module" src="emartna-cloud.js?v=2.08"></script>
+<script type="module" src="emartna-auth.js?v=2.08"></script>
+<script type="module" src="emartna-profile.js?v=2.08"></script>
+<script type="module" src="emartna-users.js?v=2.08"></script>
+<script type="module" src="emartna-platform.js?v=2.08"></script>
+<script type="module" src="emartna-contactlog.js?v=2.08"></script>
+<script type="module" src="emartna-permreport.js?v=2.08"></script>
+<script type="module" src="emartna-finops.js?v=2.08"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.08"></script>
+<script type="module" src="emartna-planscreens.js?v=2.08"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.07"></script>
+<script type="module" src="emartna-perms.js?v=2.08"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.07"></script>
+<script type="module" src="emartna-bundle.js?v=2.08"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
