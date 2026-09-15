@@ -11717,9 +11717,20 @@ function removePaymentMethod(id){
   save();refreshPayMethods();
 }
 /* الطرق اللي الساكن مسموح يشوفها: مفعّلة ومربوطة بحساب موجود */
+/* ⚠️ كان بيتطلب إن الخزينة المربوطة تكون موجودة في D.accounts —
+   والساكن مابيشوفش الخزائن أصلًا (صلاحية مالية)، فالقائمة كانت
+   بتطلع فاضية عنده ورسالة «الاتحاد لسه ما فعّلش طرق سداد».
+
+   الربط بالخزينة يخص الإدارة (عشان الدفعة تدخل الحساب الصح) —
+   مش شرط لعرض الطريقة للساكن. */
 function activePaymentMethods(){
-  return (D.building.paymentMethods||[]).filter(m=>
-    m&&m.type&&m.active!==false&&m.accountId&&(D.accounts||[]).some(a=>a.id===m.accountId));
+  const list = (D.building.paymentMethods||[]).filter(m =>
+    m && m.type && m.active !== false && m.accountId);
+  const accs = D.accounts || [];
+  /* الإدارة بتشوف الخزائن — بنتحقق من الربط.
+     الساكن مابيشوفهاش — بنكتفي بوجود accountId. */
+  if (!accs.length) return list;
+  return list.filter(m => accs.some(a => a.id === m.accountId));
 }
 function savePaymentContact(){if(!guardAction('settings','edit'))return;
   D.building.contactPhoneCountry=document.getElementById('payCountry').value;
@@ -12000,7 +12011,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.22';
+const APP_BUILD='2.23';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12203,25 +12214,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.22"></script>
-<script type="module" src="emartna-auth.js?v=2.22"></script>
-<script type="module" src="emartna-profile.js?v=2.22"></script>
-<script type="module" src="emartna-users.js?v=2.22"></script>
-<script type="module" src="emartna-platform.js?v=2.22"></script>
-<script type="module" src="emartna-contactlog.js?v=2.22"></script>
-<script type="module" src="emartna-permreport.js?v=2.22"></script>
-<script type="module" src="emartna-finops.js?v=2.22"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.22"></script>
-<script type="module" src="emartna-planscreens.js?v=2.22"></script>
+<script type="module" src="emartna-cloud.js?v=2.23"></script>
+<script type="module" src="emartna-auth.js?v=2.23"></script>
+<script type="module" src="emartna-profile.js?v=2.23"></script>
+<script type="module" src="emartna-users.js?v=2.23"></script>
+<script type="module" src="emartna-platform.js?v=2.23"></script>
+<script type="module" src="emartna-contactlog.js?v=2.23"></script>
+<script type="module" src="emartna-permreport.js?v=2.23"></script>
+<script type="module" src="emartna-finops.js?v=2.23"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.23"></script>
+<script type="module" src="emartna-planscreens.js?v=2.23"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.22"></script>
+<script type="module" src="emartna-perms.js?v=2.23"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.22"></script>
+<script type="module" src="emartna-bundle.js?v=2.23"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
