@@ -5458,6 +5458,7 @@ const MESSAGE_CATEGORIES=[
   {key:'lead_outreach',label:'دعوة عميل محتمل (أرقام تسويقية)'},
   {key:'custom_offer',label:'عرض خاص (قمع المبيعات)'},
   {key:'renewal_reminder',label:'تذكير تجديد اشتراك'},
+  {key:'faq_reply',label:'ردود على أسئلة العملاء'},
 ];
 function defaultMessageTemplates(){
   return[
@@ -5466,6 +5467,48 @@ function defaultMessageTemplates(){
     {id:uid(),category:'custom_offer',title:'عرض خاص قياسي',body:'عزيزي رئيس اتحاد "{اسم_العمارة}"،\nعندنا عرض خاص ليك على نظام عمارتنا 🎁\n\nالخطة: {اسم_الخطة}\nالسعر الخاص: {السعر} جنيه\nالمدة: {المدة}\nالعرض ساري لمدة {أيام_العرض} يوم من تاريخه.\n\nللاستفادة من العرض، تواصل معانا في أقرب وقت.'},
     {id:uid(),category:'custom_offer',title:'عرض كود خصم قياسي',body:'عزيزي رئيس اتحاد "{اسم_العمارة}"،\nعندنا كود خصم خاص ليك 🎟️\n\nالكود: {كود_الخصم}\nنسبة الخصم: {نسبة_الخصم}\nالخطة: {اسم_الخطة}\nالسعر بعد الخصم: {السعر} جنيه\n\nاستخدم الكود عند الترقية للاستفادة بالعرض.'},
     {id:uid(),category:'renewal_reminder',title:'تذكير تجديد قياسي',body:'عزيزي رئيس اتحاد "{اسم_العمارة}"،\nاشتراكك في نظام عمارتنا ({اسم_الخطة}) {تاريخ_الانتهاء}. برجاء التواصل لتجديد الاشتراك أو الترقية.'},
+
+    /* ردود جاهزة على أسئلة العملاء المتكررة — بتوفّر إعادة صياغة
+       نفس الرد كل مرة، وبتخلّي نبرة الردود موحّدة. */
+    {id:uid(),category:'faq_reply',title:'سؤال عن المساحة والمرفقات',
+     body:'شكرًا لسؤالك 🌟\n\n'+
+'«عمارتنا» في مرحلته الحالية مصمَّم كنظام تسجيل ومتابعة — بديل عن ملفات الإكسل والكشكول، مش مساحة تخزين للملفات.\n\n'+
+'اللي بيقدّمه لحضرتك:\n'+
+'• تحصيل واضح لكل وحدة\n'+
+'• متابعة المتأخرات لحظيًا\n'+
+'• مصروفات مبوّبة\n'+
+'• تقارير جاهزة للعرض على السكان أو الجمعية العمومية\n'+
+'• وكل ساكن يشوف حسابه من غير ما تكلّمه\n\n'+
+'ورفع المرفقات متاح ضمن مساحة مناسبة للاستخدام العادي — كشوف وفواتير وإيصالات.'},
+
+    {id:uid(),category:'faq_reply',title:'المساحة قربت تخلص',
+     body:'أهلًا بحضرتك 👋\n\n'+
+'المساحة المتاحة للمرفقات قربت تمتلئ — وده طبيعي مع الاستخدام.\n\n'+
+'الحل بضغطة واحدة: الإعدادات ← مساحة المرفقات ← أرشفة المرفقات القديمة.\n'+
+'بتختار الملفات الأقدم من ٦ شهور أو سنة، والبرنامج بيشيلها '+
+'وبيسيب السجلات مكانها زي ما هي — يعني مش بتخسر أي بيانات.\n\n'+
+'والبرنامج هيفضل شغّال عادي في كل الأحوال 👌'},
+
+    {id:uid(),category:'faq_reply',title:'عدم عرض المصروفات على السكان',
+     body:'أهلًا بحضرتك 👋\n\n'+
+'البرنامج بيسيب قرار الشفافية لحضرتك بالكامل — تقدر تحدّد اللي السكان يشوفوه من:\n'+
+'الإعدادات ← «اللي السكان يشوفوه»\n\n'+
+'وفيه ٣ مفاتيح منفصلة:\n'+
+'• تفاصيل المصروفات\n'+
+'• أرصدة الخزينة\n'+
+'• كشوف المصروفات الشهرية\n\n'+
+'يعني ينفع تقفل تفاصيل الحركات، وتنشر «كشف المصروفات الشهري» كملف واحد '+
+'بالشكل اللي حضرتك تعتمده — فالسكان يشوفوا الإجمالي والمستندات، '+
+'من غير ما يدخلوا في تفاصيل كل حركة.\n\n'+
+'والساكن في كل الأحوال بيشوف حسابه هو ومستحقاته.'},
+
+    {id:uid(),category:'faq_reply',title:'كشف مصروفات خارجي',
+     body:'تمام 👍\n\n'+
+'لو حضرتك بتجهّز كشف المصروفات بشكل معيّن برّه البرنامج، ترفعه عندنا وتنشره للسكان:\n'+
+'الماليات ← كشوف المصروفات الشهرية ← + كشف جديد\n\n'+
+'ترفع الكشف ومعاه الفواتير والإيصالات، وتقدر تنشره للسكان أو تسيبه للإدارة بس.\n\n'+
+'وبكده يبقى عندك الاتنين: تفاصيلك الداخلية في البرنامج، '+
+'والكشف المعتمد اللي بتعرضه على السكان.'},
   ];
 }
 function ensureMessageTemplates(){
@@ -11601,7 +11644,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.98';
+const APP_BUILD='1.99';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11804,25 +11847,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.98"></script>
-<script type="module" src="emartna-auth.js?v=1.98"></script>
-<script type="module" src="emartna-profile.js?v=1.98"></script>
-<script type="module" src="emartna-users.js?v=1.98"></script>
-<script type="module" src="emartna-platform.js?v=1.98"></script>
-<script type="module" src="emartna-contactlog.js?v=1.98"></script>
-<script type="module" src="emartna-permreport.js?v=1.98"></script>
-<script type="module" src="emartna-finops.js?v=1.98"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.98"></script>
-<script type="module" src="emartna-planscreens.js?v=1.98"></script>
+<script type="module" src="emartna-cloud.js?v=1.99"></script>
+<script type="module" src="emartna-auth.js?v=1.99"></script>
+<script type="module" src="emartna-profile.js?v=1.99"></script>
+<script type="module" src="emartna-users.js?v=1.99"></script>
+<script type="module" src="emartna-platform.js?v=1.99"></script>
+<script type="module" src="emartna-contactlog.js?v=1.99"></script>
+<script type="module" src="emartna-permreport.js?v=1.99"></script>
+<script type="module" src="emartna-finops.js?v=1.99"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.99"></script>
+<script type="module" src="emartna-planscreens.js?v=1.99"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=1.98"></script>
+<script type="module" src="emartna-perms.js?v=1.99"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=1.98"></script>
+<script type="module" src="emartna-bundle.js?v=1.99"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح

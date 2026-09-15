@@ -257,7 +257,8 @@
       const msg = String(error.message||'');
       if (/policy|row-level|violates/i.test(msg))
         throw new Error('المساحة خلصت.\n\nأرشف المرفقات القديمة من: ' +
-          'الإعدادات ← مساحة المرفقات، أو كلّم الدعم لزيادة الحصة.');
+          'فرّغ مساحة من: الإعدادات ← مساحة المرفقات ← أرشفة المرفقات القديمة.\n' +
+          'السجلات بتفضل مكانها — الملفات القديمة بس هي اللي بتتشال.');
       throw error;
     }
     return { path, name:file.name, mime:file.type, size:file.size, is_main:!!isMain };
