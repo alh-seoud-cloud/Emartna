@@ -1970,11 +1970,23 @@ function onPopState(e){
 }
 
 /* ---------- حسابات الشقق (كشف الحساب) ---------- */
-function apCharges(apId){return D.ledger.filter(l=>l.apartmentId===apId&&(l.type==='شهري'||l.type==='مشروع')).reduce((s,l)=>s+Number(l.amount),0)}
-function apPayments(apId){return D.ledger.filter(l=>l.apartmentId===apId&&l.type==='دفعة').reduce((s,l)=>s+Number(l.amount),0)}
-function apRefunds(apId){return D.ledger.filter(l=>l.apartmentId===apId&&l.type==='صرف').reduce((s,l)=>s+Number(l.amount),0)}
-function apAdjust(apId){return D.ledger.filter(l=>l.apartmentId===apId&&l.type==='تسوية').reduce((s,l)=>s+Number(l.amount),0)}
-function apBalance(apId){const a=D.apartments.find(x=>x.id===apId);return(a?Number(a.openingBalance)||0:0)+apCharges(apId)-apPayments(apId)+apRefunds(apId)+apAdjust(apId)}
+function apCharges(apId){return money2(D.ledger.filter(l=>l.apartmentId===apId&&(l.type==='شهري'||l.type==='مشروع')).reduce((s,l)=>s+Number(l.amount),0))}
+function apPayments(apId){return money2(D.ledger.filter(l=>l.apartmentId===apId&&l.type==='دفعة').reduce((s,l)=>s+Number(l.amount),0))}
+function apRefunds(apId){return money2(D.ledger.filter(l=>l.apartmentId===apId&&l.type==='صرف').reduce((s,l)=>s+Number(l.amount),0))}
+function apAdjust(apId){return money2(D.ledger.filter(l=>l.apartmentId===apId&&l.type==='تسوية').reduce((s,l)=>s+Number(l.amount),0))}
+/* ===== تقريب المبالغ =====
+   الحساب العشري في الجافاسكريبت بيراكم أخطاء دقيقة: توزيع نسبي
+   لـ١٥٠٠٠ على ٩٦ وحدة كان بيطلع رصيد ٤٩.٩٩٩٩٩٩٩٩٩٩٩٨١٨ بدل ٥٠.
+   كل دالة بترجّع مبلغ لازم تعدّي من هنا. */
+function money2(n){
+  const v = Number(n);
+  if (!isFinite(v)) return 0;
+  /* EPSILON بيصحّح حالات زي 1.005 اللي بتتقرّب لتحت غلط */
+  return Math.round((v + Number.EPSILON) * 100) / 100;
+}
+window.money2 = money2;
+
+function apBalance(apId){const a=D.apartments.find(x=>x.id===apId);return money2((a?Number(a.openingBalance)||0:0)+apCharges(apId)-apPayments(apId)+apRefunds(apId)+apAdjust(apId))}
 function unitTypeIndex(a){
   if(!a||!D||!D.apartments)return 0;
   const list=D.apartments.filter(x=>x.type===a.type&&(a.blockName?x.blockName===a.blockName:!x.blockName)).sort((x,y)=>x.number-y.number);
@@ -2016,7 +2028,7 @@ function accountBalance(accId){
   bal-=D.expenses.filter(e=>e.accountId===accId).reduce((s,e)=>s+Number(e.amount),0);
   bal+=D.transfers.filter(t=>t.to===accId).reduce((s,t)=>s+Number(t.amount),0);
   bal-=D.transfers.filter(t=>t.from===accId).reduce((s,t)=>s+Number(t.amount),0);
-  return bal;
+  return money2(bal);
 }
 function totalTreasury(){return D.accounts.reduce((s,a)=>s+accountBalance(a.id),0)}
 function totalCollected(){return D.ledger.filter(l=>l.type==='دفعة').reduce((s,l)=>s+Number(l.amount),0)}
@@ -9692,7 +9704,7 @@ function computeProportionalShares(totalAmount,excludeClosed){
   const weighted=units.map(a=>({a,weight:distributionWeightFor(a)})).filter(x=>x.weight>0);
   const sumWeights=weighted.reduce((s,x)=>s+x.weight,0);
   if(sumWeights<=0)return[];
-  let shares=weighted.map(x=>({a:x.a,weight:x.weight,amount:Math.round((x.weight/sumWeights)*totalAmount)}));
+  let shares=weighted.map(x=>({a:x.a,weight:x.weight,amount:money2((x.weight/sumWeights)*totalAmount)}));
   // تصحيح فرق التقريب عشان مجموع الأنصبة يساوي المبلغ الإجمالي بالظبط
   const roundedSum=shares.reduce((s,x)=>s+x.amount,0);
   const diff=Math.round(totalAmount)-roundedSum;
@@ -9819,7 +9831,7 @@ function openPaymentModal(apId){if(!guardAction('collections','add'))return;
   openModal(`
     <h3>تسجيل دفعة</h3>
     <div class="field2"><label>الشقة</label><select id="pAp" onchange="refreshPaymentProjectOptions()">${aps.map(a=>`<option value="${a.id}" ${a.id===apId?'selected':''}>${unitLabel(a)} - ${esc(a.ownerName)} (المستحق: ${money(apBalance(a.id))})</option>`).join('')}</select></div>
-    <div class="field2"><label>المبلغ المدفوع</label><input id="pAmount" type="number" value="${apId?Math.max(0,apBalance(apId)):''}"></div>
+    <div class="field2"><label>المبلغ المدفوع</label><input id="pAmount" type="number" value="${apId?money2(Math.max(0,apBalance(apId))):''}"></div>
     <div class="field2"><label>يُقيّد في حساب</label><select id="pAccount">${D.accounts.map(a=>`<option value="${a.id}">${esc(a.name)} (${money(accountBalance(a.id))})</option>`).join('')}</select></div>
     <div class="field2"><label>خاص بمشروع؟ (اختياري)</label><select id="pProject"></select></div>
     <div class="field2"><label>الشهر المرتبط (إن وجد)</label><input id="pMonth" type="month" value="${curMonth()}"></div>
@@ -9845,7 +9857,7 @@ function savePayment(){if(!guardAction('collections','add'))return;
   if(!amount||amount<=0)return showMessage('أدخل مبلغًا صحيحًا');
   if(!enforceLicenseOrAlert('transaction'))return;
   const projectId=document.getElementById('pProject').value||null;
-  D.ledger.push({id:uid(),apartmentId:apId,type:'دفعة',amount,accountId:document.getElementById('pAccount').value,month:document.getElementById('pMonth').value||null,date:document.getElementById('pDate').value||todayISO(),note:document.getElementById('pNote').value.trim()||'دفعة',projectId,createdAt:new Date().toISOString()});
+  D.ledger.push({id:uid(),apartmentId:apId,type:'دفعة',amount:money2(amount),accountId:document.getElementById('pAccount').value,month:document.getElementById('pMonth').value||null,date:document.getElementById('pDate').value||todayISO(),note:document.getElementById('pNote').value.trim()||'دفعة',projectId,createdAt:new Date().toISOString()});
   notifyApartmentOwner(apId,'تم تسجيل دفعة على حسابك',money(amount));
   const ap=D.apartments.find(a=>a.id===apId);
   logActivity('تسجيل دفعة',(ap?unitLabel(ap):'')+' - '+money(amount));
@@ -11799,7 +11811,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.06';
+const APP_BUILD='2.07';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12002,25 +12014,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.06"></script>
-<script type="module" src="emartna-auth.js?v=2.06"></script>
-<script type="module" src="emartna-profile.js?v=2.06"></script>
-<script type="module" src="emartna-users.js?v=2.06"></script>
-<script type="module" src="emartna-platform.js?v=2.06"></script>
-<script type="module" src="emartna-contactlog.js?v=2.06"></script>
-<script type="module" src="emartna-permreport.js?v=2.06"></script>
-<script type="module" src="emartna-finops.js?v=2.06"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.06"></script>
-<script type="module" src="emartna-planscreens.js?v=2.06"></script>
+<script type="module" src="emartna-cloud.js?v=2.07"></script>
+<script type="module" src="emartna-auth.js?v=2.07"></script>
+<script type="module" src="emartna-profile.js?v=2.07"></script>
+<script type="module" src="emartna-users.js?v=2.07"></script>
+<script type="module" src="emartna-platform.js?v=2.07"></script>
+<script type="module" src="emartna-contactlog.js?v=2.07"></script>
+<script type="module" src="emartna-permreport.js?v=2.07"></script>
+<script type="module" src="emartna-finops.js?v=2.07"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.07"></script>
+<script type="module" src="emartna-planscreens.js?v=2.07"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.06"></script>
+<script type="module" src="emartna-perms.js?v=2.07"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.06"></script>
+<script type="module" src="emartna-bundle.js?v=2.07"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
