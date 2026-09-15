@@ -3483,10 +3483,16 @@ function showPhoneMatchWarning(match){
       <button class="btn gold" onclick="closeModal();window.__signupPhoneConfirmed=true;doSignup()">✅ متابعة إنشاء حساب جديد</button>
     </div>`);
 }
+/* نسخة بلا تهريب HTML — للطباعة والتصدير.
+   لازم تدّي نفس شكل unitLabel بالظبط، وإلا الكشف المطبوع
+   يطلع برقم مختلف عن اللي على الشاشة. */
 function unitLabelStatic(a){
-  if(a&&a.label&&String(a.label).trim())
-    return (a.blockName?a.blockName+' - ':'')+String(a.label).trim();
-  return(a.blockName?a.blockName+' - ':'')+(a.type==='shop'?'محل':'شقة')+' '+a.number;
+  if(!a)return'-';
+  const blk=(a.blockName?a.blockName+' - ':'');
+  const lbl=a.label?String(a.label).trim():'';
+  const tn=(a.type==='shop'?'محل':'شقة');
+  if(lbl) return /^[0-9٠-٩]+$/.test(lbl) ? blk+tn+' '+lbl : blk+lbl;
+  return blk+tn+' '+a.number;
 }
 async function doSignup(){
   const name=document.getElementById('suName').value.trim();
@@ -7582,7 +7588,8 @@ function runSysSmartSearch(q){
     });
     (d.apartments||[]).forEach(a=>{
       if([a.ownerName,a.tenantName,a.phone,a.number].some(v=>String(v||'').toLowerCase().includes(q)))
-        apMatches.push({buildingName:b.name,buildingId:b.id,label:`${a.number?'وحدة '+a.number+' - ':''}${a.ownerName||''}`,sub:a.phone||a.tenantName||''});
+        /* البحث بيعرض رقم الوحدة اللي الناس بتعرفه، مش الترتيب الداخلي */
+      apMatches.push({buildingName:b.name,buildingId:b.id,label:`${(a.label&&String(a.label).trim())?(a.type==='shop'?'محل ':'شقة ')+String(a.label).trim()+' - ':(a.number?'وحدة '+a.number+' - ':'')}${a.ownerName||''}`,sub:a.phone||a.tenantName||''});
     });
   });
   const groups=[];
@@ -7916,7 +7923,7 @@ function buildingIllustration(mode){
           if(isAdmin)click=`onclick="openApartmentDetail('${a.id}')"`;
           else if(isOwnerView)click=`onclick="openApartmentContact('${a.id}')"`;
           const shopMark=a.type==='shop'?' is-shop':'';
-          return `<div class="bld-unit ${cls}${shopMark}" ${click} title="${unitLabel(a)}">${a.type==='shop'?'<span class="bld-shop-badge">🏪</span>':''}${unitTypeIndex(a)}</div>`;
+          return `<div class="bld-unit ${cls}${shopMark}" ${click} title="${unitLabel(a)}">${a.type==='shop'?'<span class="bld-shop-badge">🏪</span>':''}${(a.label&&String(a.label).trim())?esc(String(a.label).trim()):unitTypeIndex(a)}</div>`;
         }).join('')}
       </div></div>`;
     }).join('')}
@@ -7964,7 +7971,7 @@ function openApartmentContact(id){
       ${esc(unitTypeName(a))}${a.blockName?' · '+esc(a.blockName):''}
       ${a.floor?' · '+esc(a.floor):''}
       ${a.usageType?' · '+esc(a.usageType):''}
-      · ترقيم متسلسل: ${esc(a.number)}</p>
+      ${isStaff?' · ترتيب داخلي: '+esc(a.number):''}</p>
 
     <div class="card mtop2" style="background:var(--tint)">
       ${line('👤','المالك', a.ownerName, full?a.phone:null)}
@@ -8067,8 +8074,8 @@ function openApartmentDetail(id){
     </div>
     <div class="card mtop2" style="background:var(--tint)">
       <div class="grid g2 small">
-        <div><b>🚪 رقم الباب:</b> ${window.doorNumber?esc(doorNumber(a)):esc(a.number)}</div>
-        <div><b>🔢 الترقيم المتسلسل:</b> ${esc(a.number)}</div>
+        <div><b>🚪 رقم ${a.type==='shop'?'المحل':'الشقة'}:</b> ${(a.label&&String(a.label).trim())?esc(String(a.label).trim()):(window.doorNumber?esc(doorNumber(a)):esc(a.number))}</div>
+        <div><b>🔢 الترتيب الداخلي:</b> <span style="color:var(--muted)">${esc(a.number)}</span></div>
         <div><b>🏢 الدور:</b> ${esc(a.floor||'-')}</div>
         <div><b>💳 الاشتراك الشهري:</b> ${money(a.monthlyFee)}</div>
       </div>
