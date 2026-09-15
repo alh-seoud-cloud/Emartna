@@ -1025,6 +1025,62 @@
      المساحة محدودة (٢٠ ميجا)، والمرفقات القديمة نادرًا بتتفتح.
      الأرشفة بتشيل الملف وتسيب سجل الرسالة بعلامة "مؤرشف" — فالمحادثة
      تفضل مفهومة والمساحة تتفرّغ. */
+  /* ===== الأرشفة التلقائية =====
+     مرفقات الشات بتتأرشف بعد المدة المحددة (١٥ يوم افتراضيًا).
+     المستندات المحاسبية — كشوف المصروفات وإيصالات السداد ومرفقات
+     المصروفات — مستثناة تمامًا: دي إثبات مش محادثة.
+
+     بننفّذها من المتصفح لما إداري يفتح البرنامج: الخادم بيعلّم
+     المستحق، والمتصفح بيشيل الملف فعليًا. التأخير ساعات مش أيام،
+     ومفيش تعقيد خدمات خلفية. */
+  async function autoArchive(){
+    try{
+      const s = sb(), b = bUuid();
+      if (!s || !b) return;
+      if (!window.guardActionSilent || !guardActionSilent('chat','delete_any')) return;
+
+      const { data, error } = await s.rpc('due_for_archive', { p_building:b });
+      if (error || !data || !data.length) return;
+
+      let done = 0;
+      for (const r of data.slice(0, 40)){
+        try{
+          await s.storage.from('attachments').remove([r.path]);
+          await s.rpc('mark_attachment_archived', { p_source:r.source, p_id:r.id });
+          done++;
+        }catch(e){}
+      }
+      if (done && window.toast)
+        toast(`اتأرشف ${done} مرفق قديم — المساحة اتفرّغت`);
+    }catch(e){}
+  }
+  setTimeout(autoArchive, 9000);
+  document.addEventListener('emartna:building-complete',
+    () => setTimeout(autoArchive, 9000));
+
+  /* تحذير قبل الأرشفة بيومين — الأرشفة تبقى متوقعة مش مفاجأة */
+  async function warnBeforeArchive(){
+    try{
+      const s = sb(), b = bUuid(); if (!s || !b) return;
+      const key = 'emartna_arch_warn_' + b;
+      const last = localStorage.getItem(key);
+      const today = new Date().toISOString().slice(0,10);
+      if (last === today) return;
+
+      const { data } = await s.rpc('archive_warning', { p_building:b });
+      if (!data || !data.length) return;
+      localStorage.setItem(key, today);
+
+      const names = data.slice(0,3).map(x => x.name || 'مرفق').join(' · ');
+      showMessage('🗄️ مرفقات في المحادثة هتتأرشف قريب\n\n' +
+        `${data.length} مرفق (${names}${data.length>3?'…':''}) ` +
+        'هيتشالوا خلال يومين.\n\n' +
+        'لو محتاج تحتفظ بحاجة منهم، نزّلها — أو ارفعها في ' +
+        '«كشوف المصروفات الشهرية» وهتفضل للأبد.');
+    }catch(e){}
+  }
+  setTimeout(warnBeforeArchive, 14000);
+
   window.openArchiveAttachments = async function(){
     const s = sb(), b = bUuid(); if (!s || !b) return;
     openModal('<h3>⏳ بنجهّز القائمة...</h3>');
@@ -1114,6 +1170,15 @@
       });
   };
 
+  /* مدة الاحتفاظ بتختلف بالباقة — بنحمّلها للعرض */
+  (async function loadRetention(){
+    try{
+      const s = sb(), b = bUuid(); if (!s || !b) return;
+      const { data } = await s.rpc('chat_retention', { p_building:b });
+      if (data) window.__chatRetention = data;
+    }catch(e){}
+  })();
+
   window.openStorageUsage = async function(){
     openModal('<h3>⏳ بنحسب المساحة...</h3>');
     const q = await loadQuota();
@@ -1141,8 +1206,21 @@
         <b class="small">المساحة قربت تخلص</b>
         <div class="small">يفضّل تأرشف المرفقات القديمة قبل ما تمتلئ.</div></div>` : ''}
 
+      <div class="card mtop2" style="background:var(--tint)">
+        <b class="small">إيه اللي بيتأرشف؟</b>
+        <div class="small mtop">
+          <div>💬 <b>مرفقات المحادثات</b> — بتتأرشف تلقائيًا بعد
+            ${window.__chatRetention || 15} يوم</div>
+          <div class="mtop">🗂️ <b>كشوف المصروفات</b> — بتفضل للأبد</div>
+          <div>🧾 <b>إيصالات السداد ومستندات المصروفات</b> — بتفضل للأبد</div>
+        </div>
+        <p class="small mtop" style="color:var(--muted)">
+          المستندات المحاسبية إثبات — عمرها ما تتشال. المحادثة عابرة،
+          فمرفقاتها بتتأرشف والرسالة بتفضل مكانها.</p>
+      </div>
+
       <button class="btn ${pct>=70?'primary':''} mtop2" style="width:100%"
-        onclick="openArchiveAttachments()">🗄️ أرشفة المرفقات القديمة</button>
+        onclick="openArchiveAttachments()">🗄️ أرشفة المرفقات القديمة دلوقتي</button>
 
       <p class="small mtop2" style="color:var(--muted)">
         💡 الصور بتتضغط تلقائيًا قبل الرفع، فالصورة بتاخد حوالي ربع ميجا
@@ -13234,6 +13312,201 @@
   };
 
   console.log('[عمارتنا] صحة المنصة جاهزة');
+})();
+
+})();
+
+/* ═══ emartna-phone.js ═══ */
+(function(){
+/* ============================================================
+   عمارتنا — قائمة إجراءات الرقم
+   ------------------------------------------------------------
+   الأرقام منتشرة في ٣٢ موضع عبر ١٢ شاشة، وكل واحد بسلوك مختلف:
+   بعضها زرار اتصال، بعضها واتساب، وبعضها نص ساكن مالوش أي إجراء.
+
+   بدل ما نعدّل ٣٢ مكان، بنمسح الصفحة بعد كل رسم ونحوّل أي رقم
+   موبايل لعنصر قابل للضغط بقائمة موحّدة:
+     نسخ · اتصال · واتساب · واتساب برسالة جاهزة
+
+   المسح بالنمط (regex) مش بتعديل الشاشات — فأي شاشة جديدة
+   بتتغطى تلقائيًا من غير شغل إضافي.
+   ============================================================ */
+
+(function(){
+  'use strict';
+
+  const esc2 = s => (window.esc ? esc(s) : String(s == null ? '' : s));
+
+  /* أرقام مصرية ودولية: 01xxxxxxxxx · +20xxxxxxxxxx · 00201xxxxxxxxx */
+  /* بنشيل المسافات والشرط قبل الفحص — الأرقام بتتكتب بصيغ كتير
+     (0100 123 4567 · 0100-123-4567) والنمط لازم يقبلهم كلهم. */
+  const RE = /^(?:\+?\d{1,4})?0?1[0125]\d{8}$|^\+\d{10,15}$/;
+  const looksPhone = t => RE.test(String(t||'').replace(/[\s\-()]/g,''));
+  const digits = s => String(s||'').replace(/\D/g,'');
+
+  /* توحيد الرقم لصيغة واتساب — الرقم المصري بيبدأ بـ20 */
+  function waNum(raw){
+    let d = digits(raw);
+    if (d.startsWith('00')) d = d.slice(2);
+    if (d.startsWith('01') && d.length === 11) d = '20' + d.slice(1);
+    if (d.startsWith('1') && d.length === 10) d = '20' + d;
+    return d;
+  }
+
+  /* ---------- القائمة ---------- */
+
+  window.openPhoneMenu = function(evt, raw, name){
+    evt.preventDefault();
+    evt.stopPropagation();
+    closePhoneMenu();
+
+    const num = waNum(raw);
+    const pretty = String(raw||'').trim();
+    const who = name ? ' — ' + name : '';
+    const r = evt.currentTarget.getBoundingClientRect();
+
+    const el = document.createElement('div');
+    el.id = 'phoneMenu';
+    const W = Math.min(260, window.innerWidth - 16);
+    const left = Math.min(Math.max(8, r.right - W), window.innerWidth - W - 8);
+    el.style.cssText = `position:fixed;top:${r.bottom+6}px;left:${left}px;
+      width:${W}px;background:var(--card);border:1px solid var(--line);
+      border-radius:12px;padding:5px;z-index:950;display:flex;
+      flex-direction:column;gap:2px;box-shadow:0 8px 26px rgba(0,0,0,.2)`;
+
+    const item = (ic,label,onclick,sub) => `<button class="btn ghost"
+      style="width:100%;justify-content:flex-start;gap:10px;padding:9px 11px;
+        text-align:start" onclick="${onclick}">
+      <span style="font-size:15px;flex:0 0 auto">${ic}</span>
+      <span style="flex:1"><b style="font-size:13px">${label}</b>
+      ${sub?`<div class="small" style="color:var(--muted)">${sub}</div>`:''}</span>
+    </button>`;
+
+    el.innerHTML =
+      `<div class="small" style="padding:7px 11px 5px;color:var(--muted);
+        border-bottom:1px solid var(--line);margin-bottom:3px">
+        <span dir="ltr">${esc2(pretty)}</span>${esc2(who)}</div>` +
+      item('📋','نسخ الرقم',`copyPhone('${esc2(pretty)}')`) +
+      item('📞','اتصال',`location.href='tel:${esc2(digits(raw))}';closePhoneMenu()`) +
+      item('💬','واتساب',`openWa('${num}','')`) +
+      item('📨','واتساب برسالة جاهزة',
+           `closePhoneMenu();pickPhoneTemplate('${num}','${esc2(name||'')}')`,
+           'تختار من قوالبك');
+
+    document.body.appendChild(el);
+    const h = el.offsetHeight;
+    if (r.bottom + 6 + h > window.innerHeight - 8)
+      el.style.top = Math.max(8, r.top - h - 6) + 'px';
+
+    setTimeout(()=>document.addEventListener('click', closePhoneMenu, {once:true}), 0);
+  };
+
+  window.closePhoneMenu = function(){
+    const m = document.getElementById('phoneMenu'); if (m) m.remove();
+  };
+
+  window.copyPhone = function(p){
+    try{ navigator.clipboard.writeText(p); if (window.toast) toast('اتنسخ الرقم'); }
+    catch(e){ if (window.showMessage) showMessage('الرقم: ' + p); }
+    closePhoneMenu();
+  };
+
+  window.openWa = function(num, text){
+    const url = 'https://wa.me/' + num + (text ? '?text=' + encodeURIComponent(text) : '');
+    window.open(url, '_blank');
+    closePhoneMenu();
+  };
+
+  /* ---------- اختيار قالب ---------- */
+
+  window.pickPhoneTemplate = function(num, name){
+    let list = [];
+    try{ list = (window.ensureMessageTemplates ? ensureMessageTemplates() : []) || []; }
+    catch(e){}
+
+    if (!list.length){
+      return showMessage('مفيش قوالب رسائل لسه.\n\n' +
+        'تقدر تضيفها من: التواصل مع العملاء ← قوالب الرسائل.');
+    }
+
+    const cats = (window.MESSAGE_CATEGORIES || []);
+    const catLabel = k => (cats.find(c=>c.key===k)||{}).label || k;
+    const byCat = {};
+    list.forEach(t => (byCat[t.category] = byCat[t.category] || []).push(t));
+
+    openModal(`
+      <h3>📨 اختار رسالة</h3>
+      <p class="small mtop">هتتبعت على واتساب${name?' لـ'+esc2(name):''}
+        <span dir="ltr">(${esc2(num)})</span> — وتقدر تعدّلها قبل الإرسال.</p>
+
+      ${Object.keys(byCat).map(c=>`
+        <div class="mtop2"><b class="small">${esc2(catLabel(c))}</b>
+          ${byCat[c].map(t=>`<div class="card mtop" style="cursor:pointer"
+            onclick="sendTemplateWa('${esc2(num)}','${esc2(t.id)}','${esc2(name||'')}')">
+            <b class="small">${esc2(t.title)}</b>
+            <div class="small" style="color:var(--muted);white-space:pre-wrap;
+              max-height:44px;overflow:hidden">${esc2(String(t.body||'').slice(0,110))}…</div>
+          </div>`).join('')}
+        </div>`).join('')}
+
+      <div class="modal-actions">
+        <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+      </div>`, true);
+  };
+
+  window.sendTemplateWa = function(num, tplId, name){
+    let body = '';
+    try{
+      const t = (ensureMessageTemplates()||[]).find(x=>String(x.id)===String(tplId));
+      body = t ? String(t.body||'') : '';
+    }catch(e){}
+    /* استبدال المتغيّرات المتاحة */
+    try{
+      const b = (window.D && D.building) || {};
+      body = body
+        .replace(/\{اسم_العمارة\}/g, b.name || '')
+        .replace(/\{اسم_المستخدم\}/g, name || '')
+        .replace(/\{اسم_العميل\}/g, name || '');
+    }catch(e){}
+    closeModal();
+    openWa(num, body);
+  };
+
+  /* ---------- تحويل الأرقام في الصفحة ---------- */
+
+  function enhance(){
+    try{
+      /* ١) الروابط الموجودة أصلًا: نخليها تفتح القائمة بدل الإجراء المباشر */
+      document.querySelectorAll('a[href^="tel:"]:not([data-ph])').forEach(a=>{
+        a.setAttribute('data-ph','1');
+        const num = a.getAttribute('href').replace('tel:','');
+        a.addEventListener('click', e => openPhoneMenu(e, num, ''));
+      });
+
+      /* ٢) الأرقام المكتوبة كنص — بنحوّلها لعنصر قابل للضغط.
+         بنمشي على عناصر النص الصغيرة بس عشان ما نلمسش محتوى كبير. */
+      const sel = 'td,span,div.small,b,.hint';
+      document.querySelectorAll(sel).forEach(el=>{
+        if (el.dataset.phScan) return;
+        if (el.children.length) return;              // فيه عناصر جوّه — نسيبه
+        const txt = (el.textContent||'').trim();
+        if (txt.length < 9 || txt.length > 24) return;
+        if (!looksPhone(txt)) return;
+        if (digits(txt).length < 10) return;
+        el.dataset.phScan = '1';
+        el.style.cursor = 'pointer';
+        el.style.textDecoration = 'underline dotted';
+        el.title = 'اضغط للاتصال أو واتساب';
+        el.addEventListener('click', e => openPhoneMenu(e, txt, ''));
+      });
+    }catch(e){}
+  }
+
+  setInterval(enhance, 1100);
+  document.addEventListener('emartna:building-complete',
+    () => setTimeout(enhance, 700));
+
+  console.log('[عمارتنا] قائمة إجراءات الرقم جاهزة');
 })();
 
 })();

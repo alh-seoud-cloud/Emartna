@@ -5460,6 +5460,7 @@ const MESSAGE_CATEGORIES=[
   {key:'renewal_reminder',label:'تذكير تجديد اشتراك'},
   {key:'faq_reply',label:'ردود على أسئلة العملاء'},
 ];
+window.MESSAGE_CATEGORIES = MESSAGE_CATEGORIES;
 function defaultMessageTemplates(){
   return[
     {id:uid(),category:'lead_outreach',title:'دعوة عامة',body:'أهلًا 👋\nجرّب "عمارتنا" - نظام إدارة اتحاد الملاك بسهولة واحترافية!\nتحصيل، مصروفات، مشاريع، وتواصل مع السكان في مكان واحد.\nابدأ تجربة مجانية دلوقتي: {رابط_الموقع}'},
@@ -5511,6 +5512,8 @@ function defaultMessageTemplates(){
 'والكشف المعتمد اللي بتعرضه على السكان.'},
   ];
 }
+/* منشورة للوحدات: قائمة إجراءات الرقم بتستخدمها لاختيار قالب */
+window.ensureMessageTemplates = ensureMessageTemplates;
 function ensureMessageTemplates(){
   if(!REG.messageTemplates||!REG.messageTemplates.length)REG.messageTemplates=defaultMessageTemplates();
   if(!REG.messageTemplates.some(t=>t.body.includes('{كود_الخصم}'))){
@@ -11644,7 +11647,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.99';
+const APP_BUILD='2.01';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11847,25 +11850,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.99"></script>
-<script type="module" src="emartna-auth.js?v=1.99"></script>
-<script type="module" src="emartna-profile.js?v=1.99"></script>
-<script type="module" src="emartna-users.js?v=1.99"></script>
-<script type="module" src="emartna-platform.js?v=1.99"></script>
-<script type="module" src="emartna-contactlog.js?v=1.99"></script>
-<script type="module" src="emartna-permreport.js?v=1.99"></script>
-<script type="module" src="emartna-finops.js?v=1.99"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.99"></script>
-<script type="module" src="emartna-planscreens.js?v=1.99"></script>
+<script type="module" src="emartna-cloud.js?v=2.01"></script>
+<script type="module" src="emartna-auth.js?v=2.01"></script>
+<script type="module" src="emartna-profile.js?v=2.01"></script>
+<script type="module" src="emartna-users.js?v=2.01"></script>
+<script type="module" src="emartna-platform.js?v=2.01"></script>
+<script type="module" src="emartna-contactlog.js?v=2.01"></script>
+<script type="module" src="emartna-permreport.js?v=2.01"></script>
+<script type="module" src="emartna-finops.js?v=2.01"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.01"></script>
+<script type="module" src="emartna-planscreens.js?v=2.01"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=1.99"></script>
+<script type="module" src="emartna-perms.js?v=2.01"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=1.99"></script>
+<script type="module" src="emartna-bundle.js?v=2.01"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
