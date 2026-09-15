@@ -13851,3 +13851,205 @@
 })();
 
 })();
+
+/* ═══ emartna-retention.js ═══ */
+(function(){
+/* ============================================================
+   عمارتنا — سياسة حفظ المرفقات
+   ------------------------------------------------------------
+   السياسة كانت مكتوبة في الكود — أي تغيير يحتاج رفع ملف.
+   دلوقتي صاحب البرنامج بيغيّرها من لوحته:
+     • المساحة لكل باقة
+     • مدة أرشفة مرفقات المحادثة
+     • مدة ضغط المستندات المحاسبية
+   مع استثناء لعمارة بعينها لو عميل طلب.
+
+   ⚠️ الحذف مش خيار هنا بالتصميم: المستندات المحاسبية إثبات،
+   والضغط بيحل مشكلة المساحة من غير ما يضيّع الدليل.
+   ============================================================ */
+
+(function(){
+  'use strict';
+
+  const esc2 = s => (window.esc ? esc(s) : String(s == null ? '' : s));
+  const sb   = () => (window.CLOUD && window.CLOUD._sb) || null;
+
+  let P = null, O = null;
+
+  async function load(){
+    try{
+      const s = sb(); if (!s) return;
+      const [p,o] = await Promise.all([
+        s.rpc('retention_policies'),
+        s.rpc('retention_overrides'),
+      ]);
+      P = p.data || []; O = o.data || [];
+    }catch(e){ P = []; O = []; }
+    if (window.renderSysContent) renderSysContent();
+  }
+  window.reloadRetention = function(){ P = null; load(); };
+
+  window.pageSysRetention = function(){
+    if (P === null){ load(); return '<p class="small">⏳ بيحمّل السياسة...</p>'; }
+
+    return `
+    <div class="card content-narrow">
+      <div class="flexrow" style="justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <h3>🗄️ سياسة حفظ المرفقات</h3>
+        <button class="btn sm ghost" onclick="reloadRetention()">🔄 تحديث</button>
+      </div>
+      <p class="small mtop">التغيير بيسري على كل عملاء الباقة فورًا —
+        من غير رفع أي ملف.</p>
+    </div>
+
+    <div class="card content-narrow mtop2" style="background:var(--tint)">
+      <b class="small">السياسة الحالية</b>
+      <div class="small mtop" style="line-height:2">
+        <div>💬 <b>مرفقات المحادثة</b> — بتتأرشف بعد المدة المحددة
+          (الرسالة بتفضل مكانها)</div>
+        <div>🧾 <b>إيصالات السداد ومستندات المصروفات</b> —
+          <b style="color:var(--accent)">للأبد</b>، بتتضغط بس بعد المدة المحددة</div>
+        <div>🗂️ <b>كشوف المصروفات الشهرية</b> —
+          <b style="color:var(--accent)">للأبد</b>، بلا ضغط ولا أرشفة</div>
+      </div>
+      <p class="small mtop" style="color:var(--muted)">
+        المستندات المحاسبية إثبات قانوني — الحذف مش متاح بالتصميم.
+        الضغط بينزّل الحجم ٨٠٪ والإيصال يفضل مقروء.</p>
+    </div>
+
+    <div class="card content-narrow mtop2">
+      <h3 style="font-size:14px">السياسة لكل باقة</h3>
+      <div class="table-wrap mtop">
+        <table><thead><tr>
+          <th>الباقة</th><th>عملاء</th><th>المساحة (م.ب)</th>
+          <th>أرشفة المحادثة (يوم)</th><th>ضغط المستندات (شهر)</th><th></th>
+        </tr></thead><tbody>
+        ${(P||[]).map(r=>`<tr>
+          <td><b>${esc2(r.plan_name)}</b></td>
+          <td>${r.clients ? `<span class="badge g">${r.clients}</span>`
+                : '<span class="small" style="color:var(--muted)">—</span>'}</td>
+          <td><input type="number" min="5" max="5000" style="width:82px"
+            id="st_${esc2(r.plan_key)}" value="${r.storage_mb}"></td>
+          <td><input type="number" min="1" max="3650" style="width:82px"
+            id="cd_${esc2(r.plan_key)}" value="${r.chat_days}"></td>
+          <td><input type="number" min="1" max="120" style="width:82px"
+            id="cm_${esc2(r.plan_key)}" value="${r.compress_months}"></td>
+          <td><button class="btn sm primary"
+            onclick="saveRetentionFor('${esc2(r.plan_key)}')">💾</button></td>
+        </tr>`).join('')}
+        </tbody></table></div>
+      <p class="hint">المساحة ٥ م.ب على الأقل · الأرشفة يوم على الأقل ·
+        الضغط شهر على الأقل.</p>
+    </div>
+
+    <div class="card content-narrow mtop2">
+      <div class="flexrow" style="justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <h3 style="font-size:14px">استثناءات لعمارات بعينها</h3>
+        <button class="btn sm" onclick="pickBuildingOverride()">+ استثناء</button>
+      </div>
+      ${!O || !O.length
+        ? '<p class="small mtop" style="color:var(--muted)">مفيش استثناءات — كل العمارات على سياسة باقتها.</p>'
+        : `<div class="table-wrap mtop">
+        <table><thead><tr><th>العمارة</th><th>الاستهلاك</th>
+          <th>مساحة إضافية</th><th>أرشفة</th><th>ضغط</th><th></th>
+        </tr></thead><tbody>
+        ${O.map(r=>`<tr>
+          <td><b>${esc2(r.building_name)}</b>
+            <div class="small" style="color:var(--muted)">${esc2(r.code||'')}</div></td>
+          <td class="small">${r.used_mb} / ${r.quota_mb} م.ب</td>
+          <td class="small">${r.storage_extra != null
+            ? '+'+r.storage_extra+' م.ب' : '—'}</td>
+          <td class="small">${r.chat_days != null ? r.chat_days+' يوم' : '—'}</td>
+          <td class="small">${r.compress_months != null ? r.compress_months+' شهر' : '—'}</td>
+          <td><button class="btn sm ghost"
+            onclick="editBuildingOverride('${esc2(r.building_id)}','${esc2(r.building_name)}')">
+            ✏️</button></td>
+        </tr>`).join('')}
+        </tbody></table></div>`}
+    </div>`;
+  };
+
+  window.saveRetentionFor = async function(key){
+    const num = id => {
+      const el = document.getElementById(id);
+      const v = el ? Number(el.value) : null;
+      return (v && v > 0) ? v : null;
+    };
+    try{
+      const { error } = await sb().rpc('save_retention', {
+        p_plan: key,
+        p_storage:   num('st_'+key),
+        p_chat_days: num('cd_'+key),
+        p_months:    num('cm_'+key),
+      });
+      if (error) throw error;
+      if (window.toast) toast('اتحفظت — سارية على كل عملاء الباقة');
+      reloadRetention();
+    }catch(e){ showMessage(e.message || 'تعذّر الحفظ'); }
+  };
+
+  window.pickBuildingOverride = function(){
+    const list = (window.REG && REG.buildings) || [];
+    if (!list.length) return showMessage('مفيش عمارات.');
+    openModal(`
+      <h3>استثناء لعمارة</h3>
+      <div class="field2 mtop"><label>العمارة</label>
+        <select id="ovBld">${list.map(b=>`<option value="${esc2(b.__uuid||b.id)}">
+          ${esc2(b.name)}${b.code?' — '+esc2(b.code):''}</option>`).join('')}</select></div>
+      <div class="modal-actions">
+        <button class="btn primary" onclick="
+          (function(){var s=document.getElementById('ovBld');
+           var t=s.options[s.selectedIndex].text;
+           closeModal();editBuildingOverride(s.value,t);})()">التالي</button>
+        <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+      </div>`);
+  };
+
+  window.editBuildingOverride = function(id, name){
+    const cur = (O||[]).find(x => x.building_id === id) || {};
+    openModal(`
+      <h3>⚙️ ${esc2(name)}</h3>
+      <p class="small mtop">سيب الخانة فاضية عشان العمارة تمشي على سياسة باقتها.</p>
+      <div class="field2 mtop"><label>مساحة إضافية (م.ب)</label>
+        <input type="number" id="ovSt" min="0" max="5000"
+          value="${cur.storage_extra != null ? cur.storage_extra : ''}"
+          placeholder="فاضي = بلا إضافة"></div>
+      <div class="field2"><label>أرشفة المحادثة (يوم)</label>
+        <input type="number" id="ovCd" min="1" max="3650"
+          value="${cur.chat_days != null ? cur.chat_days : ''}"
+          placeholder="فاضي = حسب الباقة"></div>
+      <div class="field2"><label>ضغط المستندات (شهر)</label>
+        <input type="number" id="ovCm" min="1" max="120"
+          value="${cur.compress_months != null ? cur.compress_months : ''}"
+          placeholder="فاضي = حسب الباقة"></div>
+      <div class="modal-actions">
+        <button class="btn primary" onclick="saveBuildingOverride('${esc2(id)}')">
+          💾 حفظ</button>
+        <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+      </div>`);
+  };
+
+  window.saveBuildingOverride = async function(id){
+    const val = i => {
+      const el = document.getElementById(i);
+      const v = el && el.value !== '' ? Number(el.value) : null;
+      return (v != null && v >= 0) ? v : null;
+    };
+    try{
+      const { error } = await sb().rpc('save_building_retention', {
+        p_building: id,
+        p_storage_extra: val('ovSt'),
+        p_chat_days:     val('ovCd'),
+        p_months:        val('ovCm'),
+      });
+      if (error) throw error;
+      closeModal();
+      if (window.toast) toast('اتحفظ الاستثناء');
+      reloadRetention();
+    }catch(e){ showMessage(e.message || 'تعذّر الحفظ'); }
+  };
+
+  console.log('[عمارتنا] سياسة حفظ المرفقات جاهزة');
+})();
+
+})();

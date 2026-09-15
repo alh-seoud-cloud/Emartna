@@ -3671,7 +3671,7 @@ function renderSysContent(){
   }
   /* الشاشات اللي محتواها نافذة */
   if(SYS_MODAL_PAGES[curPage]){ c.innerHTML=pageSysModalHost(curPage); return; }
-  const fn={sysdash:pageSysDashboard,syslocations:(window.pageSysLocations||(()=>'<p class="small">جاري التحميل…</p>')),syspipeline:(window.pageSysPipeline||pageSysPipeline),sysfunnel:(window.pageSysFunnel||(()=>'<p class="small">جاري التحميل…</p>')),syshealth:(window.pageSysHealth||(()=>'<p class="small">جاري التحميل…</p>')),sysorphans:(window.pageSysOrphans||(()=>'<p class="small">جاري التحميل…</p>')),sysleads:pageSysMarketingLeads,sysvisits:(window.pageSysVisits||(()=>'<p class="small">جاري التحميل…</p>')),sysoffers:pageSysOffers,syscoupons:pageSysCoupons,sysmessages:pageSysMessageTemplates,sysusers:pageSysUsers,syslicenses:pageSysLicenses,syslicensehistory:pageSysLicenseHistory,sysplans:pageSysPlans,sysrevenue:pageSysRevenue,syslanding:pageSysLandingSettings,sysrenewals:pageSysRenewals,sysproposals:pageSysProposals,systickets:pageSysSupportTickets,sysstaff:pageSupportStaff,systasks:pageSysTasks,sysdailysummary:pageSysDailySummary,sysreports:pageSysReports,sysactivitylog:pageSysActivityLog,sysreferrals:pageSysReferrals,sysversions:pageSysVersions,sysmarketing:pageMarketingCard,systrash:pageSysTrash,sysaisettings:pageSysAISettings,sysaireports:pageSysAIReports,syssettings:pageSysSettings}[curPage]||pageSysDashboard;
+  const fn={sysdash:pageSysDashboard,syslocations:(window.pageSysLocations||(()=>'<p class="small">جاري التحميل…</p>')),syspipeline:(window.pageSysPipeline||pageSysPipeline),sysfunnel:(window.pageSysFunnel||(()=>'<p class="small">جاري التحميل…</p>')),syshealth:(window.pageSysHealth||(()=>'<p class="small">جاري التحميل…</p>')),sysretention:(window.pageSysRetention||(()=>'<p class="small">جاري التحميل…</p>')),sysorphans:(window.pageSysOrphans||(()=>'<p class="small">جاري التحميل…</p>')),sysleads:pageSysMarketingLeads,sysvisits:(window.pageSysVisits||(()=>'<p class="small">جاري التحميل…</p>')),sysoffers:pageSysOffers,syscoupons:pageSysCoupons,sysmessages:pageSysMessageTemplates,sysusers:pageSysUsers,syslicenses:pageSysLicenses,syslicensehistory:pageSysLicenseHistory,sysplans:pageSysPlans,sysrevenue:pageSysRevenue,syslanding:pageSysLandingSettings,sysrenewals:pageSysRenewals,sysproposals:pageSysProposals,systickets:pageSysSupportTickets,sysstaff:pageSupportStaff,systasks:pageSysTasks,sysdailysummary:pageSysDailySummary,sysreports:pageSysReports,sysactivitylog:pageSysActivityLog,sysreferrals:pageSysReferrals,sysversions:pageSysVersions,sysmarketing:pageMarketingCard,systrash:pageSysTrash,sysaisettings:pageSysAISettings,sysaireports:pageSysAIReports,syssettings:pageSysSettings}[curPage]||pageSysDashboard;
   c.innerHTML=fn();
   if(curPage==='sysmarketing')renderMarketingQr();
   const bw=document.getElementById('sysNotifBellWrap'); if(bw)bw.innerHTML=renderSysNotifBell();
@@ -7133,7 +7133,7 @@ var SYS_NAV_GROUPS=[
   {key:'site',icon:'🖥️',label:'الموقع العام',items:[['syslanding','🖥️','الصفحة الرئيسية وإعدادات العرض'],['sysversions','🆕','سجل الإصدارات والتحديثات'],['sysmarketing','🖨️','بطاقة دعاية للطباعة'],['syslocations','🗺️','المحافظات والمدن']]},
   {key:'feedback',icon:'💬',label:'التواصل مع العملاء',items:[['sysproposals','💡','مقترحات العملاء'],['systickets','🎫','طلبات الدعم الفني'],['syscontactlog','📇','سجل التواصل'],['sysfollowups','📅','متابعات مستحقة'],['sysstaff','🧑‍💼','فريق الدعم الفني'],['systasks','✅','مهام الفريق']]},
   {key:'ai',icon:'🤖',label:'الذكاء الاصطناعي',items:[['sysaisettings','⚙️','إعدادات الذكاء الاصطناعي'],['sysaireports','🤖','تقارير الذكاء الاصطناعي']]},
-  {key:'system',icon:'🛠️',label:'النظام',items:[['syshealth','🩺','صحة المنصة'],['sysorphans','👤','مستخدمون بلا عمارة'],['sysidle','⏳','سياسة إقفال الجلسة'],['sysfeatures','🎛️','مميزات البرنامج'],['systrash','🗑️','سلة المحذوفات'],['syssettings','⚙️','إعدادات حسابي']]},
+  {key:'system',icon:'🛠️',label:'النظام',items:[['syshealth','🩺','صحة المنصة'],['sysretention','🗄️','سياسة حفظ المرفقات'],['sysorphans','👤','مستخدمون بلا عمارة'],['sysidle','⏳','سياسة إقفال الجلسة'],['sysfeatures','🎛️','مميزات البرنامج'],['systrash','🗑️','سلة المحذوفات'],['syssettings','⚙️','إعدادات حسابي']]},
 ];
 window.__navExpandedGroup=null;
 function findGroupKeyForPage(groups,page){const g=groups.find(g=>g.items.some(it=>it[0]===page));return g?g.key:null}
@@ -7772,18 +7772,67 @@ function buildingIllustration(mode){
     }).join('')}
     <div class="bld-base"></div></div>`;
 }
+/* ⚠️ دي النافذة اللي بتظهر للساكن من واجهة العمارة — غير شاشة
+   تفاصيل الوحدة اللي لرئيس الاتحاد. كانت بتعرض الترقيم المتسلسل
+   (٦٧) بدل رقم الباب (٨٠٧) وبلا بيانات كافية.
+
+   خصوصية: الساكن يشوف بيانات وحدته كاملة، وبيانات غيره بالاسم
+   والدور بس — الأرقام لأصحابها والإدارة. */
 function openApartmentContact(id){
   const a=D.apartments.find(x=>x.id===id); if(!a)return;
+  const u=currentUser();
+  const isStaff=u&&isStaffRole(u.role);
+  /* الساكن ممكن يملك أكتر من وحدة — بنقارن باسم المستخدم مش
+     بالوحدة النشطة بس. */
+  const mine=!!(u&&!isStaff&&(
+    (u.apartmentId&&u.apartmentId===a.id) ||
+    (D.users||[]).some(x=>x.username===u.username&&x.apartmentId===a.id) ||
+    (window.myApartment&&(myApartment()||{}).id===a.id)
+  ));
+  const full=isStaff||mine;
+
+  const door=window.doorNumber?doorNumber(a):a.number;
+  const line=(ic,lbl,val,phone)=>`<div class="flexrow" style="gap:8px;
+    justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line)">
+    <span class="small"><b>${ic} ${lbl}:</b> ${esc(val||'—')}</span>
+    ${phone?`<span class="flexrow" style="gap:5px">
+      <span class="small" dir="ltr">${esc(phone)}</span>
+      <a class="btn sm ghost" href="tel:${esc(String(phone).replace(/\D/g,''))}">📞</a>
+      <a class="btn sm gold" target="_blank"
+        href="https://wa.me/${String(phone).replace(/\D/g,'')}">💬</a>
+    </span>`:''}</div>`;
+
   openModal(`
-    <h3>${unitLabel(a)}</h3>
-    <div class="small mtop" style="line-height:2.3">
-      <div><b>الاسم:</b> ${esc(a.ownerName)}</div>
-      ${a.tenantName?`<div><b>المستأجر:</b> ${esc(a.tenantName)}</div>`:''}
-      <div><b>الدور:</b> ${esc(a.floor||'-')}</div>
-      ${a.phone?`<div><b>الهاتف:</b> ${esc(a.phoneCountry||'')} ${esc(a.phone)}</div>`:'<p class="small">لا يوجد رقم هاتف مسجّل لهذه الوحدة.</p>'}
+    <h3>🚪 ${esc(door)}${mine?' <span class="badge g">وحدتك</span>':''}</h3>
+    <p class="small" style="color:var(--muted);margin-top:-4px">
+      ${esc(unitTypeName(a))}${a.blockName?' · '+esc(a.blockName):''}
+      ${a.floor?' · '+esc(a.floor):''}
+      ${a.usageType?' · '+esc(a.usageType):''}
+      · ترقيم متسلسل: ${esc(a.number)}</p>
+
+    <div class="card mtop2" style="background:var(--tint)">
+      ${line('👤','المالك', a.ownerName, full?a.phone:null)}
+      ${a.tenantName||a.tenantPhone
+        ? line('🔑','المستأجر', a.tenantName, full?a.tenantPhone:null) : ''}
+      ${full&&a.email?`<div class="small mtop"><b>✉️ الإيميل:</b>
+        <span dir="ltr">${esc(a.email)}</span></div>`:''}
+      ${full?`<div class="small mtop"><b>💳 الاشتراك الشهري:</b>
+        ${money(a.monthlyFee)}</div>`:''}
     </div>
-    ${a.phone?`<a class="btn gold mtop" href="https://wa.me/${(a.phoneCountry||'').replace('+','')}${a.phone}" target="_blank">💬 تواصل عبر واتساب</a>`:''}
-    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`);
+
+    ${!full?`<p class="small mtop" style="color:var(--muted)">
+      أرقام التواصل بتظهر لصاحب الوحدة وللإدارة بس — حفاظًا على
+      خصوصية السكان.</p>`:''}
+
+    ${full&&!a.phone&&!a.tenantPhone?`<p class="small mtop"
+      style="color:var(--muted)">مفيش رقم مسجّل للوحدة دي.</p>`:''}
+
+    <div class="modal-actions">
+      ${isStaff?`<button class="btn ghost"
+        onclick="closeModal();openApartmentDetail('${esc(a.id)}')">
+        📋 التفاصيل الكاملة</button>`:''}
+      <button class="btn primary" onclick="closeModal()">إغلاق</button>
+    </div>`);
 }
 function pageAdminDashboard(u){
   const aps=D.apartments; const month=curMonth();
@@ -11750,7 +11799,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.04';
+const APP_BUILD='2.06';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11953,25 +12002,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.04"></script>
-<script type="module" src="emartna-auth.js?v=2.04"></script>
-<script type="module" src="emartna-profile.js?v=2.04"></script>
-<script type="module" src="emartna-users.js?v=2.04"></script>
-<script type="module" src="emartna-platform.js?v=2.04"></script>
-<script type="module" src="emartna-contactlog.js?v=2.04"></script>
-<script type="module" src="emartna-permreport.js?v=2.04"></script>
-<script type="module" src="emartna-finops.js?v=2.04"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.04"></script>
-<script type="module" src="emartna-planscreens.js?v=2.04"></script>
+<script type="module" src="emartna-cloud.js?v=2.06"></script>
+<script type="module" src="emartna-auth.js?v=2.06"></script>
+<script type="module" src="emartna-profile.js?v=2.06"></script>
+<script type="module" src="emartna-users.js?v=2.06"></script>
+<script type="module" src="emartna-platform.js?v=2.06"></script>
+<script type="module" src="emartna-contactlog.js?v=2.06"></script>
+<script type="module" src="emartna-permreport.js?v=2.06"></script>
+<script type="module" src="emartna-finops.js?v=2.06"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.06"></script>
+<script type="module" src="emartna-planscreens.js?v=2.06"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.04"></script>
+<script type="module" src="emartna-perms.js?v=2.06"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.04"></script>
+<script type="module" src="emartna-bundle.js?v=2.06"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
