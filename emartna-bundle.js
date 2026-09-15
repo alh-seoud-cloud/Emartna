@@ -1761,7 +1761,9 @@
       const acc = (D.accounts || []).find(a => a.id === id);
       if (!acc) return null;
       title = 'كشف حساب: ' + acc.name;
-      subtitle = acc.type === 'نقدي' ? '💵 خزينة نقدية' : '🏦 ' + (acc.bankName || 'حساب بنكي');
+      subtitle = (window.accTypeIcon?accTypeIcon(acc.type):'🏦') + ' ' +
+        (window.accTypeLabel?accTypeLabel(acc.type):'حساب') +
+        (acc.bankName ? ' — ' + acc.bankName : '');
       opening = Number(acc.opening) || 0;
       (D.ledger || []).forEach(l => {
         if (l.accountId !== id) return;
@@ -2559,7 +2561,7 @@
     <div class="section-title"><h3>الأصول (اللي للعمارة)</h3></div>
     <div class="card"><table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead>${th2}</thead><tbody>
-        ${accs.map((a,i) => r((a.type==='نقدي'?'💵 ':'🏦 ') + esc2(a.name), a.balance, (accsO[i]||{}).balance || 0)).join('')}
+        ${accs.map((a,i) => r((window.accTypeIcon?accTypeIcon(a.type):'🏦')+' ' + esc2(a.name), a.balance, (accsO[i]||{}).balance || 0)).join('')}
         ${r('مستحقات على الملاك (مدينون)', u.debit, uo.debit)}
         ${r('إجمالي الأصول', assetsNow, assetsOld, true)}
       </tbody></table></div>

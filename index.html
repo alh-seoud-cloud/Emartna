@@ -9753,7 +9753,7 @@ function pageTreasury(){
   const accName=id=>{const a=D.accounts.find(x=>x.id===id);return a?a.name:'-'};
   return `
   <div class="grid g3">
-    ${D.accounts.map(a=>`<div class="kpi ${accountBalance(a.id)>=0?'ok':'owe'}" style="cursor:pointer" onclick="openAccountStatement('${a.id}')"><div class="ic">${a.type==='نقدي'?'💵':'🏦'}</div><div class="lbl">${esc(a.name)}</div><div class="val">${money(accountBalance(a.id))}</div><button class="btn sm ghost" style="margin-top:8px" onclick="event.stopPropagation();openAccountModal('${a.id}')">تعديل</button></div>`).join('')}
+    ${D.accounts.map(a=>`<div class="kpi ${accountBalance(a.id)>=0?'ok':'owe'}" style="cursor:pointer" onclick="openAccountStatement('${a.id}')"><div class="ic">${accTypeIcon(a.type)}</div><div class="lbl">${esc(a.name)}</div><div class="val">${money(accountBalance(a.id))}</div><button class="btn sm ghost" style="margin-top:8px" onclick="event.stopPropagation();openAccountModal('${a.id}')">تعديل</button></div>`).join('')}
     <div class="kpi"><div class="ic">➕</div><div class="lbl">حساب جديد</div><button class="btn sm primary mtop" onclick="openAccountModal()">إضافة حساب</button></div>
   </div>
   <div class="flexrow mtop2">
@@ -9770,15 +9770,62 @@ function pageTreasury(){
   ],null,
   {emptyText:'لا توجد حركات بعد',exportName:'حركة الخزينة'})}`;
 }
+/* أنواع الخزائن — الوصف بيوضّح الفرق عشان المستخدم يختار صح.
+   لازم تطابق قيد accounts_type_check في القاعدة. */
+window.accTypeIcon = function(t){
+  const x=(window.ACCOUNT_TYPES||[]).find(y=>y.key===t);
+  return x ? x.icon : '🏦';
+};
+window.accTypeLabel = function(t){
+  const x=(window.ACCOUNT_TYPES||[]).find(y=>y.key===t);
+  return x ? x.label : (t||'حساب');
+};
+
+const ACCOUNT_TYPES = [
+  { key:'نقدي',  icon:'💵', label:'نقدي',
+    hint:'الكاش اللي في إيد الاتحاد' },
+  { key:'بنكي',  icon:'🏦', label:'حساب بنكي',
+    hint:'حساب في بنك باسم الاتحاد' },
+  { key:'محفظة', icon:'📱', label:'محفظة إلكترونية',
+    hint:'فودافون كاش · إنستاباي · أي محفظة رقمية' },
+  { key:'عهدة',  icon:'🤝', label:'عهدة نقدية',
+    hint:'مبلغ مع شخص — الحارس أو المندوب — ويترد بعدين' },
+  { key:'أخرى',  icon:'📦', label:'أخرى',
+    hint:'أي مصدر تاني للأموال' },
+];
+window.ACCOUNT_TYPES = ACCOUNT_TYPES;
+
+window.toggleAccTypeFields = function(){
+  const v=(document.getElementById('acType')||{}).value;
+  const t=ACCOUNT_TYPES.find(x=>x.key===v)||{};
+  const h=document.getElementById('acTypeHint');
+  if(h) h.textContent = t.hint || '';
+  /* اسم البنك ورقم الحساب يخصّوا البنكي والمحفظة بس */
+  const show = (v==='بنكي'||v==='محفظة');
+  ['acBankWrap','acNumWrap'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.style.display = show ? '' : 'none';
+  });
+  const lbl=document.getElementById('acBankLabel');
+  if(lbl) lbl.textContent = v==='محفظة' ? 'مزوّد المحفظة (إن وجد)' : 'اسم البنك (إن وجد)';
+  const nlbl=document.getElementById('acNumLabel');
+  if(nlbl) nlbl.textContent = v==='محفظة' ? 'رقم المحفظة (إن وجد)' : 'رقم الحساب (إن وجد)';
+};
+
 function openAccountModal(id){if(!guardAction('treasury','edit'))return;
+  setTimeout(()=>{ try{ toggleAccTypeFields(); }catch(e){} }, 60);
   const a=id?D.accounts.find(x=>x.id===id):null;
   openModal(`
     <h3>${a?'تعديل حساب':'إضافة حساب جديد'}</h3>
     <div class="field2"><label>اسم الحساب</label><input id="acName" value="${a?esc(a.name):''}" placeholder="مثال: حساب البنك الأهلي"></div>
-    <div class="field2"><label>النوع</label><select id="acType"><option value="نقدي" ${a&&a.type==='نقدي'?'selected':''}>نقدي</option><option value="بنكي" ${a&&a.type==='بنكي'?'selected':''}>بنكي</option></select></div>
+    <div class="field2"><label>النوع</label><select id="acType" onchange="toggleAccTypeFields()">${
+      ACCOUNT_TYPES.map(t=>`<option value="${t.key}" ${
+        (a?a.type:'نقدي')===t.key?'selected':''}>${t.icon} ${t.label}</option>`).join('')
+    }</select>
+      <p class="hint" id="acTypeHint">${(ACCOUNT_TYPES.find(t=>t.key===(a?a.type:'نقدي'))||{}).hint||''}</p></div>
     <div class="field2"><label>الرصيد الافتتاحي</label><input id="acOpening" type="number" value="${a?a.opening:0}"></div>
-    <div class="field2"><label>اسم البنك (إن وجد)</label><input id="acBank" value="${a?esc(a.bankName||''):''}"></div>
-    <div class="field2"><label>رقم الحساب (إن وجد)</label><input id="acNo" value="${a?esc(a.accountNo||''):''}"></div>
+    <div class="field2" id="acBankWrap"><label id="acBankLabel">اسم البنك (إن وجد)</label><input id="acBank" value="${a?esc(a.bankName||''):''}"></div>
+    <div class="field2" id="acNumWrap"><label id="acNumLabel">رقم الحساب (إن وجد)</label><input id="acNo" value="${a?esc(a.accountNo||''):''}"></div>
     <div class="modal-actions">
       <button class="btn primary" onclick="saveAccount(${a?`'${a.id}'`:'null'})">💾 حفظ</button>
       <button class="btn ghost" onclick="closeModal()">إلغاء</button>
@@ -11419,7 +11466,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.90';
+const APP_BUILD='1.92';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11622,25 +11669,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.90"></script>
-<script type="module" src="emartna-auth.js?v=1.90"></script>
-<script type="module" src="emartna-profile.js?v=1.90"></script>
-<script type="module" src="emartna-users.js?v=1.90"></script>
-<script type="module" src="emartna-platform.js?v=1.90"></script>
-<script type="module" src="emartna-contactlog.js?v=1.90"></script>
-<script type="module" src="emartna-permreport.js?v=1.90"></script>
-<script type="module" src="emartna-finops.js?v=1.90"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.90"></script>
-<script type="module" src="emartna-planscreens.js?v=1.90"></script>
+<script type="module" src="emartna-cloud.js?v=1.92"></script>
+<script type="module" src="emartna-auth.js?v=1.92"></script>
+<script type="module" src="emartna-profile.js?v=1.92"></script>
+<script type="module" src="emartna-users.js?v=1.92"></script>
+<script type="module" src="emartna-platform.js?v=1.92"></script>
+<script type="module" src="emartna-contactlog.js?v=1.92"></script>
+<script type="module" src="emartna-permreport.js?v=1.92"></script>
+<script type="module" src="emartna-finops.js?v=1.92"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.92"></script>
+<script type="module" src="emartna-planscreens.js?v=1.92"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=1.90"></script>
+<script type="module" src="emartna-perms.js?v=1.92"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=1.90"></script>
+<script type="module" src="emartna-bundle.js?v=1.92"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
