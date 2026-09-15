@@ -2112,13 +2112,27 @@ function syncUsageTypeDefault(){
    وحدته برقم بابها (٨٠٧). الرقم المتسلسل مالوش معنى عنده.
    دلوقتي بترجّع رقم الباب لما ترقيم الأدوار مفعّل (الافتراضي)،
    وبتغطي الـ٧١ موضع اللي بتستخدمها في البرنامج مرة واحدة. */
+/* اسم الوحدة في كل التقارير والكشوف.
+   ------------------------------------------------------------
+   ⚠️ الرقم بقى متخزّن في القاعدة (a.label) بدل ما يتحسب في
+      المتصفح. الحساب القديم كان بيدّي نتايج مختلفة لكل مستخدم
+      حسب زرار العرض عنده، فكشف الحساب الواحد كان يطلع برقمين.
+
+   الرقم اللي كله أرقام (٤٠٢) بيتعرض مع نوع الوحدة — «شقة ٤٠٢» —
+   عشان يفضل مفهوم في كشف مطبوع. أما لو رئيس الاتحاد كتب وصف
+   بنفسه (A-12 · محل ٣) فبيتعرض زي ما كتبه بالظبط، من غير زيادة. */
 function unitLabel(a){
   if(!a)return'-';
-  // الرقم المخصّص (زي A-12 أو محل ٣) بيغلب أي ترقيم تلقائي
-  if(a.label&&String(a.label).trim())
-    return (a.blockName?esc(a.blockName)+' - ':'')+esc(String(a.label).trim());
+  const blk=(a.blockName?esc(a.blockName)+' - ':'');
+  const lbl=a.label?String(a.label).trim():'';
+  if(lbl){
+    /* أرقام فقط (إنجليزي أو عربي) → نزوّد نوع الوحدة قدامه */
+    if(/^[0-9٠-٩]+$/.test(lbl)) return blk+unitTypeName(a)+' '+esc(lbl);
+    return blk+esc(lbl);
+  }
 
-  const pre=(a.blockName?esc(a.blockName)+' - ':'')+unitTypeName(a)+' ';
+  /* احتياطي: وحدة لسه ما وصلهاش رقم متخزّن */
+  const pre=blk+unitTypeName(a)+' ';
   if(window.doorNumber){
     try{
       const d=doorNumber(a);
@@ -12099,7 +12113,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.27';
+const APP_BUILD='2.28';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12302,25 +12316,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.27"></script>
-<script type="module" src="emartna-auth.js?v=2.27"></script>
-<script type="module" src="emartna-profile.js?v=2.27"></script>
-<script type="module" src="emartna-users.js?v=2.27"></script>
-<script type="module" src="emartna-platform.js?v=2.27"></script>
-<script type="module" src="emartna-contactlog.js?v=2.27"></script>
-<script type="module" src="emartna-permreport.js?v=2.27"></script>
-<script type="module" src="emartna-finops.js?v=2.27"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.27"></script>
-<script type="module" src="emartna-planscreens.js?v=2.27"></script>
+<script type="module" src="emartna-cloud.js?v=2.28"></script>
+<script type="module" src="emartna-auth.js?v=2.28"></script>
+<script type="module" src="emartna-profile.js?v=2.28"></script>
+<script type="module" src="emartna-users.js?v=2.28"></script>
+<script type="module" src="emartna-platform.js?v=2.28"></script>
+<script type="module" src="emartna-contactlog.js?v=2.28"></script>
+<script type="module" src="emartna-permreport.js?v=2.28"></script>
+<script type="module" src="emartna-finops.js?v=2.28"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.28"></script>
+<script type="module" src="emartna-planscreens.js?v=2.28"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.27"></script>
+<script type="module" src="emartna-perms.js?v=2.28"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.27"></script>
+<script type="module" src="emartna-bundle.js?v=2.28"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
