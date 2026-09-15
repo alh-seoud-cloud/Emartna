@@ -249,6 +249,9 @@ const BUILDING_FIELDS = {
      لازم يتقرا من القاعدة عشان الشاشة تعرض الوضع الصح. */
   residentsSeeExpenses:'residents_see_expenses',
   residentsSeeBalances:'residents_see_balances',
+  /* دليل السكان: اسم ورقم مالك/مستأجر باقي الوحدات.
+     الافتراضي مقفول — الأرقام بيانات شخصية والكود بيتوزّع. */
+  residentsSeeDirectory:'residents_see_directory',
   distributionWeights:'distribution_weights',
   lastReminderMonth:'last_reminder_month',
   lastChargeReminderMonth:'last_charge_reminder_month',
@@ -380,9 +383,12 @@ async function fetchBuilding(buildingUuid, legacyId){
 
   /* صف العمارة وبيانات الوحدات العامة بيتجابوا مع بعض بدل
      ما نستنى الأول يخلص وبعدين نطلب التاني. */
-  const [b, unitsPub] = await Promise.all([
+  const [b, unitsPub, unitsDir] = await Promise.all([
     sb.from('buildings').select('*').eq('id', buildingUuid).single(),
     sb.rpc('units_public', { b_id: buildingUuid }).then(r => r, () => ({ data:null })),
+    /* بيانات التواصل — الخادم هو اللي بيقرر يبعتها ولا لأ حسب
+       مفتاح residents_see_directory. الواجهة بتعرض اللي وصلها بس. */
+    sb.rpc('units_directory', { b_id: buildingUuid }).then(r => r, () => ({ data:null })),
   ]);
   if (b.error) throw b.error;
 
@@ -430,11 +436,21 @@ async function fetchBuilding(buildingUuid, legacyId){
       const pub = unitsPub || { data:null };     // اتجابت بالتوازي فوق
       if (!pub.error && pub.data){
         const mine = new Map((res.data || []).map(r => [r.id, r]));
+        /* ⚠️ الأعمدة دي كانت مكتوبة فاضية بالإيد، فشاشة الوحدة
+           كانت بتعرض «—» حتى والبيانات موجودة في القاعدة.
+           دلوقتي بتيجي من units_directory — والخادم بيفضّيها
+           بنفسه لو المفتاح مقفول. */
+        const dir = new Map((((unitsDir||{}).data) || []).map(r => [r.id, r]));
         res = { data: pub.data.map(u => mine.get(u.id) || {
           id: u.id, legacy_id: u.legacy_id, number: u.number,
           block_name: u.block_name, floor: u.floor, type: u.type,
           usage_type: u.usage_type, closed: u.closed,
-          owner_name: '', tenant_name: '', phone: '', email: '',
+          owner_name:   (dir.get(u.id)||{}).owner_name   || '',
+          tenant_name:  (dir.get(u.id)||{}).tenant_name  || '',
+          phone:        (dir.get(u.id)||{}).phone        || '',
+          tenant_phone: (dir.get(u.id)||{}).tenant_phone || '',
+          email: '',
+          /* المالي بيفضل للإدارة — الدالة أصلًا مابترجّعهوش */
           monthly_fee: 0, opening_balance: 0, __limited: true,
         }), error: null };
       }

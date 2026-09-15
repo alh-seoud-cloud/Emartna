@@ -11129,6 +11129,16 @@ async function openTransparencyModal(){
           تقدر تنشر الكشف من غير ما تدّي تفاصيل الحركات.</div></span>
     </label>
 
+    <label class="checkline mtop">
+      <input type="checkbox" id="trDir" ${b.residentsSeeDirectory===true?'checked':''}>
+      <span><b>دليل السكان — أسماء وأرقام الجيران</b>
+        <div class="small" style="color:var(--muted)">
+          الساكن يضغط على أي وحدة فيشوف اسم المالك ورقمه واسم المستأجر ورقمه.
+          <b style="color:var(--red)">خلّي بالك:</b> كود العمارة بيتوزّع على السكان،
+          وأي حد يوصله الكود هياخد الأسماء والأرقام كلها. الاشتراك والرصيد
+          بيفضلوا للإدارة في كل الأحوال.</div></span>
+    </label>
+
     <p class="small mtop2" style="color:var(--muted)">
       كشف حساب الساكن ومستحقاته بتفضل ظاهرة له في الحالتين — دي حقه.</p>
 
@@ -11141,15 +11151,16 @@ async function saveTransparency(){
   const ex=document.getElementById('trExp').checked;
   const ba=document.getElementById('trBal').checked;
   const stm=!!(document.getElementById('trStm')||{}).checked;
+  const dir=!!(document.getElementById('trDir')||{}).checked;
   D.building.residentsSeeExpenses=ex; D.building.residentsSeeBalances=ba;
-  D.building.residentsSeeStatements=stm;
+  D.building.residentsSeeStatements=stm; D.building.residentsSeeDirectory=dir;
   save();
   try{
     const uuid=CLOUD._cache.buildingUuid[activeBuildingId];
     if(uuid){
       const r=await CLOUD._sb.from('buildings')
         .update({residents_see_expenses:ex,residents_see_balances:ba,
-                 residents_see_statements:stm})
+                 residents_see_statements:stm,residents_see_directory:dir})
         .eq('id',uuid).select('id');
       if(r.error)throw r.error;
       if(!r.data||!r.data.length)return showMessage('الحفظ ما أثّرش على أي صف.');
@@ -12015,7 +12026,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.24';
+const APP_BUILD='2.25';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12218,25 +12229,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.24"></script>
-<script type="module" src="emartna-auth.js?v=2.24"></script>
-<script type="module" src="emartna-profile.js?v=2.24"></script>
-<script type="module" src="emartna-users.js?v=2.24"></script>
-<script type="module" src="emartna-platform.js?v=2.24"></script>
-<script type="module" src="emartna-contactlog.js?v=2.24"></script>
-<script type="module" src="emartna-permreport.js?v=2.24"></script>
-<script type="module" src="emartna-finops.js?v=2.24"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.24"></script>
-<script type="module" src="emartna-planscreens.js?v=2.24"></script>
+<script type="module" src="emartna-cloud.js?v=2.25"></script>
+<script type="module" src="emartna-auth.js?v=2.25"></script>
+<script type="module" src="emartna-profile.js?v=2.25"></script>
+<script type="module" src="emartna-users.js?v=2.25"></script>
+<script type="module" src="emartna-platform.js?v=2.25"></script>
+<script type="module" src="emartna-contactlog.js?v=2.25"></script>
+<script type="module" src="emartna-permreport.js?v=2.25"></script>
+<script type="module" src="emartna-finops.js?v=2.25"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.25"></script>
+<script type="module" src="emartna-planscreens.js?v=2.25"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.24"></script>
+<script type="module" src="emartna-perms.js?v=2.25"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.24"></script>
+<script type="module" src="emartna-bundle.js?v=2.25"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
