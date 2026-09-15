@@ -2467,6 +2467,63 @@ function tableSearchInput(tableId,val){
 /* =========================================================
    الواجهات
    ========================================================= */
+/* شاشة المستخدم اللي مالوش عمارة */
+function noBuildingHTML(){
+  const u=(window.CLOUD_AUTH&&CLOUD_AUTH.user)||{};
+  const nm=(u.user_metadata&&u.user_metadata.full_name)||'';
+  return `
+  <div style="min-height:100dvh;display:flex;align-items:center;justify-content:center;
+    padding:22px;background:var(--bg)">
+    <div class="card" style="max-width:460px;width:100%;text-align:center">
+      <div style="font-size:40px">🏢</div>
+      <h3 class="mtop">أهلًا${nm?' '+esc(nm):''} 👋</h3>
+      <p class="small mtop">حسابك شغّال، بس مش مربوط بأي عمارة دلوقتي.</p>
+
+      <div class="card mtop2" style="background:var(--tint);text-align:start">
+        <b class="small">🔑 عندك كود عمارة؟</b>
+        <p class="small">لو رئيس اتحاد عمارتك باعتلك كود، اكتبه هنا.</p>
+        <div class="field2 mtop">
+          <input id="joinCode" placeholder="مثال: AYU5AL"
+            style="text-transform:uppercase;text-align:center;letter-spacing:2px">
+        </div>
+        <button class="btn primary" style="width:100%" onclick="joinWithCode()">
+          انضم للعمارة</button>
+      </div>
+
+      <div class="card mtop2" style="text-align:start">
+        <b class="small">🏗️ أو ابدأ عمارة جديدة</b>
+        <p class="small">لو انت رئيس الاتحاد وعايز تسجّل عمارتك.</p>
+        <button class="btn mtop" style="width:100%" onclick="startNewBuilding()">
+          سجّل عمارة جديدة</button>
+      </div>
+
+      <p class="small mtop2" style="color:var(--muted)">
+        محتاج مساعدة؟ كلّمنا على واتساب وهنظبّطهالك.</p>
+      <button class="btn ghost sm mtop" onclick="logout()">🚪 تسجيل الخروج</button>
+    </div>
+  </div>`;
+}
+
+window.joinWithCode = async function(){
+  const el=document.getElementById('joinCode');
+  const code=((el||{}).value||'').trim().toUpperCase();
+  if(!code) return showMessage('اكتب كود العمارة');
+  try{
+    const { data, error } = await CLOUD._sb.rpc('join_by_building_code',
+      { p_code: code });
+    if(error) throw error;
+    showMessage((data&&data.note) || 'اتسجّلت في العمارة');
+    setTimeout(()=>location.reload(), 900);
+  }catch(e){ showMessage(e.message||'الكود مش صحيح'); }
+};
+
+window.startNewBuilding = function(){
+  /* نفس مسار التسجيل العادي — بس المستخدم مسجّل دخول بالفعل */
+  try{ window.__viewMode='signup'; }catch(e){}
+  if(window.goToSignup) goToSignup();
+  else showMessage('من فضلك سجّل خروج وابدأ تسجيل عمارة جديدة.');
+};
+
 function renderRoot(){
   if(window.__previewMode){
     document.getElementById('root').innerHTML=`<div style="position:sticky;top:0;z-index:50;background:var(--accent-dark);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.2)">
@@ -2489,7 +2546,13 @@ function renderRoot(){
   }
   else if(s&&s.type==='building'){
     if(!D||activeBuildingId!==s.buildingId){D=loadBuildingData(s.buildingId);activeBuildingId=s.buildingId;if(D&&!window.CLOUD)migrateBuildingData();}
-    if(!D||!currentUser()){clearSession();html=loginHTML();}
+    /* ⚠️ مستخدم بلا عمارة (عمارته اتحذفت أو وقف قبل ما يكمّل) كان
+       بيترمي لشاشة الدخول، يدخل تاني، ويترمي تاني — حلقة مقفولة.
+       دلوقتي بيشوف شاشة فيها خياراته. */
+    if(!D||!currentUser()){
+      if(window.CLOUD_AUTH && CLOUD_AUTH.user){ html=noBuildingHTML(); }
+      else { clearSession(); html=loginHTML(); }
+    }
     else html=shellHTML(currentUser());
   } else html=loginHTML();
   document.getElementById('root').innerHTML=html;
@@ -3608,7 +3671,7 @@ function renderSysContent(){
   }
   /* الشاشات اللي محتواها نافذة */
   if(SYS_MODAL_PAGES[curPage]){ c.innerHTML=pageSysModalHost(curPage); return; }
-  const fn={sysdash:pageSysDashboard,syslocations:(window.pageSysLocations||(()=>'<p class="small">جاري التحميل…</p>')),syspipeline:(window.pageSysPipeline||pageSysPipeline),sysfunnel:(window.pageSysFunnel||(()=>'<p class="small">جاري التحميل…</p>')),syshealth:(window.pageSysHealth||(()=>'<p class="small">جاري التحميل…</p>')),sysleads:pageSysMarketingLeads,sysvisits:(window.pageSysVisits||(()=>'<p class="small">جاري التحميل…</p>')),sysoffers:pageSysOffers,syscoupons:pageSysCoupons,sysmessages:pageSysMessageTemplates,sysusers:pageSysUsers,syslicenses:pageSysLicenses,syslicensehistory:pageSysLicenseHistory,sysplans:pageSysPlans,sysrevenue:pageSysRevenue,syslanding:pageSysLandingSettings,sysrenewals:pageSysRenewals,sysproposals:pageSysProposals,systickets:pageSysSupportTickets,sysstaff:pageSupportStaff,systasks:pageSysTasks,sysdailysummary:pageSysDailySummary,sysreports:pageSysReports,sysactivitylog:pageSysActivityLog,sysreferrals:pageSysReferrals,sysversions:pageSysVersions,sysmarketing:pageMarketingCard,systrash:pageSysTrash,sysaisettings:pageSysAISettings,sysaireports:pageSysAIReports,syssettings:pageSysSettings}[curPage]||pageSysDashboard;
+  const fn={sysdash:pageSysDashboard,syslocations:(window.pageSysLocations||(()=>'<p class="small">جاري التحميل…</p>')),syspipeline:(window.pageSysPipeline||pageSysPipeline),sysfunnel:(window.pageSysFunnel||(()=>'<p class="small">جاري التحميل…</p>')),syshealth:(window.pageSysHealth||(()=>'<p class="small">جاري التحميل…</p>')),sysorphans:(window.pageSysOrphans||(()=>'<p class="small">جاري التحميل…</p>')),sysleads:pageSysMarketingLeads,sysvisits:(window.pageSysVisits||(()=>'<p class="small">جاري التحميل…</p>')),sysoffers:pageSysOffers,syscoupons:pageSysCoupons,sysmessages:pageSysMessageTemplates,sysusers:pageSysUsers,syslicenses:pageSysLicenses,syslicensehistory:pageSysLicenseHistory,sysplans:pageSysPlans,sysrevenue:pageSysRevenue,syslanding:pageSysLandingSettings,sysrenewals:pageSysRenewals,sysproposals:pageSysProposals,systickets:pageSysSupportTickets,sysstaff:pageSupportStaff,systasks:pageSysTasks,sysdailysummary:pageSysDailySummary,sysreports:pageSysReports,sysactivitylog:pageSysActivityLog,sysreferrals:pageSysReferrals,sysversions:pageSysVersions,sysmarketing:pageMarketingCard,systrash:pageSysTrash,sysaisettings:pageSysAISettings,sysaireports:pageSysAIReports,syssettings:pageSysSettings}[curPage]||pageSysDashboard;
   c.innerHTML=fn();
   if(curPage==='sysmarketing')renderMarketingQr();
   const bw=document.getElementById('sysNotifBellWrap'); if(bw)bw.innerHTML=renderSysNotifBell();
@@ -7070,7 +7133,7 @@ var SYS_NAV_GROUPS=[
   {key:'site',icon:'🖥️',label:'الموقع العام',items:[['syslanding','🖥️','الصفحة الرئيسية وإعدادات العرض'],['sysversions','🆕','سجل الإصدارات والتحديثات'],['sysmarketing','🖨️','بطاقة دعاية للطباعة'],['syslocations','🗺️','المحافظات والمدن']]},
   {key:'feedback',icon:'💬',label:'التواصل مع العملاء',items:[['sysproposals','💡','مقترحات العملاء'],['systickets','🎫','طلبات الدعم الفني'],['syscontactlog','📇','سجل التواصل'],['sysfollowups','📅','متابعات مستحقة'],['sysstaff','🧑‍💼','فريق الدعم الفني'],['systasks','✅','مهام الفريق']]},
   {key:'ai',icon:'🤖',label:'الذكاء الاصطناعي',items:[['sysaisettings','⚙️','إعدادات الذكاء الاصطناعي'],['sysaireports','🤖','تقارير الذكاء الاصطناعي']]},
-  {key:'system',icon:'🛠️',label:'النظام',items:[['syshealth','🩺','صحة المنصة'],['sysidle','⏳','سياسة إقفال الجلسة'],['sysfeatures','🎛️','مميزات البرنامج'],['systrash','🗑️','سلة المحذوفات'],['syssettings','⚙️','إعدادات حسابي']]},
+  {key:'system',icon:'🛠️',label:'النظام',items:[['syshealth','🩺','صحة المنصة'],['sysorphans','👤','مستخدمون بلا عمارة'],['sysidle','⏳','سياسة إقفال الجلسة'],['sysfeatures','🎛️','مميزات البرنامج'],['systrash','🗑️','سلة المحذوفات'],['syssettings','⚙️','إعدادات حسابي']]},
 ];
 window.__navExpandedGroup=null;
 function findGroupKeyForPage(groups,page){const g=groups.find(g=>g.items.some(it=>it[0]===page));return g?g.key:null}
@@ -11647,7 +11710,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.01';
+const APP_BUILD='2.02';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11850,25 +11913,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.01"></script>
-<script type="module" src="emartna-auth.js?v=2.01"></script>
-<script type="module" src="emartna-profile.js?v=2.01"></script>
-<script type="module" src="emartna-users.js?v=2.01"></script>
-<script type="module" src="emartna-platform.js?v=2.01"></script>
-<script type="module" src="emartna-contactlog.js?v=2.01"></script>
-<script type="module" src="emartna-permreport.js?v=2.01"></script>
-<script type="module" src="emartna-finops.js?v=2.01"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.01"></script>
-<script type="module" src="emartna-planscreens.js?v=2.01"></script>
+<script type="module" src="emartna-cloud.js?v=2.02"></script>
+<script type="module" src="emartna-auth.js?v=2.02"></script>
+<script type="module" src="emartna-profile.js?v=2.02"></script>
+<script type="module" src="emartna-users.js?v=2.02"></script>
+<script type="module" src="emartna-platform.js?v=2.02"></script>
+<script type="module" src="emartna-contactlog.js?v=2.02"></script>
+<script type="module" src="emartna-permreport.js?v=2.02"></script>
+<script type="module" src="emartna-finops.js?v=2.02"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.02"></script>
+<script type="module" src="emartna-planscreens.js?v=2.02"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.01"></script>
+<script type="module" src="emartna-perms.js?v=2.02"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.01"></script>
+<script type="module" src="emartna-bundle.js?v=2.02"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح

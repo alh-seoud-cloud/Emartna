@@ -13146,6 +13146,93 @@
       <div class="small mtop" style="color:var(--muted)">${pct.toFixed(1)}% مستخدم</div>`;
   }
 
+  /* ===== مستخدمون بلا عمارة =====
+     بيحصل لما عمارة تتحذف (العضوية CASCADE) أو المستخدم يقف قبل
+     ما يكمّل التسجيل. قبل كده كانوا بيضيعوا بلا أثر. */
+  window.pageSysOrphans = function(){
+    if (!window.__orphans){ loadOrphans(); return '<p class="small">⏳ بيحمّل...</p>'; }
+    const rows = window.__orphans;
+    return `
+    <div class="card content-narrow">
+      <div class="flexrow" style="justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <h3>👤 مستخدمون بلا عمارة</h3>
+        <button class="btn sm ghost" onclick="reloadOrphans()">🔄 تحديث</button>
+      </div>
+      <p class="small mtop">حسابات شغّالة مش مربوطة بأي عمارة — غالبًا عمارتهم
+        اتحذفت أو وقفوا قبل ما يكمّلوا. تقدر تربطهم بعمارة أو تكلّمهم.</p>
+    </div>
+
+    ${!rows.length ? `<div class="card content-narrow mtop2"
+      style="text-align:center;padding:28px">
+      <div style="font-size:32px">✅</div>
+      <p class="mtop">كل المستخدمين مربوطين بعمارات.</p></div>` :
+    `<div class="card content-narrow mtop2">
+      <div class="table-wrap">
+        <table><thead><tr><th>الاسم</th><th>الرقم</th><th>اتسجل</th>
+          <th>عضويات سابقة</th><th></th></tr></thead><tbody>
+        ${rows.map(r=>`<tr>
+          <td><b>${esc2(r.name)}</b>
+            ${r.email?`<div class="small" dir="ltr"
+              style="color:var(--muted)">${esc2(r.email)}</div>`:''}</td>
+          <td class="small" dir="ltr">${esc2(r.phone||'—')}</td>
+          <td class="small">${esc2(r.created_at)}</td>
+          <td>${r.had_memberships
+            ? `<span class="badge y">${r.had_memberships} اتحذفت</span>`
+            : '<span class="small" style="color:var(--muted)">مفيش</span>'}</td>
+          <td><div class="flexrow" style="gap:5px">
+            <button class="btn sm" onclick="attachUserPick('${esc2(r.user_id)}','${esc2(r.name)}')">
+              🔗 اربطه بعمارة</button>
+            ${r.phone?`<a class="btn sm gold" target="_blank"
+              href="https://wa.me/${String(r.phone).replace(/\D/g,'')}">💬</a>`:''}
+          </div></td>
+        </tr>`).join('')}
+        </tbody></table></div>
+    </div>`}`;
+  };
+
+  async function loadOrphans(){
+    try{
+      const { data, error } = await sb().rpc('orphan_users');
+      if (error) throw error;
+      window.__orphans = data || [];
+    }catch(e){ window.__orphans = []; }
+    if (window.renderSysContent) renderSysContent();
+  }
+  window.reloadOrphans = function(){ window.__orphans = null; loadOrphans(); };
+
+  window.attachUserPick = function(uid, name){
+    const list = (window.REG && REG.buildings) || [];
+    if (!list.length) return showMessage('مفيش عمارات.');
+    openModal(`
+      <h3>🔗 ربط ${esc2(name)} بعمارة</h3>
+      <div class="field2 mtop"><label>العمارة</label>
+        <select id="atBld">${list.map(b=>`<option value="${esc2(b.__uuid||b.id)}">
+          ${esc2(b.name)}${b.code?' — '+esc2(b.code):''}</option>`).join('')}</select></div>
+      <div class="field2"><label>الدور</label>
+        <select id="atRole">
+          <option value="admin">رئيس الاتحاد</option>
+          <option value="deputy">نائب رئيس الاتحاد</option>
+          <option value="accountant">محاسب</option>
+          <option value="owner">صاحب شقة</option>
+        </select></div>
+      <div class="modal-actions">
+        <button class="btn primary" onclick="attachUserGo('${esc2(uid)}')">اربط</button>
+        <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+      </div>`);
+  };
+
+  window.attachUserGo = async function(uid){
+    const b = (document.getElementById('atBld')||{}).value;
+    const r = (document.getElementById('atRole')||{}).value || 'admin';
+    try{
+      const { error } = await sb().rpc('admin_attach_user',
+        { p_user:uid, p_building:b, p_role:r });
+      if (error) throw error;
+      closeModal(); showMessage('اتربط بالعمارة ✅');
+      reloadOrphans();
+    }catch(e){ showMessage(e.message||'تعذّر الربط'); }
+  };
+
   window.pageSysHealth = function(){
     if (H === null){ load(); return '<p class="small">⏳ بيقيس المساحة...</p>'; }
 
