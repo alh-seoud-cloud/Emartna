@@ -263,11 +263,11 @@ window.permReportPrint = function(){
   const w = window.open('', '_blank');
   w.document.write(`<html dir="rtl" lang="ar"><head><meta charset="utf-8">
     <title>تقرير الصلاحيات — ${esc2(bName)}</title>
-    <style>body{font-family:system-ui,sans-serif;padding:18px}
+    <style>${window.printBackCSS||""}body{font-family:system-ui,sans-serif;padding:18px}
       table{width:100%;border-collapse:collapse;font-size:12px}
       th,td{border:1px solid #ddd;padding:5px;text-align:center}
       th:first-child,td:first-child{text-align:right}
-      .small{font-size:11px;color:#666}</style></head><body>
+      .small{font-size:11px;color:#666}</style></head><body>${window.printBackBar?printBackBar():""}
     <h2>تقرير الصلاحيات — ${esc2(bName)}</h2>
     <p class="small">${new Date().toLocaleString('ar-EG')}</p>
     ${box.innerHTML}</body></html>`);
