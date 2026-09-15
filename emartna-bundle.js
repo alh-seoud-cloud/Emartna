@@ -14824,7 +14824,7 @@
 })();
 
 /* ═══ emartna-matchgrid.js ═══ */
-(function(){
+(async function(){
 /* ============================================================
    عمارتنا — مطابقة الوحدات شهر بشهر
    ------------------------------------------------------------
@@ -14978,6 +14978,13 @@
           .map(([k,l])=>`<button class="btn sm ${FILTER===k?'':'ghost'}"
             onclick="mgFilter('${k}')">${l}</button>`).join('')}
       </div>
+
+      ${periods.length?`<div class="flexrow mtop2" style="gap:6px;flex-wrap:wrap">
+        <button class="btn sm gold" onclick="mgBulkSettled('${
+          esc2(periods[periods.length-1])}')">
+          ⚡ اقفل المسدّدين في ${esc2(mShort(periods[periods.length-1]))}</button>
+      </div>
+      <p class="hint">الوحدات اللي رصيدها صفر مفيش خلاف عليها — تقدر تقفلها مرة واحدة.</p>`:''}
     </div>
 
     <div class="grid g4 mtop2">
@@ -15000,6 +15007,35 @@
       <p class="hint">✅ طابق · ⚠️ عليه اعتراض · ⏳ لسه ما طابقش —
         اضغط على أي رصيد للتفاصيل</p>
     </div>`;
+  };
+
+  /* ===== مطابقة جماعية للمسدّدين =====
+     الوحدة اللي رصيدها صفر مفيش خلاف عليها — مفيش مبلغ محل نزاع.
+     فتقفيلها جماعيًا آمن، ويوفّر على رئيس الاتحاد ٩٠ مكالمة.
+     ⚠️ اللي عليهم متأخرات مستثناة — دول اللي محتاجين مراجعة فعلية. */
+  window.mgBulkSettled = function(period){
+    const rows = (G||[]).filter(r => r.period === period
+      && r.status === 'none' && Math.abs(Number(r.closing)||0) < 0.5);
+    if (!rows.length)
+      return showMessage('مفيش وحدات مسدّدة ومستنية مطابقة في الشهر ده.');
+
+    confirmAction(
+      `اقفل مطابقة ${rows.length} وحدة رصيدها صفر في ${mLabel(period)}؟\n\n` +
+      'الوحدات اللي عليها متأخرات مش هتتقفل — دي محتاجة مراجعة معاهم.\n\n' +
+      'هتتسجّل باسمك كمطابقة إدارية.',
+      async () => {
+        let done = 0;
+        for (const r of rows){
+          try{
+            await sb().rpc('ack_on_behalf', {
+              p_apartment: r.apartment_id, p_month: period,
+              p_status: 'ok', p_note: 'رصيد صفر — مفيش خلاف' });
+            done++;
+          }catch(e){}
+        }
+        showMessage(`✅ اتقفلت ${done} وحدة.`);
+        reloadMatchGrid();
+      });
   };
 
   /* ---------- خيارات الخانة ---------- */
@@ -15058,11 +15094,22 @@
       'برجاء مراجعة الحساب وتأكيده من التطبيق، أو الرد علينا لو فيه أي ملاحظة.';
   }
 
-  window.mgPhoneAck = function(apId, period){
+  window.mgPhoneAck = async function(apId, period){
+    /* بنجيب الشهور اللي هتتقفل تبعًا عشان نوري الرقم قبل التأكيد —
+       المستخدم لازم يعرف إنه بيقفل ٢٠ شهر مش شهر واحد. */
+    let older = [];
+    try{
+      const { data } = await sb().rpc('ack_cascade_preview',
+        { p_apartment: apId, p_month: period });
+      older = data || [];
+    }catch(e){}
+
+    const M2 = n => window.money ? money(Number(n)||0) : (Number(n)||0);
     openModal(`
-      <h3>📞 مطابقة تليفونية</h3>
-      <p class="small mtop">بتسجّل إن صاحب الوحدة راجع حسابه معاك تليفونيًا.
-        هتتسجّل باسمك وبعلامة واضحة إنها مطابقة تليفونية.</p>
+      <h3>📞 مطابقة مع صاحب الوحدة</h3>
+      <p class="small mtop">بتسجّل إنك راجعت الحساب معاه — تليفونيًا أو وجاهة.
+        هتتسجّل باسمك.</p>
+
       <div class="field2 mtop2"><label>النتيجة</label>
         <select id="mgSt">
           <option value="ok">✅ راجع وموافق</option>
@@ -15070,22 +15117,45 @@
         </select></div>
       <div class="field2"><label>ملاحظة (اختياري)</label>
         <input id="mgNote" placeholder="مثال: اتكلمنا يوم 3/10"></div>
+
+      ${older.length ? `
+      <label class="checkline mtop2" style="align-items:flex-start">
+        <input type="checkbox" id="mgCascade" checked>
+        <span><b>اقفل الشهور السابقة كمان (${older.length} شهر)</b>
+          <div class="small" style="color:var(--muted)">
+            الرصيد تراكمي — الموافقة على رصيد ${esc2(mShort(period))}
+            معناها إن اللي قبله مظبوط.</div>
+          <div class="card mtop" style="max-height:110px;overflow:auto;
+            background:var(--tint);padding:8px">
+            ${older.map(r=>`<div class="flexrow small"
+              style="justify-content:space-between;padding:3px 0">
+              <span>${esc2(mShort(r.period))} ${esc2(r.period.slice(0,4))}</span>
+              <b>${M2(r.closing)}</b></div>`).join('')}
+          </div>
+        </span>
+      </label>` : ''}
+
       <div class="modal-actions">
         <button class="btn primary" onclick="mgSaveAck('${esc2(apId)}','${esc2(period)}')">
-          💾 سجّل</button>
+          💾 سجّل المطابقة</button>
         <button class="btn ghost" onclick="closeModal()">إلغاء</button>
-      </div>`);
+      </div>`, true);
   };
 
   window.mgSaveAck = async function(apId, period){
     const st = (document.getElementById('mgSt')||{}).value || 'ok';
     const note = ((document.getElementById('mgNote')||{}).value||'').trim();
+    const cascade = !!(document.getElementById('mgCascade')||{}).checked;
     try{
-      const { error } = await sb().rpc('ack_on_behalf', {
+      const fn = cascade ? 'ack_on_behalf_cascade' : 'ack_on_behalf';
+      const { data, error } = await sb().rpc(fn, {
         p_apartment: apId, p_month: period,
         p_status: st, p_note: note || null });
       if (error) throw error;
-      closeModal(); toast('اتسجّلت المطابقة');
+      closeModal();
+      showMessage(cascade && data > 1
+        ? `✅ اتسجّلت المطابقة — واتقفل معاها ${data-1} شهر سابق.`
+        : '✅ اتسجّلت المطابقة');
       reloadMatchGrid();
     }catch(e){ showMessage(e.message || 'تعذّر التسجيل'); }
   };
