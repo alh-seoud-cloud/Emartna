@@ -249,6 +249,12 @@ const BUILDING_FIELDS = {
      لازم يتقرا من القاعدة عشان الشاشة تعرض الوضع الصح. */
   residentsSeeExpenses:'residents_see_expenses',
   residentsSeeBalances:'residents_see_balances',
+  /* نمط ترقيم الوحدات + إعدادات الإنشاء.
+     كانت عايشة في ذاكرة المتصفح وبتموت مع الصفحة، فالبرنامج
+     مكانش فاكر إزاي رقّم — ولا ينفع يعيد الترقيم أو يعرضه. */
+  numberingStyle:'numbering_style',
+  numberingPrefix:'numbering_prefix',
+  floorPlan:'floor_plan',
   /* دليل السكان: اسم ورقم مالك/مستأجر باقي الوحدات.
      الافتراضي مقفول — الأرقام بيانات شخصية والكود بيتوزّع. */
   residentsSeeDirectory:'residents_see_directory',

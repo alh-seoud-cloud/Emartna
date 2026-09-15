@@ -9386,6 +9386,16 @@ function pageBuilding(){
       <div class="field2"><label>عدد شقق الدور الأرضي</label><input id="bGroundCount" type="number" value="${b.groundFloorCount||4}"></div>
       <div class="field2"><label>عدد المحلات من ضمن الدور الأرضي (إن وجدت)</label><input id="bGroundShops" type="number" min="0" value="${b.groundShopsCount||0}"></div>
       <div class="field2"><label>عدد الشقق في كل دور متكرر بعده</label><input id="bPerFloor" type="number" value="${b.apartmentsPerFloor||4}"></div>
+      <div class="field2"><label>نمط ترقيم الوحدات</label>
+        <select id="bNumStyle">
+          ${[['floor','دور + رقم — ١٠١ · ١٠٢ · ٢٠١'],
+             ['plain','متسلسل بالعربي — ١ · ٢ · ٣'],
+             ['en','متسلسل بالإنجليزي — 1 · 2 · 3'],
+             ['typed','بالنوع — شقة ١ · محل ١']]
+            .map(o=>`<option value="${o[0]}" ${(b.numberingStyle||'floor')===o[0]?'selected':''}>${o[1]}</option>`).join('')}
+        </select>
+        <p class="small" style="color:var(--muted)">النمط اللي الوحدات الجديدة هتتّرقم بيه.
+          الأرقام الحالية ما بتتغيّرش إلا لو ضغطت «إعادة ترقيم».</p></div>
       <div class="field2"><label>سنة الإنشاء</label><input id="bYear" value="${esc(b.buildYear)}"></div>
       <div class="field2"><label>العملة</label><input id="bCurrency" value="${esc(b.currency)}"></div>
     </div>
@@ -9394,6 +9404,7 @@ function pageBuilding(){
       <button class="btn primary" onclick="saveBuilding()">💾 حفظ البيانات</button>
       <button class="btn" onclick="reassignFloors()">🏢 ترتيب الأدوار</button>
       <button class="btn ghost" onclick="applyGroundShopsPrompt()">🏪 محلات الأرضي</button>
+      <button class="btn ghost" onclick="renumberAllUnits()">🔢 إعادة ترقيم الوحدات</button>
     </div>
     <p class="small mtop">إعادة الترتيب التلقائي: الشقق 1-${b.groundFloorCount||4} = الدور الأرضي، وبعد كده كل ${b.apartmentsPerFloor||4} شقق = دور متكرر (الأول، الثاني...). أي تعديل يدوي سابق للأدوار هيتغيّر. زرار "تطبيق عدد المحلات" بيحوّل أول وحدات الدور الأرضي (برقم "عدد المحلات" اللي كتبته) لنوع "محل"، والباقي يفضل "شقة".</p>
   </div>
@@ -9412,11 +9423,70 @@ function saveBuilding(){
   D.building.groundFloorCount=Number(document.getElementById('bGroundCount').value||4);
   D.building.groundShopsCount=Math.min(D.building.groundFloorCount,Number(document.getElementById('bGroundShops').value||0));
   D.building.apartmentsPerFloor=Number(document.getElementById('bPerFloor').value||4);
+  /* النمط بيتخزّن على العمارة عشان الوحدات الجديدة تتّرقم بيه،
+     وعشان يفضل معروف لو حبّ يعيد الترقيم بعدين */
+  const __ns=(document.getElementById('bNumStyle')||{}).value;
+  if(__ns) D.building.numberingStyle=__ns;
   D.building.buildYear=document.getElementById('bYear').value.trim();
   D.building.currency=document.getElementById('bCurrency').value.trim()||'جنيه';
   D.building.notes=document.getElementById('bNotes').value.trim();
   logActivity('تعديل بيانات العمارة','');
   save();toast('تم حفظ بيانات العمارة');renderContent();
+}
+/* ============================================================
+   إعادة ترقيم كل الوحدات بالنمط المحفوظ على العمارة.
+   ------------------------------------------------------------
+   ⚠️ الرقم ده بيظهر في كشوف حساب وإيصالات سداد اتطبعت واتبعتت
+      للسكان. فتغييره مش تغيير شكل — الساكن ممكن ما يعرفش كشفه.
+      عشان كده فيه تأكيد صريح بيقول عدد الوحدات المتأثرة.
+
+   ⚠️ الوحدات اللي رئيس الاتحاد كتب أرقامها بإيده (حاجة غير
+      الترقيم التلقائي، زي A-12 أو «محل ٣») ما بتتلمسش — قراره
+      يغلب على أي حساب تلقائي.
+   ============================================================ */
+function renumberAllUnits(){
+  if(!guardAction('settings','edit'))return;
+  const style=(D.building&&D.building.numberingStyle)||'floor';
+  const ground=Number(D.building.groundFloorCount||4);
+  const per=Number(D.building.apartmentsPerFloor||4);
+
+  /* اليدوي = أي رقم فيه حروف. الأرقام الصرفة اتولدت تلقائيًا */
+  const isManual=a=>{
+    const l=a.label?String(a.label).trim():'';
+    return l && !/^[0-9\u0660-\u0669]+$/.test(l);
+  };
+  const targets=D.apartments.filter(a=>!isManual(a));
+  const manual=D.apartments.length-targets.length;
+
+  const styleName={floor:'دور + رقم (١٠١ · ٢٠١)',plain:'متسلسل بالعربي',
+                   en:'متسلسل بالإنجليزي',typed:'بالنوع (شقة ١ · محل ١)'}[style]||style;
+
+  confirmDelete(
+    `إعادة ترقيم ${targets.length} وحدة بنمط «${styleName}»؟\n\n`+
+    (manual?`${manual} وحدة أرقامها متكتوبة بإيدك — مش هتتغيّر.\n\n`:'')+
+    `⚠️ الرقم ده ظاهر في كشوف الحساب وإيصالات السداد. لو كنت بعتّ `+
+    `كشوف للسكان بالأرقام القديمة، الأرقام الجديدة ممكن تلخبطهم.`,
+    ()=>{
+      /* الترقيم داخل كل دور بالترتيب — نفس منطق العرض القديم */
+      const seen={};
+      [...targets].sort((x,y)=>(x.number||0)-(y.number||0)).forEach(a=>{
+        const key=String(a.floor||'')+'|'+String(a.blockName||'');
+        seen[key]=(seen[key]||0)+1;
+        const idx=seen[key];
+        let v='';
+        if(style==='floor'){
+          const f=(window.floorSortIndex?floorSortIndex(a):null);
+          v=(f&&f>0)?String(f*100+idx):String(idx);
+        }else if(style==='typed'){
+          v=unitTypeName(a)+' '+a.number;
+        }else{
+          v=String(a.number);
+        }
+        a.label=v;
+      });
+      logActivity('إعادة ترقيم الوحدات',styleName);
+      save();toast('اتعمل — '+targets.length+' وحدة');renderContent();
+    });
 }
 function applyGroundShopsPrompt(){
   const shopsCount=Math.min(D.building.groundFloorCount||4,Number(document.getElementById('bGroundShops').value||0));
@@ -12113,7 +12183,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.28';
+const APP_BUILD='2.29';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12316,25 +12386,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.28"></script>
-<script type="module" src="emartna-auth.js?v=2.28"></script>
-<script type="module" src="emartna-profile.js?v=2.28"></script>
-<script type="module" src="emartna-users.js?v=2.28"></script>
-<script type="module" src="emartna-platform.js?v=2.28"></script>
-<script type="module" src="emartna-contactlog.js?v=2.28"></script>
-<script type="module" src="emartna-permreport.js?v=2.28"></script>
-<script type="module" src="emartna-finops.js?v=2.28"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.28"></script>
-<script type="module" src="emartna-planscreens.js?v=2.28"></script>
+<script type="module" src="emartna-cloud.js?v=2.29"></script>
+<script type="module" src="emartna-auth.js?v=2.29"></script>
+<script type="module" src="emartna-profile.js?v=2.29"></script>
+<script type="module" src="emartna-users.js?v=2.29"></script>
+<script type="module" src="emartna-platform.js?v=2.29"></script>
+<script type="module" src="emartna-contactlog.js?v=2.29"></script>
+<script type="module" src="emartna-permreport.js?v=2.29"></script>
+<script type="module" src="emartna-finops.js?v=2.29"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.29"></script>
+<script type="module" src="emartna-planscreens.js?v=2.29"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.28"></script>
+<script type="module" src="emartna-perms.js?v=2.29"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.28"></script>
+<script type="module" src="emartna-bundle.js?v=2.29"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
