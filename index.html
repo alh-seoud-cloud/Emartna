@@ -7850,11 +7850,13 @@ function openApartmentContact(id){
     (D.users||[]).some(x=>x.username===u.username&&x.apartmentId===a.id) ||
     (window.myApartment&&(myApartment()||{}).id===a.id)
   ));
-  /* التواصل: لصاحب الوحدة وللإدارة.
-     المالي: للإدارة بس — الساكن مايشوفش اشتراك ولا رصيد وحدة غيره.
-     لو وحدته هو، بيشوف تفاصيله من شاشة حسابه مش من هنا. */
-  const full=isStaff||mine;          // بيانات التواصل
-  const canSeeMoney=isStaff;         // بيانات مالية
+  /* ⚠️ كنت خفيت التواصل كمان — والطلب كان إخفاء المالي بس.
+     الهدف من الشاشة دي أصلًا إن السكان يتواصلوا مع بعض.
+
+     التواصل: للكل — اسم ورقم المالك والمستأجر.
+     المالي: للإدارة بس — الاشتراك الشهري والرصيد. */
+  const full=true;                   // بيانات التواصل — للكل
+  const canSeeMoney=isStaff;         // بيانات مالية — للإدارة بس
 
   const door=window.doorNumber?doorNumber(a):a.number;
   const line=(ic,lbl,val,phone)=>`<div class="flexrow" style="gap:8px;
@@ -7885,11 +7887,9 @@ function openApartmentContact(id){
         ${money(a.monthlyFee)}</div>`:''}
     </div>
 
-    ${!full?`<p class="small mtop" style="color:var(--muted)">
-      أرقام التواصل بتظهر لصاحب الوحدة وللإدارة بس — حفاظًا على
-      خصوصية السكان.</p>`:''}
-    ${full&&!canSeeMoney?`<p class="small mtop" style="color:var(--muted)">
-      البيانات المالية بتظهر في شاشة «حسابي وشقتي».</p>`:''}
+    ${!canSeeMoney?`<p class="small mtop" style="color:var(--muted)">
+      ${mine?'بياناتك المالية في شاشة «حسابي وشقتي».'
+            :'الاشتراك والرصيد بيظهروا للإدارة بس.'}</p>`:''}
 
     ${full&&!a.phone&&!a.tenantPhone?`<p class="small mtop"
       style="color:var(--muted)">مفيش رقم مسجّل للوحدة دي.</p>`:''}
@@ -12000,7 +12000,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.21';
+const APP_BUILD='2.22';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12203,25 +12203,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.21"></script>
-<script type="module" src="emartna-auth.js?v=2.21"></script>
-<script type="module" src="emartna-profile.js?v=2.21"></script>
-<script type="module" src="emartna-users.js?v=2.21"></script>
-<script type="module" src="emartna-platform.js?v=2.21"></script>
-<script type="module" src="emartna-contactlog.js?v=2.21"></script>
-<script type="module" src="emartna-permreport.js?v=2.21"></script>
-<script type="module" src="emartna-finops.js?v=2.21"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.21"></script>
-<script type="module" src="emartna-planscreens.js?v=2.21"></script>
+<script type="module" src="emartna-cloud.js?v=2.22"></script>
+<script type="module" src="emartna-auth.js?v=2.22"></script>
+<script type="module" src="emartna-profile.js?v=2.22"></script>
+<script type="module" src="emartna-users.js?v=2.22"></script>
+<script type="module" src="emartna-platform.js?v=2.22"></script>
+<script type="module" src="emartna-contactlog.js?v=2.22"></script>
+<script type="module" src="emartna-permreport.js?v=2.22"></script>
+<script type="module" src="emartna-finops.js?v=2.22"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.22"></script>
+<script type="module" src="emartna-planscreens.js?v=2.22"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.21"></script>
+<script type="module" src="emartna-perms.js?v=2.22"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.21"></script>
+<script type="module" src="emartna-bundle.js?v=2.22"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
