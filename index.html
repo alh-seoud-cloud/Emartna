@@ -7629,6 +7629,20 @@ function openLedgerDetail(id,readOnly){
   const acc=l.accountId?D.accounts.find(a=>a.id===l.accountId):null;
   openModal(`
     <h3>تفاصيل الحركة</h3>
+    ${l.attPath?`<div class="card mtop" style="background:var(--tint)">
+      <div class="flexrow" style="justify-content:space-between;gap:8px">
+        <span class="small"><b>🧾 إيصال السداد</b>
+          <div style="color:var(--muted)">${esc(l.attName||'مرفق')}</div></span>
+        <button class="btn sm" onclick="viewReceipt('${esc(l.id)}')">عرض</button>
+      </div></div>`
+    : (l.type==='دفعة' && guardActionSilent('collections','edit')
+      ? `<div class="card mtop" style="border:1px dashed var(--line)">
+        <div class="flexrow" style="justify-content:space-between;gap:8px">
+          <span class="small" style="color:var(--muted)">مفيش إيصال مرفق</span>
+          <button class="btn sm ghost" onclick="attachReceiptTo('${esc(l.id)}')">
+            🧾 ارفع إيصال</button>
+        </div></div>` : '')}
+
     <div class="small" style="line-height:2.3">
       <div><b>النوع:</b> ${ledgerBadge(l.type)}</div>
       <div><b>الشقة:</b> ${ap?unitLabel(ap)+' - '+esc(ap.ownerName):'-'}</div>
@@ -9536,6 +9550,9 @@ function pageCollections(){
   ];
   const ledCols=[
     {key:'type',label:'النوع',value:l=>l.type,cell:l=>ledgerBadge(l.type)},
+    /* 🧾 = فيه إيصال · ＋ = ارفع إيصال (للدفعات بس) */
+    {key:'rcpt',label:'🧾',value:l=>l.attPath?1:0,
+     cell:l=>window.receiptBadge?receiptBadge(l):''},
     {key:'ap',label:'الشقة',value:l=>{const ap=D.apartments.find(x=>x.id===l.apartmentId);return ap?ap.number:0},cell:l=>{const ap=D.apartments.find(x=>x.id===l.apartmentId);return ap?unitLabel(ap):'-';}},
     {key:'note',label:'البيان',value:l=>l.note||l.project||'',cell:l=>esc(l.note||l.project||(l.month?'اشتراك '+monthLabel(l.month):''))},
     {key:'amount',label:'المبلغ',value:l=>Number(l.amount),cell:l=>money(l.amount)},
@@ -9759,6 +9776,11 @@ function openPaymentModal(apId){if(!guardAction('collections','add'))return;
     <div class="field2"><label>الشهر المرتبط (إن وجد)</label><input id="pMonth" type="month" value="${curMonth()}"></div>
     <div class="field2"><label>تاريخ الدفع</label><input id="pDate" type="date" value="${todayISO()}"></div>
     <div class="field2"><label>ملاحظة</label><input id="pNote" placeholder="مثال: دفعة نقدية"></div>
+    <div class="field2"><label>🧾 إيصال السداد (اختياري)</label>
+      <input type="file" id="pReceipt" accept="image/*,.pdf">
+      <p class="hint">صورة الإيصال أو لقطة التحويل — بتفضل محفوظة للأبد
+        كإثبات، ومش بتتأرشف.</p></div>
+    <div id="pRecProg" class="small" style="color:var(--muted)"></div>
     <div class="modal-actions"><button class="btn primary" onclick="savePayment()">💾 حفظ الدفعة</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
   refreshPaymentProjectOptions();
 }
@@ -9778,6 +9800,24 @@ function savePayment(){if(!guardAction('collections','add'))return;
   notifyApartmentOwner(apId,'تم تسجيل دفعة على حسابك',money(amount));
   const ap=D.apartments.find(a=>a.id===apId);
   logActivity('تسجيل دفعة',(ap?unitLabel(ap):'')+' - '+money(amount));
+
+  /* إيصال السداد: بيترفع بعد الحفظ عشان الدفعة تتسجّل حتى لو
+     الرفع فشل — الأولوية للقيد المالي مش للمرفق. */
+  const recEl=document.getElementById('pReceipt');
+  const file=recEl&&recEl.files&&recEl.files[0];
+  const entry=D.ledger[D.ledger.length-1];
+  if(file&&window.uploadPaymentReceipt){
+    save();
+    uploadPaymentReceipt(file, entry).then(()=>{
+      closeModal();toast('اتسجّلت الدفعة ومعاها الإيصال');renderContent();
+    }).catch(e=>{
+      closeModal();
+      showMessage('اتسجّلت الدفعة ✅\n\nبس الإيصال ما اترفعش: '+
+        (e.message||'')+'\n\nتقدر ترفعه بعدين من تفاصيل الدفعة.');
+      renderContent();
+    });
+    return;
+  }
   save();closeModal();toast('تم تسجيل الدفعة');renderContent();
 }
 function deleteLedgerEntry(id){if(!guardAction('collections','delete'))return;confirmDelete('حذف هذه الحركة المالية نهائيًا؟ يفضّل استخدام "عكس الحركة" بدلًا من الحذف للحفاظ على سجل مراجعة كامل.',()=>{logActivity('حذف حركة مالية',id);D.ledger=D.ledger.filter(l=>l.id!==id);save();toast('تم الحذف');renderContent();})}
@@ -11710,7 +11750,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.02';
+const APP_BUILD='2.03';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11913,25 +11953,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.02"></script>
-<script type="module" src="emartna-auth.js?v=2.02"></script>
-<script type="module" src="emartna-profile.js?v=2.02"></script>
-<script type="module" src="emartna-users.js?v=2.02"></script>
-<script type="module" src="emartna-platform.js?v=2.02"></script>
-<script type="module" src="emartna-contactlog.js?v=2.02"></script>
-<script type="module" src="emartna-permreport.js?v=2.02"></script>
-<script type="module" src="emartna-finops.js?v=2.02"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.02"></script>
-<script type="module" src="emartna-planscreens.js?v=2.02"></script>
+<script type="module" src="emartna-cloud.js?v=2.03"></script>
+<script type="module" src="emartna-auth.js?v=2.03"></script>
+<script type="module" src="emartna-profile.js?v=2.03"></script>
+<script type="module" src="emartna-users.js?v=2.03"></script>
+<script type="module" src="emartna-platform.js?v=2.03"></script>
+<script type="module" src="emartna-contactlog.js?v=2.03"></script>
+<script type="module" src="emartna-permreport.js?v=2.03"></script>
+<script type="module" src="emartna-finops.js?v=2.03"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.03"></script>
+<script type="module" src="emartna-planscreens.js?v=2.03"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.02"></script>
+<script type="module" src="emartna-perms.js?v=2.03"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.02"></script>
+<script type="module" src="emartna-bundle.js?v=2.03"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح

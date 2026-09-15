@@ -67,6 +67,9 @@ const MAPS = {
     fields: {
       id:'legacy_id', type:'type', amount:'amount', month:'month',
       date:'date', note:'note', project:'project',
+      /* إيصال السداد — مستند إثبات، مستثنى من الأرشفة */
+      attPath:'att_path', attName:'att_name',
+      attKind:'att_kind', attSize:'att_size',
       fromPaymentRequestId:'from_payment_request_id', createdAt:'created_at',
     },
     refs: {

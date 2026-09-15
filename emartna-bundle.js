@@ -13597,3 +13597,186 @@
 })();
 
 })();
+
+/* ═══ emartna-receipt.js ═══ */
+(async function(){
+/* ============================================================
+   عمارتنا — إيصال السداد
+   ------------------------------------------------------------
+   الساكن بيقول «أنا دفعت»، ورئيس الاتحاد بيدوّر في واتساب على
+   صورة التحويل. الإيصال هنا بيتحفظ جنب القيد نفسه.
+
+   ⚠️ إيصال السداد مستند إثبات — مستثنى من الأرشفة التلقائية،
+   عكس مرفقات المحادثة. مساره doc/ مش chat/.
+   ============================================================ */
+
+(function(){
+  'use strict';
+
+  const esc2 = s => (window.esc ? esc(s) : String(s == null ? '' : s));
+  const sb   = () => (window.CLOUD && window.CLOUD._sb) || null;
+  const bUuid= () => { try{ return CLOUD._cache.buildingUuid[window.activeBuildingId] || null; }
+                       catch(e){ return null; } };
+
+  const MAX = 5 * 1024 * 1024;
+  const OK  = ['image/jpeg','image/png','image/webp','application/pdf'];
+  const kb  = n => !n ? '' : n < 1048576 ? Math.round(n/1024)+' ك.ب'
+                                          : (n/1048576).toFixed(1)+' م.ب';
+
+  /* ضغط الصور قبل الرفع — الإيصال مش محتاج دقة كاميرا كاملة */
+  async function shrink(file){
+    if (!file.type.startsWith('image/')) return file;
+    try{
+      const img = await new Promise((res,rej)=>{
+        const i = new Image();
+        i.onload = () => res(i); i.onerror = rej;
+        i.src = URL.createObjectURL(file);
+      });
+      const max = 1400;
+      const sc = Math.min(1, max/Math.max(img.width, img.height));
+      if (sc === 1 && file.size < 700*1024) return file;
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width*sc); c.height = Math.round(img.height*sc);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      const blob = await new Promise(r => c.toBlob(r, 'image/webp', 0.75));
+      URL.revokeObjectURL(img.src);
+      return (blob && blob.size < file.size) ? blob : file;
+    }catch(e){ return file; }
+  }
+
+  /* الرفع: بيربط الملف بالقيد بعد ما يتزامن */
+  window.uploadPaymentReceipt = async function(file, entry){
+    const s = sb(), b = bUuid();
+    if (!s || !b) throw new Error('مش متصل بالسحابة');
+    if (file.size > MAX) throw new Error('الملف أكبر من ٥ ميجا');
+    if (file.type && !OK.includes(file.type))
+      throw new Error('نوع الملف مش مدعوم — صورة أو PDF');
+
+    const prog = document.getElementById('pRecProg');
+    if (prog) prog.textContent = '⏳ بنرفع الإيصال...';
+
+    const blob = await shrink(file);
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().slice(0,6);
+    const path = `doc/${b}/rcpt_${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
+
+    const { error } = await s.storage.from('attachments')
+      .upload(path, blob, { contentType: blob.type || file.type });
+    if (error){
+      const m = String(error.message||'');
+      if (/policy|row-level|violates/i.test(m))
+        throw new Error('المساحة خلصت — فرّغ مساحة من: الإعدادات ← مساحة المرفقات');
+      throw error;
+    }
+
+    /* بنحفظ المسار على العنصر المحلي — المزامنة بترفعه للقاعدة */
+    entry.attPath = path;
+    entry.attName = file.name;
+    entry.attKind = blob.type || file.type;
+    entry.attSize = blob.size;
+    if (window.save) save();
+    if (prog) prog.textContent = '';
+    return path;
+  };
+
+  /* رفع إيصال لدفعة موجودة */
+  window.attachReceiptTo = function(localId){
+    const e = (D.ledger||[]).find(x => x.id === localId);
+    if (!e) return;
+    openModal(`
+      <h3>🧾 إيصال السداد</h3>
+      <p class="small mtop">${esc2(e.note||'دفعة')} — ${window.money?money(e.amount):e.amount}</p>
+      <div class="field2 mtop"><label>اختار الإيصال</label>
+        <input type="file" id="rcFile" accept="image/*,.pdf">
+        <p class="hint">صورة أو PDF · لحد ٥ ميجا · الصور بتتضغط تلقائيًا.</p></div>
+      <div id="rcProg" class="small" style="color:var(--muted)"></div>
+      <div class="modal-actions">
+        <button class="btn primary" onclick="saveReceiptFor('${esc2(localId)}')">
+          💾 ارفع</button>
+        <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+      </div>`);
+  };
+
+  window.saveReceiptFor = async function(localId){
+    const e = (D.ledger||[]).find(x => x.id === localId);
+    const f = (document.getElementById('rcFile')||{}).files;
+    if (!e || !f || !f[0]) return showMessage('اختار ملف الأول');
+    const prog = document.getElementById('rcProg');
+    try{
+      if (prog) prog.textContent = '⏳ بنرفع...';
+      await uploadPaymentReceipt(f[0], e);
+      closeModal(); toast('اترفع الإيصال');
+      if (window.renderContent) renderContent();
+    }catch(err){
+      if (prog) prog.textContent = '';
+      showMessage(err.message || 'تعذّر الرفع');
+    }
+  };
+
+  /* عرض الإيصال */
+  window.viewReceipt = async function(localId){
+    const e = (D.ledger||[]).find(x => x.id === localId);
+    if (!e || !e.attPath) return showMessage('مفيش إيصال مرفق.');
+    let url = null;
+    try{
+      const { data, error } = await sb().storage.from('attachments')
+        .createSignedUrl(e.attPath, 3600);
+      if (error) throw error;
+      url = data.signedUrl;
+    }catch(err){ return showMessage('تعذّر فتح الإيصال: ' + (err.message||'')); }
+
+    const isImg = String(e.attKind||'').startsWith('image/');
+    openModal(`
+      <div class="flexrow" style="justify-content:space-between;gap:8px">
+        <b style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;
+          text-overflow:ellipsis">🧾 ${esc2(e.attName||'إيصال')}</b>
+        <a class="btn sm ghost" href="${url}" target="_blank" download>⬇️ تنزيل</a>
+      </div>
+      <p class="small mtop" style="color:var(--muted)">
+        ${esc2(e.date||'')} · ${window.money?money(e.amount):e.amount}
+        ${e.attSize?' · '+kb(e.attSize):''}</p>
+      <div class="mtop" style="background:#f4f6f5;border-radius:10px;overflow:hidden">
+        ${isImg
+          ? `<img src="${url}" style="width:100%;display:block;max-height:70vh;
+               object-fit:contain">`
+          : `<iframe src="${url}" style="width:100%;height:70vh;border:0"></iframe>`}
+      </div>
+      <div class="modal-actions">
+        ${guardActionSilent('collections','delete')
+          ? `<button class="btn red" onclick="removeReceipt('${esc2(localId)}')">
+              🗑 شيل الإيصال</button>` : ''}
+        <button class="btn primary" onclick="closeModal()">إغلاق</button>
+      </div>`, true);
+  };
+
+  window.removeReceipt = function(localId){
+    const e = (D.ledger||[]).find(x => x.id === localId);
+    if (!e || !e.attPath) return;
+    confirmAction('شيل الإيصال؟ الدفعة هتفضل زي ما هي.', async () => {
+      try{
+        await sb().storage.from('attachments').remove([e.attPath]);
+        e.attPath = null; e.attName = null; e.attKind = null; e.attSize = null;
+        save(); closeModal(); toast('اتشال الإيصال');
+        if (window.renderContent) renderContent();
+      }catch(err){ showMessage(err.message || 'تعذّر الحذف'); }
+    });
+  };
+
+  /* شارة الإيصال في الجداول وتفاصيل القيد */
+  window.receiptBadge = function(e){
+    if (!e) return '';
+    if (e.attPath)
+      return `<button class="btn sm ghost" title="عرض الإيصال"
+        onclick="event.stopPropagation();viewReceipt('${esc2(e.id)}')"
+        style="padding:2px 7px">🧾</button>`;
+    if (e.type === 'دفعة' && window.guardActionSilent
+        && guardActionSilent('collections','edit'))
+      return `<button class="btn sm ghost" title="ارفع إيصال"
+        onclick="event.stopPropagation();attachReceiptTo('${esc2(e.id)}')"
+        style="padding:2px 7px;opacity:.45">＋</button>`;
+    return '';
+  };
+
+  console.log('[عمارتنا] إيصال السداد جاهز');
+})();
+
+})();
