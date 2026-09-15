@@ -1212,11 +1212,13 @@
           <div>💬 <b>مرفقات المحادثات</b> — بتتأرشف تلقائيًا بعد
             ${window.__chatRetention || 15} يوم</div>
           <div class="mtop">🗂️ <b>كشوف المصروفات</b> — بتفضل للأبد</div>
-          <div>🧾 <b>إيصالات السداد ومستندات المصروفات</b> — بتفضل للأبد</div>
+          <div>🧾 <b>إيصالات السداد ومستندات المصروفات</b> — بتفضل للأبد،
+            وبتتضغط تلقائيًا بعد ٦ شهور عشان تاخد مساحة أقل</div>
         </div>
         <p class="small mtop" style="color:var(--muted)">
-          المستندات المحاسبية إثبات — عمرها ما تتشال. المحادثة عابرة،
-          فمرفقاتها بتتأرشف والرسالة بتفضل مكانها.</p>
+          المستندات المحاسبية إثبات — <b>عمرها ما تتشال</b>. بعد ٦ شهور
+          بتتضغط بس (الإيصال يفضل مقروء والحجم ينزل ٨٠٪).
+          المحادثة عابرة، فمرفقاتها بتتأرشف والرسالة بتفضل مكانها.</p>
       </div>
 
       <button class="btn ${pct>=70?'primary':''} mtop2" style="width:100%"
@@ -13775,6 +13777,75 @@
         style="padding:2px 7px;opacity:.45">＋</button>`;
     return '';
   };
+
+  /* ============================================================
+     الضغط الأرشيفي
+     ------------------------------------------------------------
+     الإيصال مستند إثبات — ما بيتحذفش أبدًا. لكن بعد ٦ شهور بيتضغط
+     أقوى: ٨٠٠ بكسل بجودة ٦٠٪. الإيصال يفضل مقروء تمامًا والحجم
+     ينزل ~٨٠٪ (٣٠٠ ك.ب → ٦٠ ك.ب).
+
+     ده بيخلي ٢٠ ميجا تستوعب ٣٣٠ إيصال بدل ٦٦ — من غير ما تخسر
+     أي دليل.
+     ============================================================ */
+  async function shrinkHard(blob){
+    const img = await new Promise((res,rej)=>{
+      const i = new Image();
+      i.onload = () => res(i); i.onerror = rej;
+      i.src = URL.createObjectURL(blob);
+    });
+    const max = 800;
+    const sc = Math.min(1, max/Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width*sc); c.height = Math.round(img.height*sc);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const out = await new Promise(r => c.toBlob(r, 'image/webp', 0.60));
+    URL.revokeObjectURL(img.src);
+    return out;
+  }
+
+  async function compressOld(){
+    try{
+      const s = sb(), b = bUuid();
+      if (!s || !b) return;
+      if (!window.guardActionSilent
+          || !guardActionSilent('collections','edit')) return;
+
+      const { data, error } = await s.rpc('docs_to_compress', { p_building:b });
+      if (error || !data || !data.length) return;
+
+      let saved = 0, n = 0;
+      for (const r of data.slice(0, 10)){
+        try{
+          /* بننزّل الأصل، نضغطه، ونرفعه في نفس المسار */
+          const { data:sig } = await s.storage.from('attachments')
+            .createSignedUrl(r.path, 300);
+          if (!sig) continue;
+          const orig = await (await fetch(sig.signedUrl)).blob();
+          const small = await shrinkHard(orig);
+          if (!small || small.size >= orig.size){
+            /* مفيش فايدة — بنعلّمه خلاص عشان ما نعيدش المحاولة */
+            await s.rpc('mark_doc_compressed',
+              { p_source:r.source, p_id:r.id, p_new_size:orig.size });
+            continue;
+          }
+          const { error:upErr } = await s.storage.from('attachments')
+            .upload(r.path, small, { contentType:'image/webp', upsert:true });
+          if (upErr) continue;
+          await s.rpc('mark_doc_compressed',
+            { p_source:r.source, p_id:r.id, p_new_size:small.size });
+          saved += (orig.size - small.size); n++;
+        }catch(e){}
+      }
+      if (n && window.toast)
+        toast(`اتضغط ${n} مستند قديم — وفّرنا ${Math.round(saved/1024)} ك.ب`);
+    }catch(e){}
+  }
+
+  /* بتشتغل بهدوء بعد ما البرنامج يستقر — مش أولوية */
+  setTimeout(compressOld, 25000);
+  document.addEventListener('emartna:building-complete',
+    () => setTimeout(compressOld, 25000));
 
   console.log('[عمارتنا] إيصال السداد جاهز');
 })();
