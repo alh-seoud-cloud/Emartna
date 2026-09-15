@@ -7533,6 +7533,11 @@ function renderContent(){
     settings:pageSettings,aireports:pageAIReports,blocks:pageCompoundBlocks,vendors:pageVendors,maintenance:pageMaintenance,floors:()=>pageFloorsReport(),analytics:pageAnalytics,chat:pageBuildingChat,license:pageLicense,referral:pageReferralProgram,activity:pageActivity,myproposals:pageMyProposals,support:pageMySupportTickets,whatsnew:pageWhatsNew,home:pageOwnerHome,profile:pageProfile
   }[curPage]||pageAdminDashboard;
   c.innerHTML=(isStaffRole(u.role)?licenseBannerHTML():'')+fn(u);
+  /* صفوف بادئات الترقيم بتتبني بعد الرسم — السكربت جوه innerHTML
+     مابيشتغلش، فالاستدعاء لازم يكون من هنا */
+  if(window.currentPage==='building'||document.getElementById('bNumRows')){
+    try{ if((D.building||{}).numberingStyle==='custom'&&window.bBuildNumRows) bBuildNumRows(); }catch(e){}
+  }
   if(window.hydrateStorageImages) hydrateStorageImages(c);
   const bw=document.getElementById('notifBellWrap'); if(bw)bw.innerHTML=renderNotifBell();
   bindPageEvents(curPage,u);
@@ -9387,15 +9392,24 @@ function pageBuilding(){
       <div class="field2"><label>عدد المحلات من ضمن الدور الأرضي (إن وجدت)</label><input id="bGroundShops" type="number" min="0" value="${b.groundShopsCount||0}"></div>
       <div class="field2"><label>عدد الشقق في كل دور متكرر بعده</label><input id="bPerFloor" type="number" value="${b.apartmentsPerFloor||4}"></div>
       <div class="field2"><label>نمط ترقيم الوحدات</label>
-        <select id="bNumStyle">
+        <select id="bNumStyle" onchange="bNumStyleChanged()">
           ${[['floor','دور + رقم — ١٠١ · ١٠٢ · ٢٠١'],
              ['plain','متسلسل بالعربي — ١ · ٢ · ٣'],
              ['en','متسلسل بالإنجليزي — 1 · 2 · 3'],
-             ['typed','بالنوع — شقة ١ · محل ١']]
+             ['typed','بالنوع — شقة ١ · محل ١'],
+             ['custom','هحددها بنفسي لكل دور']]
             .map(o=>`<option value="${o[0]}" ${(b.numberingStyle||'floor')===o[0]?'selected':''}>${o[1]}</option>`).join('')}
         </select>
-        <p class="small" style="color:var(--muted)">النمط اللي الوحدات الجديدة هتتّرقم بيه.
-          الأرقام الحالية ما بتتغيّرش إلا لو ضغطت «إعادة ترقيم».</p></div>
+        <p class="small" style="color:var(--muted)" id="bNumHint">${
+          (b.numberingStyle==='custom')?'اكتب بداية الترقيم لكل دور.'
+          :'النمط اللي الوحدات الجديدة هتتّرقم بيه. الأرقام الحالية ما بتتغيّرش إلا لو ضغطت «إعادة ترقيم».'}</p></div>
+      <div class="field2 ${b.numberingStyle==='custom'?'':'hidden'}" id="bNumCustomWrap" style="grid-column:1/-1">
+        <label>بداية الترقيم لكل دور</label>
+        <div id="bNumRows" style="max-height:34vh;overflow:auto"></div>
+        <p class="small" style="color:var(--muted)">
+          اكتب <b>١٠١</b> في الدور الأول تطلع ١٠١ · ١٠٢ · ١٠٣،
+          أو اكتب <b>A</b> تطلع A1 · A2 · A3. الدور اللي تسيبه فاضي
+          بيتّرقم بالنمط العادي.</p></div>
       <div class="field2"><label>سنة الإنشاء</label><input id="bYear" value="${esc(b.buildYear)}"></div>
       <div class="field2"><label>العملة</label><input id="bCurrency" value="${esc(b.currency)}"></div>
     </div>
@@ -9427,6 +9441,15 @@ function saveBuilding(){
      وعشان يفضل معروف لو حبّ يعيد الترقيم بعدين */
   const __ns=(document.getElementById('bNumStyle')||{}).value;
   if(__ns) D.building.numberingStyle=__ns;
+  /* البادئات بتتخزّن على العمارة عشان تفضل معروفة لو ضاف دور بعدين */
+  if(__ns==='custom'){
+    const pre={};
+    document.querySelectorAll('#bNumRows .b-nrow').forEach(r=>{
+      const v=r.querySelector('input').value.trim();
+      if(v) pre[r.dataset.i]=v;
+    });
+    D.building.numberingPrefix=pre;
+  }
   D.building.buildYear=document.getElementById('bYear').value.trim();
   D.building.currency=document.getElementById('bCurrency').value.trim()||'جنيه';
   D.building.notes=document.getElementById('bNotes').value.trim();
@@ -9444,6 +9467,77 @@ function saveBuilding(){
       الترقيم التلقائي، زي A-12 أو «محل ٣») ما بتتلمسش — قراره
       يغلب على أي حساب تلقائي.
    ============================================================ */
+/* أدوار العمارة مرتّبة — مصدر واحد لصفوف البادئات وإعادة الترقيم */
+function bFloorsList(){
+  const seen={};
+  (D.apartments||[]).forEach(a=>{
+    const f=String(a.floor||'');
+    if(!(f in seen)) seen[f]={name:f, i:(window.floorSortIndex?floorSortIndex(a):0), n:0};
+    seen[f].n++;
+  });
+  return Object.values(seen).sort((x,y)=>x.i-y.i);
+}
+
+/* صفوف «بداية الترقيم لكل دور» */
+function bBuildNumRows(){
+  const box=document.getElementById('bNumRows'); if(!box)return;
+  const saved=(D.building&&D.building.numberingPrefix)||{};
+  const old={};
+  box.querySelectorAll('.b-nrow').forEach(r=>{old[r.dataset.i]=r.querySelector('input').value;});
+  box.innerHTML=bFloorsList().map(f=>`
+    <div class="b-nrow flexrow" data-i="${f.i}"
+         style="gap:6px;align-items:center;padding:5px 0;border-bottom:1px dashed var(--line)">
+      <span class="small" style="min-width:110px">${esc(f.name)}</span>
+      <input class="b-np" style="flex:1;min-width:80px"
+        value="${esc(old[f.i]!==undefined?old[f.i]:(saved[f.i]||''))}"
+        placeholder="مثال: ${f.i===0?'1':(f.i*100+1)}"
+        oninput="bNumPreview()">
+      <span class="small" style="color:var(--muted);min-width:96px"
+        data-prev>${esc(f.n)} وحدة</span>
+    </div>`).join('')||'<p class="small">مفيش وحدات لسه.</p>';
+  bNumPreview();
+}
+
+/* معاينة حيّة — الرئيس يشوف النتيجة قبل ما يحفظ */
+function bNumPreview(){
+  document.querySelectorAll('#bNumRows .b-nrow').forEach(r=>{
+    const p=r.querySelector('input').value;
+    const out=r.querySelector('[data-prev]');
+    if(!out)return;
+    if(!String(p).trim()){ out.textContent='(نمط عادي)'; return; }
+    out.textContent=[1,2,3].map(k=>bUnitNum('custom',0,k,false,p)).join(' · ');
+  });
+}
+
+function bNumStyleChanged(){
+  const st=(document.getElementById('bNumStyle')||{}).value;
+  const wrap=document.getElementById('bNumCustomWrap');
+  const hint=document.getElementById('bNumHint');
+  if(wrap) wrap.classList.toggle('hidden', st!=='custom');
+  if(hint) hint.textContent = st==='custom'
+    ? 'اكتب بداية الترقيم لكل دور.'
+    : 'النمط اللي الوحدات الجديدة هتتّرقم بيه. الأرقام الحالية ما بتتغيّرش إلا لو ضغطت «إعادة ترقيم».';
+  if(st==='custom') bBuildNumRows();
+}
+
+/* توليد رقم وحدة — نفس منطق شاشة التسجيل بالحرف (unitNumFor)
+   عشان العمارة الجديدة والقديمة يطلعوا بنفس الشكل */
+function bUnitNum(style, floorIdx, idxInFloor, isShop, prefix){
+  if(style==='custom'){
+    const p=String(prefix||'').trim();
+    if(!p) return '';
+    const digits=p.replace(/[^\d]/g,'');
+    const n=parseInt(digits,10);
+    /* بادئة رقمية (١٠١) بنعدّ منها · بادئة حرفية (A) بنلزقها بالرقم */
+    if(!isNaN(n) && /^\d+$/.test(digits) && /\d/.test(p)) return String(n+idxInFloor-1);
+    return p+idxInFloor;
+  }
+  if(style==='plain') return String(idxInFloor);
+  if(style==='en')    return String(idxInFloor);
+  if(style==='typed') return (isShop?'محل ':'شقة ')+idxInFloor;
+  return floorIdx===0 ? String(idxInFloor) : String(floorIdx*100+idxInFloor);
+}
+
 function renumberAllUnits(){
   if(!guardAction('settings','edit'))return;
   const style=(D.building&&D.building.numberingStyle)||'floor';
@@ -9473,16 +9567,12 @@ function renumberAllUnits(){
         const key=String(a.floor||'')+'|'+String(a.blockName||'');
         seen[key]=(seen[key]||0)+1;
         const idx=seen[key];
-        let v='';
-        if(style==='floor'){
-          const f=(window.floorSortIndex?floorSortIndex(a):null);
-          v=(f&&f>0)?String(f*100+idx):String(idx);
-        }else if(style==='typed'){
-          v=unitTypeName(a)+' '+a.number;
-        }else{
-          v=String(a.number);
-        }
-        a.label=v;
+        const f=(window.floorSortIndex?floorSortIndex(a):0);
+        const pre=(D.building.numberingPrefix||{})[f];
+        /* الدور اللي البادئة بتاعته فاضية بيرجع للنمط العادي */
+        const st=(style==='custom'&&!String(pre||'').trim())?'floor':style;
+        const v=bUnitNum(st, f>0?f:0, idx, a.type==='shop', pre);
+        if(v) a.label=v;
       });
       logActivity('إعادة ترقيم الوحدات',styleName);
       save();toast('اتعمل — '+targets.length+' وحدة');renderContent();
@@ -12183,7 +12273,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.29';
+const APP_BUILD='2.30';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12386,25 +12476,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.29"></script>
-<script type="module" src="emartna-auth.js?v=2.29"></script>
-<script type="module" src="emartna-profile.js?v=2.29"></script>
-<script type="module" src="emartna-users.js?v=2.29"></script>
-<script type="module" src="emartna-platform.js?v=2.29"></script>
-<script type="module" src="emartna-contactlog.js?v=2.29"></script>
-<script type="module" src="emartna-permreport.js?v=2.29"></script>
-<script type="module" src="emartna-finops.js?v=2.29"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.29"></script>
-<script type="module" src="emartna-planscreens.js?v=2.29"></script>
+<script type="module" src="emartna-cloud.js?v=2.30"></script>
+<script type="module" src="emartna-auth.js?v=2.30"></script>
+<script type="module" src="emartna-profile.js?v=2.30"></script>
+<script type="module" src="emartna-users.js?v=2.30"></script>
+<script type="module" src="emartna-platform.js?v=2.30"></script>
+<script type="module" src="emartna-contactlog.js?v=2.30"></script>
+<script type="module" src="emartna-permreport.js?v=2.30"></script>
+<script type="module" src="emartna-finops.js?v=2.30"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.30"></script>
+<script type="module" src="emartna-planscreens.js?v=2.30"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.29"></script>
+<script type="module" src="emartna-perms.js?v=2.30"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.29"></script>
+<script type="module" src="emartna-bundle.js?v=2.30"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
