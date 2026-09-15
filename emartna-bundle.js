@@ -8244,15 +8244,16 @@
            كان العرض التجاري (الذهبي) بيشد العين أكتر من التجربة،
            رغم إن الزائر اللي بيجرّب بيتحوّل لعميل أكتر بمرّات من
            اللي بيقرا عرض. فبنخلّي التجربة هي اللي بتنبض. */
-        .wp-try{position:relative;margin-top:14px;padding:12px;
-          border-radius:14px;
-          background:linear-gradient(135deg,#F2FBF9,#E7F6F3);
+        /* نفس تصميم صندوق التجربة في شاشة الدخول — تجربة موحّدة */
+        .wp-try{position:relative;margin-top:16px;padding:14px 12px 12px;
+          border-radius:16px;
+          background:linear-gradient(140deg,#F2FBF9,#E6F5F2);
           border:1.5px solid var(--wp-green)}
-        .wp-try::before{content:'جرّب دلوقتي — من غير تسجيل';
-          position:absolute;top:-10px;inset-inline-start:14px;
+        .wp-try::before{content:'جرّب من غير تسجيل';
+          position:absolute;top:-11px;inset-inline-start:16px;
           background:var(--wp-green);color:#fff;font-size:11px;font-weight:700;
-          padding:3px 10px;border-radius:99px;
-          box-shadow:0 2px 6px rgba(15,122,111,.3)}
+          padding:3px 11px;border-radius:99px;
+          box-shadow:0 2px 8px rgba(15,122,111,.35)}
         .wp-try .wp-cta{margin-top:0}
         .wp-try .wp-cta + .wp-cta{margin-top:7px}
 

@@ -82,6 +82,34 @@ a{color:var(--accent)}
 .login-wrap .skyline-bg{position:absolute;bottom:0;left:0;right:0;pointer-events:none;opacity:.9;z-index:0}
 .login-wrap .login-card{position:relative;z-index:1}
 .login-card{background:var(--panel);border-radius:20px;padding:34px 30px;width:100%;max-width:410px;box-shadow:0 12px 40px rgba(21,154,140,.12);position:relative;overflow:hidden}
+
+/* ===== صندوق التجربة =====
+   التجربة هي الهدف الأول من الصفحتين (الدخول ونافذة الترحيب)،
+   فبتاخد لون مميز ونبض خفيف. العرض التجاري بيهدى عشان ما ينافسهاش. */
+.try-box{position:relative;margin-top:22px;padding:14px 12px 12px;
+  border-radius:16px;border:1.5px solid var(--accent);
+  background:linear-gradient(140deg,#F2FBF9,#E6F5F2)}
+.try-tag{position:absolute;top:-11px;inset-inline-start:16px;
+  background:var(--accent);color:#fff;font-size:11px;font-weight:700;
+  padding:3px 11px;border-radius:99px;
+  box-shadow:0 2px 8px rgba(21,154,140,.35)}
+.try-box button{display:block;width:100%;text-align:start;cursor:pointer;
+  border-radius:12px;padding:11px 14px;font:inherit;margin-top:8px;
+  transition:transform .15s,box-shadow .15s}
+.try-box button b{display:block;font-size:14.5px;margin-bottom:2px}
+.try-box button span{font-size:12px;opacity:.85}
+.try-box button:hover{transform:translateY(-1px)}
+.try-main{background:var(--accent);color:#fff;border:0;
+  box-shadow:0 3px 14px rgba(21,154,140,.3);
+  animation:tryPulse 2.8s ease-in-out infinite;margin-top:4px !important}
+.try-main:hover{animation:none;box-shadow:0 6px 20px rgba(21,154,140,.42)}
+.try-alt{background:#fff;color:var(--text);border:1.5px solid var(--line)}
+.try-alt:hover{border-color:var(--accent)}
+.try-note{font-size:11.5px;color:var(--muted);text-align:center;margin-top:9px}
+@keyframes tryPulse{
+  0%,100%{box-shadow:0 3px 14px rgba(21,154,140,.3)}
+  50%    {box-shadow:0 3px 22px rgba(21,154,140,.5)}}
+@media (prefers-reduced-motion:reduce){ .try-main{animation:none} }
 .wizard-steps{display:flex;align-items:center;justify-content:center;margin:14px 0 4px}
 .wizard-dot{width:28px;height:28px;border-radius:50%;background:var(--line);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;transition:.2s}
 .wizard-dot.active{background:var(--accent);color:#fff}
@@ -3119,13 +3147,17 @@ function loginHTML(){
       </button>
       <p class="small" id="googleHint" style="display:none;text-align:center;
         color:var(--muted);margin-top:6px">أسرع، ومش محتاج تفتكر كلمة سر</p>
-      <div class="mtop2" style="${loginMethodOn('demo')?'':'display:none'};border-top:1px dashed var(--line);padding-top:14px">
-        <p class="small" style="text-align:center;color:var(--muted)">🎬 عايز تجرّب البرنامج قبل ما تسجّل حساب؟</p>
-        <div class="flexrow mtop" style="justify-content:center;gap:8px">
-          <button class="btn sm gold" onclick="loginAsDemo('admin')">👔 دخول كرئيس اتحاد (تجريبي)</button>
-          <button class="btn sm ghost" onclick="loginAsDemo('owner')">🏠 دخول كصاحب شقة (تجريبي)</button>
-        </div>
-        <p class="small mtop" style="text-align:center;color:var(--muted)">عمارة تجريبية جاهزة بـ24 وحدة وبيانات واقعية - أي تعديل بترجع تلقائي لما تخرج.</p>
+      <div class="try-box" style="${loginMethodOn('demo')?'':'display:none'}">
+        <span class="try-tag">جرّب من غير تسجيل</span>
+        <button class="try-main" onclick="loginAsDemo('admin')">
+          <b>🏢 ادخل كرئيس اتحاد</b>
+          <span>عمارة جاهزة بسنتين حركات — شوف التحصيل والتقارير</span>
+        </button>
+        <button class="try-alt" onclick="loginAsDemo('owner')">
+          <b>🏠 ادخل كصاحب شقة</b>
+          <span>اللي الساكن بيشوفه: حسابه ومستحقاته</span>
+        </button>
+        <p class="try-note">بيانات واقعية · أي تعديل بيترجع لما تخرج</p>
       </div>
       <div class="login-hint">
         <a href="javascript:void(0)" onclick="openRecover()">نسيت كلمة المرور؟</a><br>
@@ -11817,7 +11849,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.12';
+const APP_BUILD='2.13';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12020,25 +12052,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.12"></script>
-<script type="module" src="emartna-auth.js?v=2.12"></script>
-<script type="module" src="emartna-profile.js?v=2.12"></script>
-<script type="module" src="emartna-users.js?v=2.12"></script>
-<script type="module" src="emartna-platform.js?v=2.12"></script>
-<script type="module" src="emartna-contactlog.js?v=2.12"></script>
-<script type="module" src="emartna-permreport.js?v=2.12"></script>
-<script type="module" src="emartna-finops.js?v=2.12"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.12"></script>
-<script type="module" src="emartna-planscreens.js?v=2.12"></script>
+<script type="module" src="emartna-cloud.js?v=2.13"></script>
+<script type="module" src="emartna-auth.js?v=2.13"></script>
+<script type="module" src="emartna-profile.js?v=2.13"></script>
+<script type="module" src="emartna-users.js?v=2.13"></script>
+<script type="module" src="emartna-platform.js?v=2.13"></script>
+<script type="module" src="emartna-contactlog.js?v=2.13"></script>
+<script type="module" src="emartna-permreport.js?v=2.13"></script>
+<script type="module" src="emartna-finops.js?v=2.13"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.13"></script>
+<script type="module" src="emartna-planscreens.js?v=2.13"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.12"></script>
+<script type="module" src="emartna-perms.js?v=2.13"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.12"></script>
+<script type="module" src="emartna-bundle.js?v=2.13"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
