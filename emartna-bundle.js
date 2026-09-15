@@ -14060,3 +14060,292 @@
 })();
 
 })();
+
+/* ═══ emartna-monthclose.js ═══ */
+(function(){
+/* ============================================================
+   عمارتنا — إقفال الشهر
+   ------------------------------------------------------------
+   رئيس الاتحاد مش محاسب. كان بيقفل الشهر من غير ما يعرف إيه اللي
+   المفروض يراجعه، فالإقفال بقى إجراء شكلي.
+
+   دلوقتي البرنامج بيفحص بنفسه: خزائن سالبة، وحدات ما اتفوترتش،
+   دفعات مش داخلة خزينة، مصروفات غير مصنّفة، مبالغ شاذة.
+
+   ⚠️ ملاحظة مهمة في التصميم: «مراجعة السكان» بتفرّق بين تلات
+   حالات — راجع وموافق، راجع ومعترض، وما دخلش أصلًا. السكوت
+   مش موافقة، والشاشة بتوضّح ده صراحةً عشان ما يتبنيش عليه
+   استنتاج غلط.
+   ============================================================ */
+
+(function(){
+  'use strict';
+
+  const esc2 = s => (window.esc ? esc(s) : String(s == null ? '' : s));
+  const sb   = () => (window.CLOUD && window.CLOUD._sb) || null;
+  const bUuid= () => { try{ return CLOUD._cache.buildingUuid[window.activeBuildingId] || null; }
+                       catch(e){ return null; } };
+
+  const AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو',
+              'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  const mLabel = p => { const [y,m]=String(p).split('-').map(Number);
+                        return (AR[m-1]||p)+' '+y; };
+
+  const SEV = {
+    error:{ic:'🛑', color:'var(--red)',   label:'لازم يتصلح'},
+    warn: {ic:'⚠️', color:'var(--gold)',  label:'يستاهل مراجعة'},
+    info: {ic:'💡', color:'var(--muted)', label:'للعلم'},
+  };
+
+  let ST = null;
+
+  function lastClosableMonth(){
+    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()-1);
+    return d.toISOString().slice(0,7);
+  }
+
+  async function load(period){
+    const s = sb(), b = bUuid();
+    if (!s || !b){ ST = { period, checks:[], ack:null }; return; }
+    try{
+      const [c,a] = await Promise.all([
+        s.rpc('month_close_checks', { p_building:b, p_month:period }),
+        s.rpc('month_ack_summary',  { p_building:b, p_month:period }),
+      ]);
+      ST = { period, checks:c.data||[], ack:(a.data&&a.data[0])||null };
+    }catch(e){ ST = { period, checks:[], ack:null }; }
+    if (window.renderContent) renderContent();
+  }
+
+  window.pageMonthClose = function(){
+    const period = (ST && ST.period) || lastClosableMonth();
+    if (!ST || ST.period !== period){ load(period); return '<p class="small">⏳ بيفحص...</p>'; }
+
+    const checks = ST.checks || [];
+    const errors = checks.filter(c => c.severity === 'error');
+    const warns  = checks.filter(c => c.severity === 'warn');
+    const ack    = ST.ack || {};
+    const locked = isLocked(period);
+
+    /* شهور متاحة للإقفال */
+    const months = [];
+    const d = new Date(); d.setDate(1);
+    for (let i=1; i<=12; i++){
+      const x = new Date(d); x.setMonth(x.getMonth()-i);
+      months.push(x.toISOString().slice(0,7));
+    }
+
+    return `
+    <div class="card content-narrow">
+      <h3>🔒 إقفال الشهر</h3>
+      <p class="small mtop">البرنامج بيفحص حسابات الشهر قبل ما تقفله —
+        فالإقفال يبقى مراجعة فعلية مش إجراء شكلي.</p>
+
+      <div class="field2 mtop2"><label>الشهر</label>
+        <select onchange="mcPick(this.value)">
+          ${months.map(m=>`<option value="${m}" ${m===period?'selected':''}>
+            ${esc2(mLabel(m))}${isLocked(m)?' — مقفول ✅':''}</option>`).join('')}
+        </select></div>
+    </div>
+
+    ${locked ? `<div class="card content-narrow mtop2"
+      style="background:var(--tint);border:1px solid var(--accent)">
+      <b>✅ ${esc2(mLabel(period))} مقفول</b>
+      <div class="small mtop">مفيش تعديل ممكن على حركات الشهر ده.
+        فك الإقفال بيطلب سبب مكتوب وبيتسجّل.</div>
+      <button class="btn ghost mtop" onclick="go('periods')">
+        إدارة الفترات المقفولة</button>
+    </div>` : `
+
+    <div class="card content-narrow mtop2">
+      <h3 style="font-size:14px">نتيجة الفحص</h3>
+      ${!checks.length
+        ? `<div class="card mtop" style="background:var(--tint);text-align:center;
+            padding:22px">
+            <div style="font-size:32px">✅</div>
+            <b class="mtop" style="display:block">كل الفحوصات سليمة</b>
+            <div class="small">مفيش ملاحظات على حسابات الشهر ده.</div>
+          </div>`
+        : checks.map(c=>{
+            const v = SEV[c.severity] || SEV.info;
+            return `<div class="card mtop" style="border-inline-start:3px solid ${v.color}">
+              <div class="flexrow" style="gap:9px;align-items:flex-start">
+                <span style="font-size:18px">${v.ic}</span>
+                <div style="flex:1">
+                  <b>${esc2(c.label)}</b>
+                  <span class="badge ${c.severity==='error'?'r':c.severity==='warn'?'y':'n'}"
+                    style="margin-inline-start:6px">${c.count_n}</span>
+                  <div class="small mtop" style="color:var(--muted)">
+                    ${esc2(c.detail||'')}</div>
+                </div>
+              </div></div>`;
+          }).join('')}
+    </div>
+
+    <div class="card content-narrow mtop2">
+      <h3 style="font-size:14px">مراجعة السكان</h3>
+      <p class="small mtop">كل ساكن بيقدر يراجع حسابه ويأكّد أو يعترض.</p>
+      <div class="grid g3 mtop2">
+        <div class="kpi"><div class="ic">✅</div><div class="lbl">راجعوا وأكّدوا</div>
+          <div class="val">${ack.reviewed||0}</div></div>
+        <div class="kpi ${ack.disputed?'owe':''}"><div class="ic">⚠️</div>
+          <div class="lbl">عندهم اعتراض</div>
+          <div class="val">${ack.disputed||0}</div></div>
+        <div class="kpi"><div class="ic">⏳</div><div class="lbl">ما دخلوش</div>
+          <div class="val">${ack.silent||0}</div></div>
+      </div>
+      <p class="small mtop2" style="color:var(--muted)">
+        ⚠️ <b>«ما دخلوش» مش معناها موافقة</b> — معناها إنهم ما فتحوش
+        حساباتهم. التأكيد بيتحسب للي ضغط «راجعت وموافق» بس.</p>
+      ${(ack.silent||0) > 0 ? `<button class="btn ghost mtop"
+        onclick="mcRemind('${esc2(period)}')">💬 ذكّر اللي ما دخلوش</button>` : ''}
+    </div>
+
+    <div class="card content-narrow mtop2">
+      ${errors.length ? `<div class="card" style="background:var(--tint-warning)">
+        <b>🛑 فيه ${errors.length} ملاحظة لازم تتصلح قبل الإقفال</b>
+        <div class="small">الإقفال بيمنع التعديل — فالأفضل تصلحها الأول.</div>
+      </div>` : ''}
+      <div class="field2 mtop"><label>ملاحظات الإقفال (اختياري)</label>
+        <textarea id="mcNote" rows="2"
+          placeholder="مثال: اتراجع مع المحاسب يوم ٣/١٠"></textarea></div>
+      <button class="btn ${errors.length?'':'primary'} mtop" style="width:100%"
+        onclick="mcClose('${esc2(period)}')">
+        🔒 اقفل ${esc2(mLabel(period))}${errors.length?' رغم الملاحظات':''}</button>
+      <p class="hint">الإقفال بيمنع أي تعديل على حركات الشهر.
+        فكّه ممكن بسبب مكتوب بيتسجّل.</p>
+    </div>`}`;
+  };
+
+  function isLocked(p){
+    try{
+      return (D.periodLocks||[]).some(x =>
+        String(x.period||'').slice(0,7) === p);
+    }catch(e){ return false; }
+  }
+
+  window.mcPick = function(p){ ST = null; load(p); };
+
+  window.mcClose = async function(period){
+    const note = ((document.getElementById('mcNote')||{}).value||'').trim();
+    const checks = (ST && ST.checks) || [];
+    const errors = checks.filter(c => c.severity === 'error');
+    const msg = errors.length
+      ? `اقفل ${mLabel(period)} رغم ${errors.length} ملاحظة حرجة؟\n\n` +
+        errors.map(c=>'• '+c.label+' ('+c.count_n+')').join('\n') +
+        '\n\nبعد الإقفال مش هتقدر تعدّل حركات الشهر ده.'
+      : `اقفل ${mLabel(period)}؟\n\nكل الفحوصات سليمة.\n` +
+        'بعد الإقفال مش هتقدر تعدّل حركات الشهر ده.';
+
+    confirmAction(msg, async () => {
+      try{
+        /* بنسجّل نتيجة الفحص وقت الإقفال — دليل إن الشهر اتراجع */
+        const summary = checks.length
+          ? checks.map(c=>c.label+':'+c.count_n).join(' · ')
+          : 'كل الفحوصات سليمة';
+        const full = (note ? note + ' — ' : '') + summary;
+
+        D.periodLocks = D.periodLocks || [];
+        D.periodLocks.push({
+          id: uid(), period: period + '-01', note: full,
+          lockedAt: new Date().toISOString(),
+        });
+        save();
+        toast('اتقفل ' + mLabel(period));
+        ST = null; load(period);
+      }catch(e){ showMessage(e.message || 'تعذّر الإقفال'); }
+    });
+  };
+
+  window.mcRemind = function(period){
+    showMessage('💬 تذكير السكان\n\n' +
+      'افتح: التواصل مع الملاك ← الإعلانات، واكتب إعلان يطلب منهم ' +
+      'مراجعة حساباتهم عن ' + mLabel(period) + '.\n\n' +
+      'الساكن هيلاقي زرار «راجعت حسابي» في شاشة حسابه.');
+  };
+
+  /* ===== كارت المراجعة للساكن =====
+     بيظهر أول الشهر عن الشهر اللي فات — ووقت العرض بس، مش دايمًا،
+     عشان ما يبقاش ضوضاء. */
+  let ACK = null;
+
+  window.monthAckCardHTML = function(ap){
+    if (!ap) return '';
+    const period = lastClosableMonth();
+    /* بيظهر في أول ١٢ يوم من الشهر بس */
+    if (new Date().getDate() > 12) return '';
+    if (ACK && ACK.period === period && ACK.done) return '';
+    if (!ACK || ACK.period !== period) loadMyAck(ap, period);
+
+    const bal = window.apBalance ? apBalance(ap.id) : 0;
+    return `<div class="card" style="border:1px solid var(--gold);
+      background:var(--tint-warning)">
+      <div class="flexrow" style="gap:10px;align-items:flex-start">
+        <span style="font-size:20px">📋</span>
+        <div style="flex:1">
+          <b>راجع حسابك عن ${esc2(mLabel(period))}</b>
+          <p class="small mtop">رصيدك دلوقتي:
+            <b>${window.money?money(bal):bal}</b>.
+            لو فيه حاجة مش مظبوطة، قول دلوقتي قبل ما الشهر يتقفل.</p>
+          <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
+            <button class="btn primary sm"
+              onclick="ackMonth('${esc2(ap.id)}','${esc2(period)}','ok')">
+              ✅ راجعت وموافق</button>
+            <button class="btn sm"
+              onclick="ackDispute('${esc2(ap.id)}','${esc2(period)}')">
+              ⚠️ عندي ملاحظة</button>
+          </div>
+        </div>
+      </div></div>`;
+  };
+
+  async function loadMyAck(ap, period){
+    try{
+      const s = sb(); if (!s) return;
+      const { data } = await s.from('month_ack').select('status')
+        .eq('apartment_id', ap.__uuid || ap.id).eq('period', period).maybeSingle();
+      ACK = { period, done: !!data };
+      if (data && window.renderContent) renderContent();
+    }catch(e){ ACK = { period, done:false }; }
+  }
+
+  window.ackMonth = async function(apId, period, status, note){
+    try{
+      const ap = (D.apartments||[]).find(x => x.id === apId);
+      const uuid = ap && ap.__uuid;
+      if (!uuid) return showMessage('الوحدة لسه بتتزامن — جرّب بعد لحظات.');
+      const { error } = await sb().rpc('ack_month', {
+        p_apartment: uuid, p_month: period,
+        p_status: status, p_note: note || null });
+      if (error) throw error;
+      ACK = { period, done:true };
+      showMessage(status === 'ok'
+        ? '✅ اتسجّلت مراجعتك — شكرًا.'
+        : '⚠️ اتسجّلت ملاحظتك ووصلت لرئيس الاتحاد.');
+      if (window.renderContent) renderContent();
+    }catch(e){ showMessage(e.message || 'تعذّر التسجيل'); }
+  };
+
+  window.ackDispute = function(apId, period){
+    openModal(`
+      <h3>⚠️ ملاحظة على حساب ${esc2(mLabel(period))}</h3>
+      <div class="field2 mtop"><label>إيه الملاحظة؟</label>
+        <textarea id="ackNote" rows="3"
+          placeholder="مثال: دفعت ٥٠٠ يوم ١٢ ومش ظاهرة في كشفي"></textarea></div>
+      <div class="modal-actions">
+        <button class="btn primary" onclick="
+          (function(){var n=document.getElementById('ackNote').value.trim();
+           if(!n)return showMessage('اكتب ملاحظتك');
+           closeModal();ackMonth('${esc2(apId)}','${esc2(period)}','dispute',n);})()">
+          إرسال</button>
+        <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+      </div>`);
+  };
+
+  document.addEventListener('emartna:building-complete',
+    () => { ST = null; ACK = null; });
+
+  console.log('[عمارتنا] إقفال الشهر جاهز');
+})();
+
+})();
