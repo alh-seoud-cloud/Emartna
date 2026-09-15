@@ -7850,7 +7850,11 @@ function openApartmentContact(id){
     (D.users||[]).some(x=>x.username===u.username&&x.apartmentId===a.id) ||
     (window.myApartment&&(myApartment()||{}).id===a.id)
   ));
-  const full=isStaff||mine;
+  /* التواصل: لصاحب الوحدة وللإدارة.
+     المالي: للإدارة بس — الساكن مايشوفش اشتراك ولا رصيد وحدة غيره.
+     لو وحدته هو، بيشوف تفاصيله من شاشة حسابه مش من هنا. */
+  const full=isStaff||mine;          // بيانات التواصل
+  const canSeeMoney=isStaff;         // بيانات مالية
 
   const door=window.doorNumber?doorNumber(a):a.number;
   const line=(ic,lbl,val,phone)=>`<div class="flexrow" style="gap:8px;
@@ -7877,13 +7881,15 @@ function openApartmentContact(id){
         ? line('🔑','المستأجر', a.tenantName, full?a.tenantPhone:null) : ''}
       ${full&&a.email?`<div class="small mtop"><b>✉️ الإيميل:</b>
         <span dir="ltr">${esc(a.email)}</span></div>`:''}
-      ${full?`<div class="small mtop"><b>💳 الاشتراك الشهري:</b>
+      ${canSeeMoney?`<div class="small mtop"><b>💳 الاشتراك الشهري:</b>
         ${money(a.monthlyFee)}</div>`:''}
     </div>
 
     ${!full?`<p class="small mtop" style="color:var(--muted)">
       أرقام التواصل بتظهر لصاحب الوحدة وللإدارة بس — حفاظًا على
       خصوصية السكان.</p>`:''}
+    ${full&&!canSeeMoney?`<p class="small mtop" style="color:var(--muted)">
+      البيانات المالية بتظهر في شاشة «حسابي وشقتي».</p>`:''}
 
     ${full&&!a.phone&&!a.tenantPhone?`<p class="small mtop"
       style="color:var(--muted)">مفيش رقم مسجّل للوحدة دي.</p>`:''}
@@ -11861,7 +11867,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.14';
+const APP_BUILD='2.15';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12064,25 +12070,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.14"></script>
-<script type="module" src="emartna-auth.js?v=2.14"></script>
-<script type="module" src="emartna-profile.js?v=2.14"></script>
-<script type="module" src="emartna-users.js?v=2.14"></script>
-<script type="module" src="emartna-platform.js?v=2.14"></script>
-<script type="module" src="emartna-contactlog.js?v=2.14"></script>
-<script type="module" src="emartna-permreport.js?v=2.14"></script>
-<script type="module" src="emartna-finops.js?v=2.14"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.14"></script>
-<script type="module" src="emartna-planscreens.js?v=2.14"></script>
+<script type="module" src="emartna-cloud.js?v=2.15"></script>
+<script type="module" src="emartna-auth.js?v=2.15"></script>
+<script type="module" src="emartna-profile.js?v=2.15"></script>
+<script type="module" src="emartna-users.js?v=2.15"></script>
+<script type="module" src="emartna-platform.js?v=2.15"></script>
+<script type="module" src="emartna-contactlog.js?v=2.15"></script>
+<script type="module" src="emartna-permreport.js?v=2.15"></script>
+<script type="module" src="emartna-finops.js?v=2.15"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.15"></script>
+<script type="module" src="emartna-planscreens.js?v=2.15"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.14"></script>
+<script type="module" src="emartna-perms.js?v=2.15"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.14"></script>
+<script type="module" src="emartna-bundle.js?v=2.15"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
