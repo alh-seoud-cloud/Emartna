@@ -959,6 +959,77 @@ async function loginWithBiometric(){
 }
 function monthLabel(m){if(!m)return'';const[y,mo]=m.split('-');const names=['','يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];return names[parseInt(mo,10)]+' '+y}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(window.__tt);window.__tt=setTimeout(()=>t.classList.remove('show'),2600)}
+/* ============================================================
+   شاشة الخطأ — بتشرح للعميل بالعربي
+   ------------------------------------------------------------
+   ليه شاشة مستقلة مش رسالة سطر واحد:
+   رسالة زي «duplicate key value violates unique constraint» ما
+   بتقولش للمستخدم إيه المكرر ولا يعمل إيه، فبيتصل بالدعم أو
+   بيسيب الشغل. الشاشة دي بتفصل التلاتة: حصل إيه · ليه · أعمل إيه.
+
+   التفاصيل التقنية مطويّة — العميل مايشوفهاش إلا لو فتحها،
+   وفيه زرار نسخ عشان يبعتها للدعم من غير ما يكتبها بإيده.
+   ============================================================ */
+window.__lastErrInfo = null;
+
+window.showErrorDialog = function(e, contextLabel){
+  /* لو طبقة السحابة لسه ماتحمّلتش، مانكسرش البرنامج */
+  const info = (window.cloudErrorInfo)
+    ? cloudErrorInfo(e)
+    : { title:'حصل خطأ', what:String((e&&e.message)||e||''), why:'', fix:'حدّث الصفحة وجرّب تاني.',
+        code:'-', constraint:'-', raw:String((e&&e.message)||e||'') };
+  window.__lastErrInfo = Object.assign({}, info, { context: contextLabel||'' });
+
+  const row = (ic,lbl,txt) => txt ? `<div class="mtop">
+      <div class="small" style="color:var(--muted)">${ic} ${lbl}</div>
+      <div style="margin-top:2px">${esc(txt)}</div></div>` : '';
+
+  openModal(`
+    <h3 style="color:var(--red)">⚠️ ${esc(info.title)}</h3>
+    ${contextLabel?`<p class="small" style="color:var(--muted);margin-top:-4px">${esc(contextLabel)}</p>`:''}
+
+    <div class="card mtop2" style="background:var(--tint)">
+      ${row('❗','اللي حصل', info.what)}
+      ${row('💡','ليه', info.why)}
+      ${row('✅','اعمل إيه', info.fix)}
+    </div>
+
+    <div class="mtop2">
+      <button class="btn sm ghost" onclick="errDetailsToggle()">🔧 تفاصيل تقنية</button>
+      <div id="errTech" style="display:none;margin-top:8px">
+        <div class="small" style="background:var(--tint);border:1px solid var(--line);
+             border-radius:8px;padding:8px;word-break:break-all;direction:ltr;text-align:left">
+          <div><b>code:</b> ${esc(info.code)}</div>
+          <div><b>constraint:</b> ${esc(info.constraint)}</div>
+          <div><b>build:</b> ${esc(window.APP_BUILD||'-')}</div>
+          <div style="margin-top:4px">${esc(info.raw)}</div>
+        </div>
+        <button class="btn sm ghost mtop" onclick="copyErrDetails()">📋 انسخ للدعم</button>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn primary" onclick="closeModal()">تمام</button>
+    </div>`);
+};
+
+window.errDetailsToggle = function(){
+  const el = document.getElementById('errTech'); if(!el) return;
+  el.style.display = (el.style.display === 'none') ? 'block' : 'none';
+};
+
+window.copyErrDetails = function(){
+  const i = window.__lastErrInfo; if(!i) return;
+  const txt = ['عمارتنا — تفاصيل خطأ',
+    'النسخة: '+(window.APP_BUILD||'-'),
+    'الوقت: '+new Date().toLocaleString('ar-EG'),
+    i.context?('الشاشة: '+i.context):'',
+    'code: '+i.code, 'constraint: '+i.constraint, i.raw].filter(Boolean).join('\n');
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(()=>toast('اتنسخ — ابعته للدعم'),()=>toast('مقدرش ينسخ'));
+  } else toast('مقدرش ينسخ');
+};
+
 function showMessage(msg){
   const overlay=document.getElementById('modalOverlay');
   const box=document.getElementById('modalBox');
@@ -1506,10 +1577,11 @@ async function createBuildingRecord(name,apartmentsCount,perFloor,adminUsername,
       }
     }catch(e){
       console.error('[عمارتنا] فشل إنشاء العمارة على الخادم:',e);
-      if(window.showMessage)
+      /* شاشة الخطأ بتشرح السبب والحل بدل سطر تقني */
+      if(window.showErrorDialog) showErrorDialog(e,'إنشاء عمارة جديدة');
+      else if(window.showMessage)
         showMessage('العمارة اتعملت محليًا بس ما وصلتش الخادم:\n'+
-          (window.cloudErrorText?cloudErrorText(e):e.message)+
-          '\n\nجرّب تاني أو تواصل مع الدعم.');
+          (window.cloudErrorText?cloudErrorText(e):e.message));
     }
   }
   return{id,code};
@@ -10970,6 +11042,7 @@ async function submitPaymentRequest(){
       const aU=CLOUD.storage.uuidOfApartment(activeBuildingId,ap.id);
       if(bU&&aU) proof=await CLOUD.storage.uploadDataUrl('proofs',[bU,aU],proof);
     }catch(err){
+      if(window.showErrorDialog){ showErrorDialog(err,'رفع إيصال السداد'); return; }
       return showMessage('تعذّر رفع الصورة: '+(window.cloudErrorText?cloudErrorText(err):err.message));
     }
   }
@@ -12026,7 +12099,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.26';
+const APP_BUILD='2.27';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12229,25 +12302,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.26"></script>
-<script type="module" src="emartna-auth.js?v=2.26"></script>
-<script type="module" src="emartna-profile.js?v=2.26"></script>
-<script type="module" src="emartna-users.js?v=2.26"></script>
-<script type="module" src="emartna-platform.js?v=2.26"></script>
-<script type="module" src="emartna-contactlog.js?v=2.26"></script>
-<script type="module" src="emartna-permreport.js?v=2.26"></script>
-<script type="module" src="emartna-finops.js?v=2.26"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.26"></script>
-<script type="module" src="emartna-planscreens.js?v=2.26"></script>
+<script type="module" src="emartna-cloud.js?v=2.27"></script>
+<script type="module" src="emartna-auth.js?v=2.27"></script>
+<script type="module" src="emartna-profile.js?v=2.27"></script>
+<script type="module" src="emartna-users.js?v=2.27"></script>
+<script type="module" src="emartna-platform.js?v=2.27"></script>
+<script type="module" src="emartna-contactlog.js?v=2.27"></script>
+<script type="module" src="emartna-permreport.js?v=2.27"></script>
+<script type="module" src="emartna-finops.js?v=2.27"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.27"></script>
+<script type="module" src="emartna-planscreens.js?v=2.27"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.26"></script>
+<script type="module" src="emartna-perms.js?v=2.27"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.26"></script>
+<script type="module" src="emartna-bundle.js?v=2.27"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح

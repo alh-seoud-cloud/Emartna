@@ -774,9 +774,260 @@ const ERR_BY_STATUS = {
   503: 'الخدمة مش متاحة دلوقتي — جرّب تاني بعد شوية.',
 };
 
+/* ============================================================
+   رسائل مربوطة باسم القيد نفسه.
+   ------------------------------------------------------------
+   ليه: «قيمة مكررة» ما بتقولش للمستخدم إيه المكرر ولا يعمل إيه.
+   الخادم بيرجّع اسم القيد جوه نص الخطأ، فبنستخرجه ونترجمه لجملة
+   بتقول الحاجة بالظبط وإيه الحل.
+
+   كل عنصر: what = إيه اللي حصل · why = ليه النظام رافض ·
+             fix = يعمل إيه دلوقتي
+   ============================================================ */
+const ERR_BY_CONSTRAINT = {
+  /* ---- الوحدات ---- */
+  uq_apartment_label: {
+    what:'الرقم المخصّص ده مستعمل في وحدة تانية في نفس العمارة.',
+    why:'الرقم المخصّص هو اللي بيظهر للسكان بدل الترقيم التلقائي، فلازم يبقى مميّز جوه العمارة عشان محدش يلخبط بين وحدتين.',
+    fix:'غيّر الرقم، أو سيبه فاضي عشان البرنامج يرقّم تلقائي. ملحوظة: المسافات الزيادة والحروف الكبيرة ما بتعملش فرق — «٥ أ» و«٥ أ » نفس الرقم.' },
+  uq_apartment_number: {
+    what:'رقم الوحدة ده متسجّل قبل كده في نفس العمارة.',
+    why:'كل وحدة لازم يكون ليها رقم مستقل عشان الحسابات ما تختلطش.',
+    fix:'اختار رقم تاني. لو بتنقل وحدة، عدّل القديمة الأول.' },
+  apartments_building_id_legacy_id_key: {
+    what:'الوحدة دي متسجّلة قبل كده.',
+    why:'اتبعتت مرتين — غالبًا ضغط مزدوج أو إعادة إرسال.',
+    fix:'حدّث الصفحة وشوف لو اتسجّلت فعلًا قبل ما تعيد.' },
+  apartments_type_check: {
+    what:'نوع الوحدة مش مقبول.',
+    why:'النوع لازم يكون شقة أو محل.',
+    fix:'اختار من القايمة بدل ما تكتب.' },
+  chk_apartments_usage_type: {
+    what:'نوع الاستخدام مش مقبول.',
+    why:'المسموح: سكني · تجاري · شركة · مكتب إداري · عيادة.',
+    fix:'اختار واحد من دول.' },
+  apartments_monthly_fee_check: {
+    what:'الاشتراك الشهري مايصحّش يبقى بالسالب.',
+    why:'الاشتراك مبلغ مستحق على الوحدة.',
+    fix:'اكتب صفر أو أكتر. لو عايز ترد فلوس، استعمل «صرف» مش اشتراك بالسالب.' },
+
+  /* ---- العمارة ---- */
+  buildings_code_key: {
+    what:'كود العمارة ده محجوز.',
+    why:'الكود بيميّز العمارة على المنصة كلها، فمستحيل عمارتين بنفس الكود.',
+    fix:'ولّد كود جديد من الإعدادات.' },
+  buildings_referral_code_key: {
+    what:'كود الإحالة محجوز.', why:'كل عمارة ليها كود إحالة مستقل.',
+    fix:'ولّد كود جديد.' },
+
+  /* ---- الخزائن ---- */
+  uq_account_name: {
+    what:'في خزينة بنفس الاسم في العمارة دي.',
+    why:'الأسماء المتشابهة بتخلّي التحصيل يتسجّل في الخزينة الغلط.',
+    fix:'غيّر الاسم — مثلًا زوّد «بنك مصر» أو «عهدة أحمد».' },
+  accounts_building_id_legacy_id_key: {
+    what:'الخزينة دي متسجّلة قبل كده.', why:'اتبعتت مرتين.',
+    fix:'حدّث الصفحة قبل ما تعيد.' },
+  accounts_type_check: {
+    what:'نوع الخزينة مش مقبول.',
+    why:'المسموح: نقدي · بنكي · محفظة · عهدة · أخرى.',
+    fix:'اختار من القايمة.' },
+
+  /* ---- القيود المالية ---- */
+  uq_ledger_monthly_per_apartment: {
+    what:'الاشتراك الشهري للوحدة دي متسجّل قبل كده في نفس الشهر.',
+    why:'ده حارس ضد ازدواج التحصيل — مستحيل وحدة تتحمّل اشتراكين لنفس الشهر.',
+    fix:'لو المبلغ غلط، عدّل القيد الموجود أو اعكسه. ما تضيفش قيد جديد.' },
+  uq_ledger_one_reversal: {
+    what:'الحركة دي معكوسة قبل كده.',
+    why:'القيد ما ينعكسش مرتين عشان الرصيد ما يبوظش.',
+    fix:'دوّر على قيد العكس الموجود في كشف الحساب.' },
+  ledger_amount_check: {
+    what:'المبلغ مش مقبول.',
+    why:'الحركات العادية لازم تبقى أكبر من صفر. التسوية بس هي اللي ممكن تبقى بالسالب.',
+    fix:'اكتب مبلغ أكبر من صفر، أو اختار النوع «تسوية» لو قاصد تنقص.' },
+  ledger_check: {
+    what:'الدفعة أو الصرف محتاج خزينة.',
+    why:'أي فلوس داخلة أو خارجة لازم تتسجّل في خزينة، وإلا الرصيد ما يتظبطش.',
+    fix:'اختار الخزينة قبل الحفظ.' },
+  ledger_type_check: {
+    what:'نوع الحركة مش مقبول.',
+    why:'المسموح: شهري · مشروع · دفعة · صرف · تسوية.',
+    fix:'اختار من القايمة.' },
+  chk_ledger_monthly_has_month: {
+    what:'الاشتراك الشهري محتاج شهر مظبوط.',
+    why:'من غير شهر، الاشتراك ما ينفعش يتطابق مع السداد.',
+    fix:'اختار الشهر بصيغة سنة-شهر.' },
+  ledger_building_id_legacy_id_key: {
+    what:'الحركة دي متسجّلة قبل كده.', why:'اتبعتت مرتين.',
+    fix:'حدّث الصفحة وراجع كشف الحساب قبل ما تعيد.' },
+
+  /* ---- تخصيص الدفعات ---- */
+  ledger_allocations_payment_id_charge_id_key: {
+    what:'الدفعة دي متخصّصة على نفس المستحق قبل كده.',
+    why:'عشان مبلغ واحد ما يتحسبش مرتين.',
+    fix:'راجع تخصيصات الدفعة قبل ما تزوّد.' },
+  ledger_allocations_check: {
+    what:'مينفعش نخصّص الحركة على نفسها.', why:'الدفعة لازم تتخصّص على مستحق مختلف.',
+    fix:'اختار المستحق الصح.' },
+  ledger_allocations_amount_check: {
+    what:'مبلغ التخصيص لازم يكون أكبر من صفر.', why:'التخصيص بصفر ملوش معنى محاسبي.',
+    fix:'اكتب مبلغ حقيقي.' },
+
+  /* ---- المصروفات والموردين والمشاريع ---- */
+  chk_expenses_amount: {
+    what:'مبلغ المصروف لازم يكون أكبر من صفر.', why:'المصروف بصفر ملوش معنى.',
+    fix:'اكتب المبلغ الفعلي.' },
+  chk_expenses_category_not_empty: {
+    what:'بند المصروف فاضي.', why:'من غير بند، تقرير المصروفات ما ينفعش يتقسّم.',
+    fix:'اختار بند أو اعمل واحد جديد.' },
+  expense_categories_building_id_name_key: {
+    what:'في بند مصروفات بنفس الاسم.', why:'البنود المكررة بتقسّم التقرير غلط.',
+    fix:'استعمل البند الموجود أو سمّي الجديد باسم مختلف.' },
+  uq_vendor_name: {
+    what:'في مورّد بنفس الاسم في العمارة دي.', why:'عشان مصروفات المورّد ما تتقسّمش على اسمين.',
+    fix:'استعمل المورّد الموجود، أو ميّز الاسم.' },
+  uq_project_name: {
+    what:'في مشروع بنفس الاسم في العمارة دي.', why:'عشان تحصيل المشروع ما يتلخبطش.',
+    fix:'غيّر الاسم أو استعمل المشروع الموجود.' },
+
+  /* ---- التحويلات ---- */
+  transfers_check: {
+    what:'مينفعش تحوّل من خزينة لنفسها.', why:'التحويل لازم يكون بين خزينتين مختلفتين.',
+    fix:'اختار خزينة وصول مختلفة.' },
+  transfers_amount_check: {
+    what:'مبلغ التحويل لازم يكون أكبر من صفر.', why:'التحويل بصفر ملوش أثر.',
+    fix:'اكتب المبلغ.' },
+
+  /* ---- العضويات والصلاحيات ---- */
+  uq_unit_one_owner: {
+    what:'الوحدة دي ليها مالك (أو مستأجر) مسجّل بالفعل.',
+    why:'كل وحدة ليها مالك نشط واحد ومستأجر نشط واحد — عشان المسؤولية عن الحساب تبقى واضحة.',
+    fix:'شيل المرتبط الحالي أو عطّله الأول، وبعدين ضيف الجديد.' },
+  uq_membership_unit: {
+    what:'الشخص ده مرتبط بالوحدة دي بالفعل.', why:'مينفعش نفس الشخص يتسجّل مرتين على نفس الوحدة.',
+    fix:'عدّل تسجيله الموجود بدل ما تضيف جديد.' },
+  chk_memberships_role: {
+    what:'الصفة مش مقبولة.', why:'الصفة لازم تكون من صفات النظام المعروفة.',
+    fix:'اختار من القايمة.' },
+
+  /* ---- الحسابات الشخصية ---- */
+  profiles_phone_e164_uniq: {
+    what:'رقم التليفون ده مسجّل على حساب تاني.',
+    why:'الرقم هو وسيلة الدخول، فمستحيل حسابين بنفس الرقم.',
+    fix:'لو الرقم بتاعك ونسيت كلمة السر، استعمل استعادة الحساب بدل ما تعمل حساب جديد.' },
+  profiles_email_uniq: {
+    what:'الإيميل ده مسجّل على حساب تاني.', why:'الإيميل وسيلة دخول مميّزة.',
+    fix:'استعمل إيميل تاني أو استرجع الحساب القديم.' },
+  profiles_has_login_id: {
+    what:'الحساب محتاج رقم تليفون أو إيميل.', why:'من غير واحد منهم مفيش طريقة للدخول.',
+    fix:'ضيف رقم تليفون على الأقل.' },
+
+  /* ---- إقفال الشهر ---- */
+  period_locks_building_id_period_key: {
+    what:'الشهر ده مقفول بالفعل.', why:'الإقفال بيتعمل مرة واحدة للشهر.',
+    fix:'لو محتاج تعدّل، افتح الشهر الأول من شاشة إقفال الشهر.' },
+  payment_requests_amount_check: {
+    what:'مبلغ الدفعة لازم يكون أكبر من صفر.', why:'مفيش دفعة بصفر.',
+    fix:'اكتب المبلغ اللي حوّلته.' },
+};
+
+/* بنستخرج اسم القيد من نص الخطأ.
+   ⚠️ رسالة CHECK بتقول: relation "accounts" violates check
+   constraint "accounts_type_check" — فأول اسم بين علامتين هو
+   اسم الجدول مش القيد. لازم نمسك اللي بعد كلمة constraint
+   تحديدًا، وبعدين نرجع لآخر اسم كاحتياطي. */
+function constraintOf(raw){
+  const s = String(raw||'');
+  const c = s.match(/constraint\s+"([a-zA-Z0-9_]+)"/i);
+  if (c) return c[1];
+  const all = s.match(/"([a-zA-Z0-9_]+)"/g);
+  if (!all || !all.length) return null;
+  return all[all.length-1].replace(/"/g,'');
+}
+
+/* ============================================================
+   cloudErrorInfo — بترجّع الخطأ مقسّم بدل جملة واحدة:
+   إيه اللي حصل · ليه · أعمل إيه · والتفاصيل التقنية للدعم.
+   ============================================================ */
+window.cloudErrorInfo = function(e){
+  const raw  = String((e && (e.message || e.details || e)) || '');
+  const code = (e && e.code) || '';
+  const st   = (e && e.status) || '';
+  const cn   = constraintOf(raw) || constraintOf(e && e.details);
+  const hit  = cn && ERR_BY_CONSTRAINT[cn];
+
+  let title = 'مش قادر يحفظ';
+  let what = '', why = '', fix = '';
+
+  if (hit){
+    title = 'البيانات محتاجة تعديل';
+    what = hit.what; why = hit.why; fix = hit.fix;
+  } else if (/Failed to fetch|NetworkError|network/i.test(raw)){
+    title = 'مفيش اتصال بالإنترنت';
+    what  = 'الشغل اتحفظ على جهازك، بس لسه ماوصلش للسحابة.';
+    why   = 'البرنامج بيشتغل من غير نت، وبيزامن لوحده أول ما يرجع.';
+    fix   = 'ما تقفلش الصفحة لحد ما المؤشر تحت يقول «اتحفظ».';
+  } else if (/JWT|token is expired|Invalid Refresh/i.test(raw) || code==='PGRST301' || st===401){
+    title = 'الجلسة انتهت';
+    what  = 'مدة دخولك خلصت.';
+    why   = 'البرنامج بيقفل الجلسة بعد مدة لحماية حسابك.';
+    fix   = 'سجّل دخول تاني — شغلك محفوظ.';
+  } else if (/row-level security|violates row-level/i.test(raw) || code==='42501' || st===403){
+    title = 'مالكش صلاحية للعملية دي';
+    what  = 'الخادم رفض العملية.';
+    why   = 'الصلاحية دي مش متاحة لصفتك في العمارة.';
+    fix   = 'كلّم رئيس الاتحاد لو محتاج الصلاحية.';
+  } else if (code==='23503'){
+    title = 'العنصر مرتبط بحاجة تانية';
+    what  = 'مينفعش يتحذف أو يتعدّل وهو مرتبط.';
+    why   = 'في بيانات تانية معتمدة عليه — الحذف كان هيسيب حركات بلا أصل.';
+    fix   = 'شيل المرتبط الأول، أو اعكس الحركة بدل ما تحذفها.';
+  } else if (code==='23502'){
+    title = 'في خانة إلزامية فاضية';
+    what  = 'في بيانات ناقصة.'; why = 'الخانة دي مطلوبة عشان السجل يبقى مكتمل.';
+    fix   = 'املا الخانات المعلّمة وجرّب تاني.';
+  } else if (code==='22P02'){
+    title = 'صيغة قيمة غلط';
+    what  = 'في رقم أو تاريخ مكتوب بشكل مش مفهوم.'; why = 'النظام محتاج صيغة محددة.';
+    fix   = 'راجع الأرقام والتواريخ — استعمل الأرقام الإنجليزية في الخانات الرقمية.';
+  } else if (code==='42703' || code==='42883' || /does not exist/i.test(raw)){
+    title = 'نسختك قديمة';
+    what  = 'البرنامج بيطلب حاجة مش موجودة على الخادم.';
+    why   = 'الصفحة شغالة على نسخة أقدم من اللي على السيرفر.';
+    fix   = 'اقفل الصفحة وافتحها من جديد. لو فضلت، امسح كاش المتصفح.';
+  } else if (st===413){
+    title = 'الملف كبير';
+    what  = 'الصورة أو الملف أكبر من المسموح.'; why = 'في حد أقصى للمرفقات.';
+    fix   = 'صغّر الصورة أو صوّرها بجودة أقل.';
+  } else if (st===429){
+    title = 'طلبات كتير بسرعة';
+    what  = 'البرنامج أرسل طلبات كتير في وقت قصير.'; why = 'حماية من الضغط الزايد.';
+    fix   = 'استنى دقيقة وجرّب تاني.';
+  } else if (st===500 || st===502 || st===503){
+    title = 'عطل مؤقت في الخادم';
+    what  = 'الخادم مش رادّ دلوقتي.'; why = 'العطل من ناحيتنا مش من ناحيتك.';
+    fix   = 'شغلك محفوظ على جهازك. جرّب بعد شوية.';
+  } else if (code==='23505'){
+    title = 'البيانات دي متسجّلة قبل كده';
+    what  = 'في سجل بنفس القيمة موجود بالفعل.'; why = 'النظام بيمنع التكرار.';
+    fix   = 'حدّث الصفحة وراجع لو اتسجّلت قبل ما تعيد.';
+  } else {
+    what = raw.slice(0,200) || 'خطأ غير معروف.';
+    why  = 'مش قادرين نحدد السبب بالظبط.';
+    fix  = 'حدّث الصفحة وجرّب تاني. لو تكرر، ابعت التفاصيل التقنية للدعم.';
+  }
+
+  return { title, what, why, fix,
+           code: code || st || '-', constraint: cn || '-', raw: raw.slice(0,400) };
+};
+
 window.cloudErrorText = function(e){
   if (!e) return 'حصل خطأ غير معروف';
   const raw = String(e.message || e || '');
+  /* القيد بالاسم أدق من الكود العام — نجرّبه الأول */
+  const __cn = constraintOf(raw) || constraintOf(e.details);
+  if (__cn && ERR_BY_CONSTRAINT[__cn]) return ERR_BY_CONSTRAINT[__cn].what;
   if (/Failed to fetch|NetworkError|network/i.test(raw))
     return 'مفيش اتصال بالإنترنت — شغلك محفوظ محليًا وهيتزامن أول ما النت يرجع.';
   if (/JWT|token is expired|Invalid Refresh/i.test(raw))
@@ -872,13 +1123,29 @@ window.retryCloudSync = function(){
 window.showCloudSyncDetails = function(){
   const pending = cache.dirty.size;
   const err = cache.lastError;
+  const E = (s) => window.esc ? esc(s) : String(s==null?'':s);
+  /* الشرح المفصّل بدل السطر التقني — نفس كتالوج القيود */
+  const info = err && window.cloudErrorInfo ? window.cloudErrorInfo(err) : null;
   const body = `
     <h3>${err ? '⚠️ في تغييرات لسه ما اتحفظتش' : '✓ كل حاجة محفوظة'}</h3>
-    ${err ? `<p class="small mtop">${window.esc ? esc(window.cloudErrorText(err)) : window.cloudErrorText(err)}</p>
-      <p class="small">عدد العناصر المنتظرة: <b>${pending}</b>. شغلك موجود على الجهاز، وهيتبعت أول ما المشكلة تتحل.</p>
-      <div style="background:var(--inputbg,#fffdf8);border:1px solid var(--line,#e3e8e6);border-radius:9px;
-                  padding:8px;font:12px/1.6 monospace;direction:ltr;text-align:left;white-space:pre-wrap;
-                  max-height:140px;overflow:auto;margin-top:10px">${window.esc ? esc(window.__cloudLastErrorRaw||'') : (window.__cloudLastErrorRaw||'')}</div>`
+    ${err ? `
+      <div class="card mtop2" style="background:var(--tint)">
+        <div><b>${E(info ? info.title : 'مشكلة في الحفظ')}</b></div>
+        ${info && info.what ? `<div class="mtop"><span class="small" style="color:var(--muted)">❗ اللي حصل</span>
+          <div>${E(info.what)}</div></div>` : ''}
+        ${info && info.why ? `<div class="mtop"><span class="small" style="color:var(--muted)">💡 ليه</span>
+          <div>${E(info.why)}</div></div>` : ''}
+        ${info && info.fix ? `<div class="mtop"><span class="small" style="color:var(--muted)">✅ اعمل إيه</span>
+          <div>${E(info.fix)}</div></div>` : ''}
+      </div>
+      <p class="small mtop">عدد العناصر المنتظرة: <b>${pending}</b>.
+         شغلك موجود على الجهاز، وهيتبعت أول ما المشكلة تتحل.</p>
+      <details class="mtop"><summary class="small">🔧 تفاصيل تقنية</summary>
+        <div style="background:var(--inputbg,#fffdf8);border:1px solid var(--line,#e3e8e6);border-radius:9px;
+                    padding:8px;font:12px/1.6 monospace;direction:ltr;text-align:left;white-space:pre-wrap;
+                    max-height:140px;overflow:auto;margin-top:8px">build ${E(window.APP_BUILD||'-')}${
+          info ? '\ncode ' + E(info.code) + '\nconstraint ' + E(info.constraint) : ''
+        }\n${E(window.__cloudLastErrorRaw||'')}</div></details>`
     : '<p class="small mtop">مفيش تغييرات منتظرة. آخر حفظ تم بنجاح.</p>'}
     <div class="modal-actions">
       ${err ? '<button class="btn primary" onclick="retryCloudSync();closeModal()">🔄 حاول تاني</button>' : ''}
