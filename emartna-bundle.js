@@ -1916,6 +1916,260 @@
 
 })();
 
+/* ═══ emartna-stmtkit.js ═══ */
+(function(){
+/* ============================================================
+   عمارتنا — مكوّن كشف الحساب الموحّد
+   ------------------------------------------------------------
+   فيه ٤ كشوف حساب في البرنامج، كل واحد اتعمل لوحده فطلعوا
+   مختلفين: واحد فيه فلترة وواحد لأ، واحد فيه طباعة وواحد لأ.
+
+   الملف ده بيدّي القطع المشتركة:
+     • شريط الفلترة (سريعة + من/إلى)
+     • بطاقة الملخّص (افتتاحي · مستحق · مدفوع · ختامي)
+     • حساب الرصيد التراكمي
+     • الطباعة والمشاركة
+
+   أي كشف جديد بينادي الدوال دي بدل ما يعيد كتابتها.
+   ============================================================ */
+
+(function(){
+  'use strict';
+
+  const esc2 = s => (window.esc ? esc(s) : String(s == null ? '' : s));
+  const M    = n => window.money ? money(Number(n)||0) : (Number(n)||0);
+  const r2   = n => window.money2 ? money2(n) : Math.round(Number(n)*100)/100;
+
+  /* ---------- حالة الفلترة لكل كشف ---------- */
+
+  window.__stFilters = window.__stFilters || {};
+
+  window.stRange = function(id){
+    return window.__stFilters[id] || { from:'', to:'' };
+  };
+
+  window.stSetQuick = function(id, months, cb){
+    const to = new Date(), from = new Date();
+    if (months) from.setMonth(from.getMonth() - months);
+    window.__stFilters[id] = months
+      ? { from: from.toISOString().slice(0,10), to: to.toISOString().slice(0,10) }
+      : { from:'', to:'' };
+    if (cb && window[cb]) window[cb]();
+    else if (window.renderContent) renderContent();
+  };
+
+  window.stSetField = function(id, key, val, cb){
+    const cur = stRange(id);
+    window.__stFilters[id] = Object.assign({}, cur, { [key]: val });
+    if (cb && window[cb]) window[cb]();
+    else if (window.renderContent) renderContent();
+  };
+
+  /* ---------- شريط الفلترة ---------- */
+
+  window.stToolbarHTML = function(id, cb){
+    const r = stRange(id);
+    const q = (lbl, m) => `<button class="btn sm ${
+      (!m && !r.from) ? 'primary' : 'ghost'}"
+      onclick="stSetQuick('${id}',${m},'${cb||''}')">${lbl}</button>`;
+    return `
+    <div class="card">
+      <div class="flexrow" style="gap:6px;flex-wrap:wrap">
+        ${q('آخر شهر',1)}${q('3 شهور',3)}${q('6 شهور',6)}${q('سنة',12)}${q('الكل',0)}
+      </div>
+      <div class="grid g2 mtop">
+        <div class="field2"><label>من تاريخ</label>
+          <input type="date" value="${esc2(r.from||'')}"
+            onchange="stSetField('${id}','from',this.value,'${cb||''}')"></div>
+        <div class="field2"><label>إلى تاريخ</label>
+          <input type="date" value="${esc2(r.to||'')}"
+            onchange="stSetField('${id}','to',this.value,'${cb||''}')"></div>
+      </div>
+    </div>`;
+  };
+
+  /* ---------- حساب الرصيد التراكمي ----------
+     بيرجّع الصفوف داخل الفترة ومعاها رصيد بعد كل حركة، والرصيد
+     الافتتاحي (اللي قبل الفترة) والختامي.
+
+     ⚠️ الحساب تصاعدي من الأقدم — لو اتحسب من الأحدث بيطلع مقلوب. */
+
+  window.stCompute = function(all, opts){
+    opts = opts || {};
+    const from = opts.from, to = opts.to;
+    const dateOf = opts.dateOf || (x => x.date);
+    const signOf = opts.signOf || (x =>
+      (x.type === 'دفعة' || x.type === 'صرف') ? -1 : 1);
+    const amtOf  = opts.amountOf || (x => Number(x.amount) || 0);
+
+    const sorted = all.slice().sort((a,b) =>
+      String(dateOf(a)||'').localeCompare(String(dateOf(b)||'')));
+
+    let run = Number(opts.opening) || 0;
+    let opening = run, seen = false;
+    const rows = [];
+
+    sorted.forEach(x => {
+      const d = String(dateOf(x) || '');
+      const inRange = (!from || d >= from) && (!to || d <= to);
+      if (!inRange && !seen){ run = r2(run + signOf(x)*amtOf(x)); opening = run; return; }
+      if (!inRange) return;
+      seen = true;
+      run = r2(run + signOf(x)*amtOf(x));
+      rows.push(Object.assign({}, x, { __run: run, __sign: signOf(x) }));
+    });
+
+    const closing = rows.length ? rows[rows.length-1].__run : opening;
+    const charges  = r2(rows.filter(x=>x.__sign>0).reduce((s,x)=>s+amtOf(x),0));
+    const payments = r2(rows.filter(x=>x.__sign<0).reduce((s,x)=>s+amtOf(x),0));
+
+    return { rows, opening, closing, charges, payments };
+  };
+
+  /* ---------- بطاقة الملخّص ---------- */
+
+  window.stSummaryHTML = function(c, labels){
+    const L = Object.assign({
+      opening:'الرصيد الافتتاحي', charges:'مستحقات الفترة',
+      payments:'اللي اتدفع', closing:'الرصيد الختامي',
+    }, labels || {});
+    return `
+    <div class="card mtop2" style="background:var(--tint)">
+      <div class="grid g4 small">
+        <div><b>${esc2(L.opening)}</b>
+          <div style="font-size:15px">${M(c.opening)}</div></div>
+        <div><b>${esc2(L.charges)}</b>
+          <div style="font-size:15px;color:var(--red)">+${M(c.charges)}</div></div>
+        <div><b>${esc2(L.payments)}</b>
+          <div style="font-size:15px;color:var(--accent)">−${M(c.payments)}</div></div>
+        <div><b>${esc2(L.closing)}</b>
+          <div style="font-size:17px;font-weight:700;
+            color:${c.closing>0?'var(--red)':'var(--accent)'}">${M(c.closing)}</div></div>
+      </div>
+    </div>`;
+  };
+
+  /* ---------- أعمدة الجدول الموحّدة ---------- */
+
+  window.stColumns = function(extra){
+    return [
+      { key:'date', label:'التاريخ', value:x=>x.date,
+        cell:x=>esc2(x.date||'') },
+      { key:'type', label:'النوع', value:x=>x.type,
+        cell:x=>window.ledgerBadge?ledgerBadge(x.type):esc2(x.type) },
+      { key:'note', label:'البيان', value:x=>x.note||'',
+        cell:x=>esc2(x.note||x.type||'') },
+      { key:'amount', label:'له / عليه', value:x=>Number(x.amount),
+        cell:x=>`<b style="color:${x.__sign<0?'var(--accent)':'var(--red)'}">${
+          x.__sign<0?'−':'+'}${M(x.amount)}</b>` },
+      { key:'run', label:'الرصيد', value:x=>Number(x.__run),
+        cell:x=>`<b>${M(x.__run)}</b>` },
+    ].concat(extra || []);
+  };
+
+  /* ---------- الطباعة ---------- */
+
+  window.stPrint = function(c, meta){
+    meta = meta || {};
+    const w = window.open('', '_blank');
+    if (!w) return showMessage('اسمح بالنوافذ المنبثقة للطباعة');
+    const b = (window.D && D.building) || {};
+    const rows = (c.rows || []).slice().reverse();   /* الأحدث فوق */
+
+    w.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head>
+      <meta charset="utf-8"><title>${esc2(meta.title||'كشف حساب')}</title>
+      <style>@page{margin:14mm}
+        body{font-family:Tahoma,Arial,sans-serif;color:#1c2622;margin:0}
+        h1{font-size:18px;margin:0 0 2px}
+        h2{font-size:13px;margin:0;color:#6b7a76;font-weight:400}
+        .hd{border-bottom:2px solid #159A8C;padding-bottom:10px;margin-bottom:12px}
+        .sum{display:flex;gap:16px;flex-wrap:wrap;background:#f0f6f4;
+          padding:10px 12px;border-radius:8px;margin-bottom:12px;font-size:12.5px}
+        table{width:100%;border-collapse:collapse;font-size:12.5px}
+        th,td{border:1px solid #d8e0dd;padding:6px 8px;text-align:right}
+        thead th{background:#f0f6f4;font-size:12px}
+        tfoot th{background:#f0f6f4}
+        tbody tr:nth-child(even){background:#fafcfb}
+        .ft{margin-top:14px;font-size:11px;color:#6b7a76;
+          border-top:1px solid #d8e0dd;padding-top:8px}
+        @media print{.no-print{display:none}}
+      </style></head><body>
+      ${window.printBackBar?printBackBar():''}
+      <div class="hd">
+        <h1>${esc2(b.name||'العمارة')} — ${esc2(meta.title||'كشف حساب')}</h1>
+        <h2>${esc2(meta.subtitle||'')}${meta.from
+          ? ' · من ' + esc2(meta.from) + ' إلى ' + esc2(meta.to) : ''}</h2>
+      </div>
+      <div class="sum">
+        <span><b>الرصيد الافتتاحي:</b> ${M(c.opening)}</span>
+        <span><b>مستحقات:</b> ${M(c.charges)}</span>
+        <span><b>مدفوع:</b> ${M(c.payments)}</span>
+        <span><b>الرصيد الختامي:</b> ${M(c.closing)}</span>
+      </div>
+      <table><thead><tr><th>التاريخ</th><th>البيان</th>
+        <th>له / عليه</th><th>الرصيد</th></tr></thead><tbody>
+      ${rows.map(x=>`<tr><td>${esc2(x.date||'')}</td>
+        <td>${esc2(x.note||x.type||'')}</td>
+        <td>${x.__sign<0?'−':'+'}${M(x.amount)}</td>
+        <td>${M(x.__run)}</td></tr>`).join('')}
+      </tbody><tfoot><tr><th colspan="3">الرصيد الختامي</th>
+        <th>${M(c.closing)}</th></tr></tfoot></table>
+      <div class="ft">${rows.length} حركة ·
+        اتطبع في ${esc2(new Date().toLocaleString('ar-EG'))} · نظام عمارتنا</div>
+      <script>setTimeout(function(){window.print()},350)<\/script>
+      </body></html>`);
+    w.document.close();
+  };
+
+  /* ---------- المشاركة ---------- */
+
+  window.stShare = async function(c, meta){
+    meta = meta || {};
+    const b = (window.D && D.building) || {};
+    const rows = (c.rows || []).slice(-12).reverse();
+    const txt = `📄 ${meta.title||'كشف حساب'} — ${b.name||''}\n` +
+      (meta.subtitle ? meta.subtitle + '\n' : '') +
+      (meta.from ? `الفترة: ${meta.from} إلى ${meta.to}\n` : '') + '\n' +
+      `الرصيد الافتتاحي: ${c.opening}\n` +
+      rows.map(x => `${x.date} · ${x.note||x.type} · ${
+        x.__sign<0?'−':'+'}${x.amount}`).join('\n') +
+      `\n\n💰 الرصيد الختامي: ${c.closing} جنيه\n— نظام عمارتنا`;
+
+    if (navigator.share){
+      try{ await navigator.share({ title: meta.title||'كشف حساب', text: txt }); return; }
+      catch(e){ if (e && e.name === 'AbortError') return; }
+    }
+    openModal(`
+      <h3>📤 مشاركة الكشف</h3>
+      <textarea rows="11" id="stShareTxt" style="width:100%;font-size:12.5px"
+        onclick="this.select()">${esc2(txt)}</textarea>
+      <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
+        ${meta.phone?`<a class="btn gold" target="_blank"
+          href="https://wa.me/${String(meta.phone).replace(/\D/g,'')}?text=${
+          encodeURIComponent(txt)}">💬 واتساب</a>`:''}
+        <button class="btn ghost" onclick="
+          navigator.clipboard.writeText(document.getElementById('stShareTxt').value);
+          toast('اتنسخ');">📋 نسخ</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn primary" onclick="closeModal()">تمام</button>
+      </div>`, true);
+  };
+
+  /* ---------- أزرار الطباعة والمشاركة ---------- */
+
+  window.stActionsHTML = function(fnPrint, fnShare){
+    return `<div class="flexrow mtop2" style="gap:6px;flex-wrap:wrap">
+      <button class="btn" onclick="${fnPrint}">🖨️ طباعة / PDF</button>
+      <button class="btn ghost" onclick="${fnShare}">📤 مشاركة</button>
+    </div>`;
+  };
+
+  console.log('[عمارتنا] مكوّن كشف الحساب جاهز');
+})();
+
+})();
+
 /* ═══ emartna-statement.js ═══ */
 (function(){
 /* ============================================================
@@ -2105,8 +2359,30 @@
         defaultKey:'date',
         emptyText:'مفيش حركات في الفترة دي',
         exportName: data.title,
-      })}</div>`;
+      })}
+      ${window.stActionsHTML?stActionsHTML('acctStPrint()','acctStShare()'):''}
+      </div>`;
+
+    /* بنحتفظ بالحساب للطباعة والمشاركة — بنفس شكل المكوّن الموحّد */
+    window.__acctStCalc = {
+      rows: withBal.slice().reverse().map(r => Object.assign({}, r, {
+        __run: r.balance, __sign: r.dir, note: r.note || r.type,
+      })),
+      opening: openBal, closing: closeBal,
+      charges: totalIn, payments: totalOut,
+    };
+    window.__acctStMeta = { title: data.title, subtitle: data.subtitle || '',
+                            from: s.from, to: s.to };
   }
+
+  window.acctStPrint = function(){
+    if (window.stPrint && window.__acctStCalc)
+      stPrint(window.__acctStCalc, window.__acctStMeta || {});
+  };
+  window.acctStShare = function(){
+    if (window.stShare && window.__acctStCalc)
+      stShare(window.__acctStCalc, window.__acctStMeta || {});
+  };
   window.renderStatement = renderStatement;
 
   window.openStatement = function(kind, id){

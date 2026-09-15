@@ -8024,28 +8024,52 @@ function openApartmentDetail(id){
     <div id="apDetailLedgerHost"></div>`,true);
   renderApDetailLedger(id);
 }
+/* ⚠️ كان بيفلتر يدويًا بلا أزرار سريعة ولا رصيد تراكمي.
+   دلوقتي بيستخدم المكوّن الموحّد — نفس سلوك باقي الكشوف. */
 function renderApDetailLedger(id){
   const a=D.apartments.find(x=>x.id===id); if(!a)return;
-  const from=window.__apStmtFrom, to=window.__apStmtTo;
-  const all=[...D.ledger.filter(l=>l.apartmentId===id)].sort((x,y)=>(x.date||'').localeCompare(y.date||''));
-  let rows=all;
-  const openingEl=document.getElementById('apStmtOpeningBal');
-  if(from){
-    const signed=l=>l.type==='دفعة'?-Number(l.amount):Number(l.amount);
-    const before=all.filter(l=>(l.date||'')<from);
-    const opening=(Number(a.openingBalance)||0)+before.reduce((s,l)=>s+signed(l),0);
-    if(openingEl)openingEl.innerHTML='الرصيد الافتتاحي لأول الفترة المحددة: <b>'+money(opening)+'</b>';
-    rows=rows.filter(l=>(l.date||'')>=from);
-  }else if(openingEl)openingEl.innerHTML='';
-  if(to)rows=rows.filter(l=>(l.date||'')<=to);
+  const sid='apStmt_'+id;
+  const r=window.stRange?stRange(sid):{from:'',to:''};
+  const all=D.ledger.filter(l=>l.apartmentId===id);
+
+  const c=window.stCompute?stCompute(all,{
+    from:r.from, to:r.to, opening:Number(a.openingBalance)||0,
+  }):{rows:all,opening:0,closing:0,charges:0,payments:0};
+
+  window.__apStmtCalc=c;
+  window.__apStmtAp=a;
+
   const host=document.getElementById('apDetailLedgerHost');
-  if(host)host.innerHTML=sortableTable('apDetailLedger',rows,[
-    {key:'type',label:'النوع',value:l=>l.type,cell:l=>ledgerBadge(l.type)},
-    {key:'note',label:'البيان',value:l=>l.note||l.project||'',cell:l=>esc(l.note||l.project||(l.month?'اشتراك '+monthLabel(l.month):''))},
-    {key:'amount',label:'المبلغ',value:l=>Number(l.amount),cell:l=>money(l.amount)},
-    {key:'date',label:'التاريخ',value:l=>l.date,cell:l=>esc(l.date||'')},
-  ],null,{emptyText:'لا توجد حركات في هذه الفترة',exportName:'كشف حساب '+unitLabel(a)+' - '+a.ownerName,rowClick:l=>`openLedgerDetail('${l.id}')`});
+  if(!host)return;
+  host.innerHTML =
+    (window.stToolbarHTML?stToolbarHTML(sid,"renderApDetailLedger.bind(null,'"+id+"')"):'') +
+    (window.stSummaryHTML?stSummaryHTML(c):'') +
+    sortableTable('apDetailLedger', c.rows.slice().reverse(),
+      window.stColumns?stColumns():[
+        {key:'date',label:'التاريخ',value:l=>l.date,cell:l=>esc(l.date||'')},
+        {key:'type',label:'النوع',value:l=>l.type,cell:l=>ledgerBadge(l.type)},
+        {key:'note',label:'البيان',value:l=>l.note||'',cell:l=>esc(l.note||'')},
+        {key:'amount',label:'المبلغ',value:l=>Number(l.amount),cell:l=>money(l.amount)},
+      ],
+      null,{defaultKey:'date',emptyText:'مفيش حركات في الفترة دي',
+        exportName:'كشف حساب '+unitLabel(a)+' - '+a.ownerName,
+        rowClick:l=>`openLedgerDetail('${l.id}')`}) +
+    (window.stActionsHTML?stActionsHTML('apStmtPrint()','apStmtShare()'):'');
 }
+window.apStmtPrint=function(){
+  const a=window.__apStmtAp||{}, c=window.__apStmtCalc;
+  if(!c)return;
+  const r=stRange('apStmt_'+a.id);
+  stPrint(c,{title:'كشف حساب '+unitLabel(a),subtitle:a.ownerName||'',
+    from:r.from,to:r.to});
+};
+window.apStmtShare=function(){
+  const a=window.__apStmtAp||{}, c=window.__apStmtCalc;
+  if(!c)return;
+  const r=stRange('apStmt_'+a.id);
+  stShare(c,{title:'كشف حساب '+unitLabel(a),subtitle:a.ownerName||'',
+    from:r.from,to:r.to,phone:a.phone});
+};
 function filterApDetailLedger(id){
   window.__apStmtFrom=document.getElementById('apStmtFrom').value;
   window.__apStmtTo=document.getElementById('apStmtTo').value;
@@ -11773,6 +11797,19 @@ window.setOwnerStField = function(k, v){
   renderContent();
 };
 
+window.ownerStPrint=function(){
+  const c=window.__ownerStCalc; if(!c||!window.stPrint)return;
+  const a=window.__ownerStAp||{};
+  stPrint(c,{title:'كشف حساب '+(window.unitLabel?unitLabel(a):''),
+    subtitle:a.ownerName||'',from:window.__ownerStFrom,to:window.__ownerStTo});
+};
+window.ownerStShare=function(){
+  const c=window.__ownerStCalc; if(!c||!window.stShare)return;
+  const a=window.__ownerStAp||{};
+  stShare(c,{title:'كشف حساب '+(window.unitLabel?unitLabel(a):''),
+    subtitle:a.ownerName||'',from:window.__ownerStFrom,to:window.__ownerStTo});
+};
+
 function ownerStatementHTML(a){
   if (!a) return '';
   const from = window.__ownerStFrom, to = window.__ownerStTo;
@@ -11795,6 +11832,12 @@ function ownerStatementHTML(a){
   });
   const closing = rows.length ? rows[rows.length-1].__run : opening;
   const view = rows.slice().reverse();
+  /* بنحتفظ بالحساب عشان الطباعة والمشاركة يستخدموه */
+  window.__ownerStAp = a;
+  window.__ownerStCalc = { rows, opening, closing,
+    charges: money2(rows.filter(l=>sign(l)>0).reduce((s,l)=>s+Number(l.amount),0)),
+    payments: money2(rows.filter(l=>sign(l)<0).reduce((s,l)=>s+Number(l.amount),0)) };
+  window.__ownerStCalc.rows = rows.map(l=>Object.assign({},l,{__sign:sign(l)}));
   const charges  = money2(rows.filter(l=>sign(l)>0).reduce((s,l)=>s+Number(l.amount),0));
   const payments = money2(rows.filter(l=>sign(l)<0).reduce((s,l)=>s+Number(l.amount),0));
   const q = (lbl, m) => `<button class="btn sm ghost" onclick="setOwnerStRange(${m})">${lbl}</button>`;
@@ -11831,6 +11874,7 @@ function ownerStatementHTML(a){
     </div>
   </div>
 
+  ${window.stActionsHTML?stActionsHTML('ownerStPrint()','ownerStShare()'):''}
   ${sortableTable('ownerLedger',view,[
     {key:'date',label:'التاريخ',value:l=>l.date,cell:l=>esc(l.date||'')},
     {key:'type',label:'النوع',value:l=>l.type,cell:l=>ledgerBadge(l.type)},
@@ -11956,7 +12000,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.18';
+const APP_BUILD='2.19';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12159,25 +12203,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.18"></script>
-<script type="module" src="emartna-auth.js?v=2.18"></script>
-<script type="module" src="emartna-profile.js?v=2.18"></script>
-<script type="module" src="emartna-users.js?v=2.18"></script>
-<script type="module" src="emartna-platform.js?v=2.18"></script>
-<script type="module" src="emartna-contactlog.js?v=2.18"></script>
-<script type="module" src="emartna-permreport.js?v=2.18"></script>
-<script type="module" src="emartna-finops.js?v=2.18"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.18"></script>
-<script type="module" src="emartna-planscreens.js?v=2.18"></script>
+<script type="module" src="emartna-cloud.js?v=2.19"></script>
+<script type="module" src="emartna-auth.js?v=2.19"></script>
+<script type="module" src="emartna-profile.js?v=2.19"></script>
+<script type="module" src="emartna-users.js?v=2.19"></script>
+<script type="module" src="emartna-platform.js?v=2.19"></script>
+<script type="module" src="emartna-contactlog.js?v=2.19"></script>
+<script type="module" src="emartna-permreport.js?v=2.19"></script>
+<script type="module" src="emartna-finops.js?v=2.19"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.19"></script>
+<script type="module" src="emartna-planscreens.js?v=2.19"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.18"></script>
+<script type="module" src="emartna-perms.js?v=2.19"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.18"></script>
+<script type="module" src="emartna-bundle.js?v=2.19"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
