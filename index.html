@@ -2036,12 +2036,24 @@ function syncUsageTypeDefault(){
     userEl.value=userEl.value.replace(/(shaqa|mahal)(\d+)$/,(type==='shop'?'mahal':'shaqa')+'$2');
   }
 }
+/* ⚠️ كانت بترجّع الترقيم المتسلسل (شقة ٦٧) — والمستخدم بيعرف
+   وحدته برقم بابها (٨٠٧). الرقم المتسلسل مالوش معنى عنده.
+   دلوقتي بترجّع رقم الباب لما ترقيم الأدوار مفعّل (الافتراضي)،
+   وبتغطي الـ٧١ موضع اللي بتستخدمها في البرنامج مرة واحدة. */
 function unitLabel(a){
   if(!a)return'-';
-  // الرقم المخصّص (زي A-12 أو محل ٣) بيغلب الترقيم التلقائي
+  // الرقم المخصّص (زي A-12 أو محل ٣) بيغلب أي ترقيم تلقائي
   if(a.label&&String(a.label).trim())
     return (a.blockName?esc(a.blockName)+' - ':'')+esc(String(a.label).trim());
-  return(a.blockName?esc(a.blockName)+' - ':'')+unitTypeName(a)+' '+unitTypeIndex(a);
+
+  const pre=(a.blockName?esc(a.blockName)+' - ':'')+unitTypeName(a)+' ';
+  if(window.doorNumber){
+    try{
+      const d=doorNumber(a);
+      if(d&&String(d)!=='-') return pre+esc(d);
+    }catch(e){}
+  }
+  return pre+unitTypeIndex(a);
 }
 function apPaidForMonth(apId,month){
   const charge=D.ledger.find(l=>l.apartmentId===apId&&l.type==='شهري'&&l.month===month);
@@ -11849,7 +11861,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.13';
+const APP_BUILD='2.14';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12052,25 +12064,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.13"></script>
-<script type="module" src="emartna-auth.js?v=2.13"></script>
-<script type="module" src="emartna-profile.js?v=2.13"></script>
-<script type="module" src="emartna-users.js?v=2.13"></script>
-<script type="module" src="emartna-platform.js?v=2.13"></script>
-<script type="module" src="emartna-contactlog.js?v=2.13"></script>
-<script type="module" src="emartna-permreport.js?v=2.13"></script>
-<script type="module" src="emartna-finops.js?v=2.13"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.13"></script>
-<script type="module" src="emartna-planscreens.js?v=2.13"></script>
+<script type="module" src="emartna-cloud.js?v=2.14"></script>
+<script type="module" src="emartna-auth.js?v=2.14"></script>
+<script type="module" src="emartna-profile.js?v=2.14"></script>
+<script type="module" src="emartna-users.js?v=2.14"></script>
+<script type="module" src="emartna-platform.js?v=2.14"></script>
+<script type="module" src="emartna-contactlog.js?v=2.14"></script>
+<script type="module" src="emartna-permreport.js?v=2.14"></script>
+<script type="module" src="emartna-finops.js?v=2.14"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.14"></script>
+<script type="module" src="emartna-planscreens.js?v=2.14"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.13"></script>
+<script type="module" src="emartna-perms.js?v=2.14"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.13"></script>
+<script type="module" src="emartna-bundle.js?v=2.14"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
