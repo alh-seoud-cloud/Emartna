@@ -7725,16 +7725,55 @@ function openApartmentDetail(id){
   window.__apStmtFrom='';
   window.__apStmtTo='';
   openModal(`
-    <h3>${unitLabel(a)} - ${esc(a.ownerName)}</h3>
+    <h3>${window.doorNumber?esc(doorNumber(a)):unitLabel(a)} — ${esc(a.ownerName||'بدون مالك')}</h3>
+    <p class="small" style="color:var(--muted);margin-top:-4px">
+      ${esc(unitTypeName(a))}${a.blockName?' · '+esc(a.blockName):''}
+      ${a.floor?' · '+esc(a.floor):''}
+      ${a.usageType?' · '+esc(a.usageType):''}
+      ${a.closed?' · <span class="badge r">مغلقة</span>':''}</p>
     <div class="modal-actions" style="margin-top:8px">
       <button class="btn primary" onclick="openPaymentModal('${a.id}')">تسجيل دفعة</button>
       <button class="btn gold" onclick="printApartmentStatement('${a.id}')">🖨️ طباعة كشف الحساب</button>
       <button class="btn ghost" onclick="openApartmentModal('${a.id}')">تعديل بيانات الشقة</button>
       <button class="btn ghost" onclick="closeModal()">إغلاق</button>
     </div>
-    <div class="grid g2 small mtop2">
-      <div><b>الدور:</b> ${esc(a.floor||'-')}</div><div><b>المستأجر:</b> ${esc(a.tenantName||'-')}</div>
-      <div><b>الهاتف:</b> ${esc(a.phone||'-')}</div><div><b>الاشتراك الشهري:</b> ${money(a.monthlyFee)}</div>
+    <div class="card mtop2" style="background:var(--tint)">
+      <div class="grid g2 small">
+        <div><b>🚪 رقم الباب:</b> ${window.doorNumber?esc(doorNumber(a)):esc(a.number)}</div>
+        <div><b>🔢 الترقيم المتسلسل:</b> ${esc(a.number)}</div>
+        <div><b>🏢 الدور:</b> ${esc(a.floor||'-')}</div>
+        <div><b>💳 الاشتراك الشهري:</b> ${money(a.monthlyFee)}</div>
+      </div>
+
+      <div class="mtop" style="border-top:1px solid var(--line);padding-top:8px">
+        <div class="flexrow" style="justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <span class="small"><b>👤 المالك:</b> ${esc(a.ownerName||'-')}</span>
+          ${a.phone?`<span class="flexrow" style="gap:5px">
+            <span class="small" dir="ltr">${esc(a.phone)}</span>
+            <a class="btn sm ghost" href="tel:${esc(a.phone)}">📞</a>
+            <a class="btn sm gold" target="_blank"
+              href="https://wa.me/${esc(String(a.phoneE164||a.phone).replace(/\D/g,''))}">💬</a>
+          </span>`:'<span class="small" style="color:var(--muted)">مفيش رقم</span>'}
+        </div>
+      </div>
+
+      ${a.tenantName||a.tenantPhone ? `
+      <div class="mtop" style="border-top:1px solid var(--line);padding-top:8px">
+        <div class="flexrow" style="justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <span class="small"><b>🔑 المستأجر:</b> ${esc(a.tenantName||'-')}</span>
+          ${a.tenantPhone?`<span class="flexrow" style="gap:5px">
+            <span class="small" dir="ltr">${esc(a.tenantPhone)}</span>
+            <a class="btn sm ghost" href="tel:${esc(a.tenantPhone)}">📞</a>
+            <a class="btn sm gold" target="_blank"
+              href="https://wa.me/${esc(String(a.tenantPhone).replace(/\D/g,''))}">💬</a>
+          </span>`:'<span class="small" style="color:var(--muted)">مفيش رقم</span>'}
+        </div>
+      </div>` : ''}
+
+      ${a.email?`<div class="small mtop"><b>✉️ الإيميل:</b>
+        <span dir="ltr">${esc(a.email)}</span></div>`:''}
+      ${a.notes?`<div class="small mtop" style="color:var(--muted)">
+        <b>📝 ملاحظات:</b> ${esc(a.notes)}</div>`:''}
     </div>
     <p class="mtop"><b>الرصيد المستحق حاليًا: </b>${bal>0?`<span class="badge r">${money(bal)}</span>`:`<span class="badge g">${bal<0?'رصيد دائن '+money(-bal):'صفر'}</span>`}</p>
     <div class="section-title"><h3 style="font-size:13px">كشف الحساب</h3></div>
@@ -9293,6 +9332,10 @@ function openApartmentModal(id){if(!guardAction('apartments','edit'))return;
       <div class="field2"><label>الدور</label>${floorSelectHTML('mFloor',a?(allFloorLabels().includes(a.floor)?a.floor:floorLabel(a.number,groundCount,perFloor)):floorLabel(nextNum,groundCount,perFloor))}</div>
       <div class="field2"><label>اسم المالك</label><input id="mOwner" value="${a?esc(a.ownerName):''}"></div>
       <div class="field2"><label>اسم المستأجر (إن وجد)</label><input id="mTenant" value="${a?esc(a.tenantName||''):''}"></div>
+      <div class="field2"><label>رقم المستأجر (إن وجد)</label>
+        <input id="mTenantPhone" dir="ltr" value="${a?esc(a.tenantPhone||''):''}"
+          placeholder="مثال: 01012345678">
+        <p class="hint">لو الساكن مستأجر، الرقم ده بيسهّل التواصل معاه مباشرة.</p></div>
       ${phoneField('mCountry','mPhone',a?a.phoneCountry:'+20',a?esc(a.phone||''):'','رقم الهاتف',true)}
       <div class="field2"><label>البريد الإلكتروني (اختياري)</label><input id="mEmail" type="email" value="${a?esc(a.email||''):''}"></div>
       <div class="field2"><label>الاشتراك الشهري <span style="color:var(--red)">*</span></label><input id="mFee" type="number" value="${a?a.monthlyFee:''}" placeholder="أدخل القيمة" min="0"></div>
@@ -9338,7 +9381,7 @@ async function saveApartment(id){
   const blockNameEl=document.getElementById('mBlockName');
   const labelEl=document.getElementById('mLabel');
   const data={number,label:labelEl?labelEl.value.trim():'',
-    blockName:blockNameEl?blockNameEl.value.trim():'',type:document.getElementById('mType').value,usageType:document.getElementById('mUsage').value,closed:document.getElementById('mClosed').checked,openingBalance:Number(document.getElementById('mOpeningBalance').value||0),floor:document.getElementById('mFloor').value.trim(),ownerName,tenantName:document.getElementById('mTenant').value.trim(),phoneCountry:document.getElementById('mCountry').value,phone,email:document.getElementById('mEmail').value.trim(),monthlyFee:fee,username,notes:document.getElementById('mNotes').value.trim()};
+    blockName:blockNameEl?blockNameEl.value.trim():'',type:document.getElementById('mType').value,usageType:document.getElementById('mUsage').value,closed:document.getElementById('mClosed').checked,openingBalance:Number(document.getElementById('mOpeningBalance').value||0),floor:document.getElementById('mFloor').value.trim(),ownerName,tenantName:document.getElementById('mTenant').value.trim(),tenantPhone:((document.getElementById('mTenantPhone')||{}).value||'').trim(),phoneCountry:document.getElementById('mCountry').value,phone,email:document.getElementById('mEmail').value.trim(),monthlyFee:fee,username,notes:document.getElementById('mNotes').value.trim()};
   const pass=document.getElementById('mPass').value;
   if(pass){const pwErr=passwordPolicyError(pass); if(pwErr)return showMessage(pwErr);}
   if(id){
@@ -11558,7 +11601,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.94';
+const APP_BUILD='1.96';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11761,25 +11804,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.94"></script>
-<script type="module" src="emartna-auth.js?v=1.94"></script>
-<script type="module" src="emartna-profile.js?v=1.94"></script>
-<script type="module" src="emartna-users.js?v=1.94"></script>
-<script type="module" src="emartna-platform.js?v=1.94"></script>
-<script type="module" src="emartna-contactlog.js?v=1.94"></script>
-<script type="module" src="emartna-permreport.js?v=1.94"></script>
-<script type="module" src="emartna-finops.js?v=1.94"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.94"></script>
-<script type="module" src="emartna-planscreens.js?v=1.94"></script>
+<script type="module" src="emartna-cloud.js?v=1.96"></script>
+<script type="module" src="emartna-auth.js?v=1.96"></script>
+<script type="module" src="emartna-profile.js?v=1.96"></script>
+<script type="module" src="emartna-users.js?v=1.96"></script>
+<script type="module" src="emartna-platform.js?v=1.96"></script>
+<script type="module" src="emartna-contactlog.js?v=1.96"></script>
+<script type="module" src="emartna-permreport.js?v=1.96"></script>
+<script type="module" src="emartna-finops.js?v=1.96"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.96"></script>
+<script type="module" src="emartna-planscreens.js?v=1.96"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=1.94"></script>
+<script type="module" src="emartna-perms.js?v=1.96"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=1.94"></script>
+<script type="module" src="emartna-bundle.js?v=1.96"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح

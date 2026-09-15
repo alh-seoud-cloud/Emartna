@@ -39,6 +39,7 @@ const MAPS = {
       blockName:'block_name', floor:'floor',
       type:'type', usageType:'usage_type', openingBalance:'opening_balance',
       ownerName:'owner_name', tenantName:'tenant_name',
+      tenantPhone:'tenant_phone',      /* رقم المستأجر — منفصل عن المالك */
       phoneCountry:'phone_country', phone:'phone', email:'email',
       monthlyFee:'monthly_fee', username:'legacy_username',
       closed:'closed', notes:'notes',

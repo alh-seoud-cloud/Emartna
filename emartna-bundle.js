@@ -10668,6 +10668,21 @@
   }
 
   /* الرقم اللي يظهر جوه المربع */
+  /* رقم الباب الفعلي — من غير ما تحتاج ترتيب الوحدة في الدور.
+     بيتحسب من قائمة وحدات نفس الدور، فينفع يتنادى من أي شاشة. */
+  window.doorNumber = function(a){
+    try{
+      if (!a) return '-';
+      if (a.label && String(a.label).trim()) return String(a.label).trim();
+      const same = (window.D && D.apartments || [])
+        .filter(x => String(x.floor||'') === String(a.floor||'')
+                  && (a.blockName ? x.blockName === a.blockName : !x.blockName))
+        .sort((x,y) => (x.number||0) - (y.number||0));
+      const idx = same.findIndex(x => x.id === a.id) + 1;
+      return facadeUnitNumber(a, idx > 0 ? idx : 1);
+    }catch(e){ return a && a.number != null ? String(a.number) : '-'; }
+  };
+
   window.facadeUnitNumber = function(a, idxInFloor){
     // ١) الرقم المخصّص اللي كتبه رئيس الاتحاد بيغلب كل حاجة
     if (a.label && String(a.label).trim()) return String(a.label).trim();
