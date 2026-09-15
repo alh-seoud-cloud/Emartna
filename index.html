@@ -11724,13 +11724,18 @@ function removePaymentMethod(id){
    الربط بالخزينة يخص الإدارة (عشان الدفعة تدخل الحساب الصح) —
    مش شرط لعرض الطريقة للساكن. */
 function activePaymentMethods(){
-  const list = (D.building.paymentMethods||[]).filter(m =>
-    m && m.type && m.active !== false && m.accountId);
-  const accs = D.accounts || [];
-  /* الإدارة بتشوف الخزائن — بنتحقق من الربط.
-     الساكن مابيشوفهاش — بنكتفي بوجود accountId. */
-  if (!accs.length) return list;
-  return list.filter(m => accs.some(a => a.id === m.accountId));
+  /* ⚠️ الحل الجذري: العرض للساكن بيعتمد على بيانات الساكن نفسه بيقراها.
+     `paymentMethods` متخزّنة على صف العمارة، والساكن بيقرا الصف ده.
+     أي تحقق محتاج جدول `accounts` بيكسر عنده، لأن قراءة الخزائن
+     محكومة بمفتاح «السكان يشوفوا الأرصدة» — وده مفتاح خصوصية
+     مالية ماله دعوة بعرض رقم محفظة.
+
+     التحقق من وجود الحساب مكانه شاشة الإعدادات (paymentMethodsListHTML)
+     حيث الإدارة بتشوف الخزائن فعلًا، وهناك بيظهر تحذير وبيتقفل
+     مفتاح التفعيل. فالطريقة اللي عليها accountId معناها إن الإدارة
+     ربطتها وفعّلتها وهي شايفة الخزائن. */
+  return (D.building.paymentMethods||[]).filter(m =>
+    m && m.type && m.details && m.active !== false && m.accountId);
 }
 function savePaymentContact(){if(!guardAction('settings','edit'))return;
   D.building.contactPhoneCountry=document.getElementById('payCountry').value;
@@ -11903,7 +11908,6 @@ function ownerStatementHTML(a){
 function pageOwnerHome(u){
   const a=myApartment(); if(!a)return '<p>لا توجد شقة مرتبطة بهذا الحساب</p>';
   const bal=apBalance(a.id);
-  const rows=[...D.ledger.filter(l=>l.apartmentId===a.id)].sort((x,y)=>(y.date||'').localeCompare(x.date||''));
   const month=curMonth(); const paidThisMonth=apPaidForMonth(a.id,month);
   return `
   ${welcomeBannerHTML(u.name)}
@@ -11945,7 +11949,7 @@ function pageOwnerHome(u){
       ${D.announcements.slice(-3).reverse().map(an=>`<div class="mtop small"><b>${esc(an.title)}</b><br>${esc(an.body).slice(0,90)}${an.body.length>90?'…':''}<br><span style="color:var(--muted)">${esc(an.date)}</span></div>`).join('<hr style="margin:10px 0;border-color:var(--line)">')||'<p class="small mtop">لا توجد إعلانات</p>'}
     </div>
   </div>
-  ${((D.building.paymentMethods&&D.building.paymentMethods.length)||D.building.contactPhone)?`<div class="card mtop2" style="background:var(--tint-success)"><h3>💳 طرق السداد والتواصل مع رئيس الاتحاد</h3>
+  ${(activePaymentMethods().length||D.building.contactPhone)?`<div class="card mtop2" style="background:var(--tint-success)"><h3>💳 طرق السداد والتواصل مع رئيس الاتحاد</h3>
     ${activePaymentMethods().map(m=>`<div class="mtop small"><span class="badge y">${esc(m.type)}</span> ${esc(m.details)}</div>`).join('')}
     ${D.building.contactPhone?`<p class="small mtop">📱 <b>للتواصل:</b> ${esc(D.building.contactPhoneCountry||'')} ${esc(D.building.contactPhone)}
     <a href="https://wa.me/${(D.building.contactPhoneCountry||'').replace('+','')}${D.building.contactPhone}" target="_blank" style="margin-right:8px">💬 واتساب</a></p>`:''}
@@ -12011,7 +12015,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.23';
+const APP_BUILD='2.24';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12214,25 +12218,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.23"></script>
-<script type="module" src="emartna-auth.js?v=2.23"></script>
-<script type="module" src="emartna-profile.js?v=2.23"></script>
-<script type="module" src="emartna-users.js?v=2.23"></script>
-<script type="module" src="emartna-platform.js?v=2.23"></script>
-<script type="module" src="emartna-contactlog.js?v=2.23"></script>
-<script type="module" src="emartna-permreport.js?v=2.23"></script>
-<script type="module" src="emartna-finops.js?v=2.23"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.23"></script>
-<script type="module" src="emartna-planscreens.js?v=2.23"></script>
+<script type="module" src="emartna-cloud.js?v=2.24"></script>
+<script type="module" src="emartna-auth.js?v=2.24"></script>
+<script type="module" src="emartna-profile.js?v=2.24"></script>
+<script type="module" src="emartna-users.js?v=2.24"></script>
+<script type="module" src="emartna-platform.js?v=2.24"></script>
+<script type="module" src="emartna-contactlog.js?v=2.24"></script>
+<script type="module" src="emartna-permreport.js?v=2.24"></script>
+<script type="module" src="emartna-finops.js?v=2.24"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.24"></script>
+<script type="module" src="emartna-planscreens.js?v=2.24"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.23"></script>
+<script type="module" src="emartna-perms.js?v=2.24"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.23"></script>
+<script type="module" src="emartna-bundle.js?v=2.24"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
@@ -12254,7 +12258,10 @@ document.addEventListener('DOMContentLoaded',async()=>{
     return new Promise(res => {
       const el = document.createElement('script');
       el.type = 'module';
-      el.src = f + '?v=1.65';
+      /* ⚠️ كان رقم ثابت — اتنسي ٨ إصدارات ورا، فالشاشات الكسولة
+         كانت بتتقدّم من كاش نسخة قديمة. البصمة دلوقتي بتتولّد من
+         APP_BUILD فمستحيل تتأخّر عن باقي الملفات تاني. */
+      el.src = f + '?v=' + (window.APP_BUILD || '');
       el.onload = () => {
         /* الوحدة بتغلّف دالة الشاشة، فلازم نعيد الرسم بعدها */
         try{
