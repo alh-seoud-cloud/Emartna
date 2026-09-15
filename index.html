@@ -8023,6 +8023,96 @@ async function markChatRead(roomId){
    العادي (واللي في الوضع التجريبي) بيترفض على طول حتى في الأفعال
    اللي من حقه بالافتراضي زي إرسال رسالة. الصح إننا نرجع لافتراضي
    الدور زي ما القاعدة بتعمل بالظبط. */
+/* ===== إخفاء الأزرار اللي مالكش صلاحيتها =====
+   فيه ٨٠+ زرار بيتحقق من الصلاحية بعد الضغط ويطلّع رسالة رفض.
+   "زرار لا يعمل" أسوأ من "زرار مش موجود": المستخدم بيحس إن
+   البرنامج معطّل، ومش فاهم إن دي صلاحية.
+   بدل ما نعدّل ٨٠ مكان، بنمسح الصفحة بعد كل رسم ونخفي أي زرار
+   بينادي دالة محروسة والمستخدم مالوش صلاحيتها. */
+/* مولّدة من تعريفات الدوال نفسها — أي دالة بتبدأ بـguardAction
+   بشاشة ثابتة بتتسجّل هنا تلقائيًا وقت البناء. */
+const GUARDED_ACTIONS = {
+  addCategory:['expenseCategories','add'],
+  addProjectAttachment:['projects','att_add'],
+  approvePaymentRequest:['paymentRequests','edit'],
+  approveSuggestion:['suggestions','approve'],
+  deleteAccount:['treasury','delete'],
+  deleteApartment:['apartments','delete'],
+  deleteExpense:['expenses','delete'],
+  deleteLedgerEntry:['collections','delete'],
+  deleteMaintenanceReport:['maintenance','delete'],
+  deleteMeetingComment:['meetings','delete'],
+  deletePoll:['polls','delete'],
+  deletePollComment:['polls','delete'],
+  deleteProject:['projects','delete'],
+  deleteProjectAttachment:['projects','att_delete'],
+  deleteUser:['users','delete'],
+  deleteVendorPrompt:['vendors','delete'],
+  openAccountModal:['treasury','edit'],
+  openAddBlockModal:['blocks','add'],
+  openApartmentModal:['apartments','edit'],
+  openAssignVendorModal:['vendors','edit'],
+  openExpenseModal:['expenses','add'],
+  openGenerateChargeModalForProject:['projects','add'],
+  openMaintenanceModal:['maintenance','add'],
+  openMeetingModal:['meetings','add'],
+  openMeetingOutcomeModal:['meetings','approve'],
+  openPaymentModal:['collections','add'],
+  openPollModal:['polls','add'],
+  openProjectModal:['projects','edit'],
+  openSuggestionModal:['suggestions','add'],
+  openTransferModal:['treasury','add'],
+  openVendorModal:['vendors','edit'],
+  printExpenseEntry:['expenses','print'],
+  printLedgerEntry:['collections','print'],
+  printMaintenanceReport:['maintenance','print'],
+  printVendorProfile:['vendors','print'],
+  rejectPaymentRequest:['paymentRequests','edit'],
+  rejectSuggestion:['suggestions','unapprove'],
+  removeCategoryPrompt:['expenseCategories','delete'],
+  reverseExpense:['expenses','edit'],
+  reverseLedgerEntry:['collections','edit'],
+  saveAccount:['treasury','edit'],
+  saveDistributionWeights:['distweights','edit'],
+  saveExpense:['expenses','add'],
+  saveExpenseEdit:['expenses','edit'],
+  saveLedgerEdit:['collections','edit'],
+  saveMeeting:['meetings','edit'],
+  saveMeetingOutcome:['meetings','approve'],
+  savePayment:['collections','add'],
+  savePaymentContact:['settings','edit'],
+  savePoll:['polls','edit'],
+  saveProject:['projects','edit'],
+  saveTransfer:['treasury','add'],
+  saveVendor:['vendors','edit'],
+  saveVendorContact:['vendors','edit']
+};
+
+window.registerGuarded = function(map){ Object.assign(GUARDED_ACTIONS, map); };
+
+window.hideUnauthorizedButtons = function(){
+  try{
+    const u = window.currentUser && currentUser();
+    if (!u) return;
+    document.querySelectorAll('[onclick]').forEach(el => {
+      const oc = el.getAttribute('onclick') || '';
+      const m = oc.match(/^\s*(\w+)\s*\(/);
+      if (!m) return;
+      const g = GUARDED_ACTIONS[m[1]];
+      if (!g) return;
+      const ok = guardActionSilent(g[0], g[1]);
+      /* بنخفي الزرار نفسه — ولو كان لوحده في شريط، الشريط كمان */
+      el.style.display = ok ? '' : 'none';
+      if (!ok){
+        const row = el.closest('.flexrow');
+        if (row && !row.querySelector('button:not([style*="none"]),a:not([style*="none"])'))
+          row.style.display = 'none';
+      }
+    });
+  }catch(e){}
+};
+setInterval(() => { try{ hideUnauthorizedButtons(); }catch(e){} }, 900);
+
 function guardActionSilent(page,action){
   try{
     const u=currentUser(); if(!u)return false;
@@ -8628,7 +8718,9 @@ function pageMaintenance(u){
   const shown=window.__maintFilter==='all'?mine:window.__maintFilter==='open'?mine.filter(r=>r.status!=='resolved'):mine.filter(r=>r.status==='resolved');
   const filterBtn=(key,label,count)=>`<button class="btn sm ${window.__maintFilter===key?'primary':'ghost'}" onclick="setMaintFilter('${key}')">${label} (${count})</button>`;
   return `
-  <div class="flexrow"><button class="btn primary" onclick="openMaintenanceModal()">+ بلاغ صيانة جديد</button></div>
+  ${guardActionSilent('maintenance','add')
+    ? `<div class="flexrow"><button class="btn primary" onclick="openMaintenanceModal()">+ بلاغ صيانة جديد</button></div>`
+    : ''}
   <div class="flexrow mtop">
     ${filterBtn('open','🔧 مفتوحة',openCount)}
     ${filterBtn('resolved','✅ تم حلها',resolvedCount)}
@@ -11466,7 +11558,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.93';
+const APP_BUILD='1.94';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11669,25 +11761,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.93"></script>
-<script type="module" src="emartna-auth.js?v=1.93"></script>
-<script type="module" src="emartna-profile.js?v=1.93"></script>
-<script type="module" src="emartna-users.js?v=1.93"></script>
-<script type="module" src="emartna-platform.js?v=1.93"></script>
-<script type="module" src="emartna-contactlog.js?v=1.93"></script>
-<script type="module" src="emartna-permreport.js?v=1.93"></script>
-<script type="module" src="emartna-finops.js?v=1.93"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.93"></script>
-<script type="module" src="emartna-planscreens.js?v=1.93"></script>
+<script type="module" src="emartna-cloud.js?v=1.94"></script>
+<script type="module" src="emartna-auth.js?v=1.94"></script>
+<script type="module" src="emartna-profile.js?v=1.94"></script>
+<script type="module" src="emartna-users.js?v=1.94"></script>
+<script type="module" src="emartna-platform.js?v=1.94"></script>
+<script type="module" src="emartna-contactlog.js?v=1.94"></script>
+<script type="module" src="emartna-permreport.js?v=1.94"></script>
+<script type="module" src="emartna-finops.js?v=1.94"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.94"></script>
+<script type="module" src="emartna-planscreens.js?v=1.94"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=1.93"></script>
+<script type="module" src="emartna-perms.js?v=1.94"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=1.93"></script>
+<script type="module" src="emartna-bundle.js?v=1.94"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
