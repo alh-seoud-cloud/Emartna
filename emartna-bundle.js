@@ -14295,22 +14295,39 @@
 
     const r = PEND.rows[0];          /* الأقدم أولًا */
     const more = PEND.rows.length - 1;
-    const bal = Number(r.closing) || 0;
+    const M = n => window.money ? money(Number(n)||0) : (Number(n)||0);
+    const open = Number(r.opening)||0, close = Number(r.closing)||0;
+
+    /* المعادلة قدام الساكن: أول الشهر + المستحق − المدفوع = آخر الشهر.
+       الرقم لوحده مالوش معنى — الصورة الكاملة هي اللي بتخليه يطابق. */
+    const row = (lbl, val, sign, color) => `
+      <div class="flexrow" style="justify-content:space-between;padding:6px 0;
+        border-bottom:1px solid var(--line)">
+        <span class="small">${lbl}</span>
+        <b style="${color?'color:'+color:''}">${sign||''}${M(val)}</b>
+      </div>`;
 
     return `<div class="card" style="border:1px solid var(--gold);
       background:var(--tint-warning)">
       <div class="flexrow" style="gap:10px;align-items:flex-start">
         <span style="font-size:20px">📋</span>
-        <div style="flex:1">
+        <div style="flex:1;min-width:0">
           <b>طابق حسابك عن ${esc2(mLabel(r.period))}</b>
-          <p class="small mtop">
-            رصيدك في <b>آخر ${esc2(mLabel(r.period))}</b>:
-            <b style="font-size:15px">${window.money?money(bal):bal}</b>
-            ${bal>0?' مستحق عليك':bal<0?' رصيد لك':''}
-          </p>
           <p class="small" style="color:var(--muted)">
-            ده الرصيد وقت إقفال الشهر — مش رصيدك دلوقتي.
-            لو فيه حاجة مش مظبوطة، قول قبل ما الشهر يتقفل.</p>
+            دي أرقام الشهر ده وحده — مش رصيدك دلوقتي.</p>
+
+          <div class="card mtop" style="background:var(--card)">
+            ${row('رصيد أول الشهر', open)}
+            ${row('مستحقات الشهر', r.charges, '+', 'var(--red)')}
+            ${row('اللي دفعته', r.payments, '−', 'var(--accent)')}
+            <div class="flexrow" style="justify-content:space-between;
+              padding-top:8px">
+              <b>رصيد آخر الشهر</b>
+              <b style="font-size:16px;color:${close>0?'var(--red)':'var(--accent)'}">
+                ${M(close)}${close>0?' عليك':close<0?' لك':''}</b>
+            </div>
+          </div>
+
           <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
             <button class="btn primary sm"
               onclick="ackMonth('${esc2(ap.id)}','${esc2(r.period)}','ok')">
@@ -14318,9 +14335,9 @@
             <button class="btn sm"
               onclick="ackDispute('${esc2(ap.id)}','${esc2(r.period)}')">
               ⚠️ عندي ملاحظة</button>
-            <button class="btn ghost sm"
+            ${r.moves?`<button class="btn ghost sm"
               onclick="showMonthDetail('${esc2(ap.id)}','${esc2(r.period)}')">
-              📄 شوف حركات الشهر</button>
+              📄 ${r.moves} حركة</button>`:''}
           </div>
           ${more>0?`<p class="small mtop" style="color:var(--muted)">
             وكمان ${more} شهر مستني المطابقة.</p>`:''}
