@@ -14264,50 +14264,112 @@
       'الساكن هيلاقي زرار «راجعت حسابي» في شاشة حسابه.');
   };
 
-  /* ===== كارت المراجعة للساكن =====
-     بيظهر أول الشهر عن الشهر اللي فات — ووقت العرض بس، مش دايمًا،
-     عشان ما يبقاش ضوضاء. */
-  let ACK = null;
+  /* ===== مراجعة الساكن =====
+     ⚠️ الرصيد بيتجمّد على آخر يوم في الشهر المراجَع — مش الرصيد
+     الحالي. الساكن اللي بيراجع يوم ١٠ أكتوبر لازم يشوف رصيده يوم
+     ٣٠ سبتمبر، وإلا بيوافق على رقم مختلف.
+
+     وبتغطي آخر ٣ شهور مش الشهر اللي فات بس — اللي فاته شهر
+     يقدر يلحقه. */
+  let PEND = null;
+
+  async function loadPending(ap){
+    try{
+      const s = sb(); if (!s || !ap) return;
+      const uuid = ap.__uuid; if (!uuid) return;
+      const { data } = await s.rpc('my_pending_acks', { p_apartment: uuid });
+      PEND = { apId: ap.id, rows: data || [] };
+      if (window.renderContent) renderContent();
+      if (window.paintAckNav) paintAckNav();
+    }catch(e){ PEND = { apId: ap && ap.id, rows: [] }; }
+  }
+
+  window.pendingAckCount = function(){
+    return (PEND && PEND.rows) ? PEND.rows.length : 0;
+  };
 
   window.monthAckCardHTML = function(ap){
     if (!ap) return '';
-    const period = lastClosableMonth();
-    /* بيظهر في أول ١٢ يوم من الشهر بس */
-    if (new Date().getDate() > 12) return '';
-    if (ACK && ACK.period === period && ACK.done) return '';
-    if (!ACK || ACK.period !== period) loadMyAck(ap, period);
+    if (!PEND || PEND.apId !== ap.id){ loadPending(ap); return ''; }
+    if (!PEND.rows.length) return '';
 
-    const bal = window.apBalance ? apBalance(ap.id) : 0;
+    const r = PEND.rows[0];          /* الأقدم أولًا */
+    const more = PEND.rows.length - 1;
+    const bal = Number(r.closing) || 0;
+
     return `<div class="card" style="border:1px solid var(--gold);
       background:var(--tint-warning)">
       <div class="flexrow" style="gap:10px;align-items:flex-start">
         <span style="font-size:20px">📋</span>
         <div style="flex:1">
-          <b>راجع حسابك عن ${esc2(mLabel(period))}</b>
-          <p class="small mtop">رصيدك دلوقتي:
-            <b>${window.money?money(bal):bal}</b>.
-            لو فيه حاجة مش مظبوطة، قول دلوقتي قبل ما الشهر يتقفل.</p>
+          <b>طابق حسابك عن ${esc2(mLabel(r.period))}</b>
+          <p class="small mtop">
+            رصيدك في <b>آخر ${esc2(mLabel(r.period))}</b>:
+            <b style="font-size:15px">${window.money?money(bal):bal}</b>
+            ${bal>0?' مستحق عليك':bal<0?' رصيد لك':''}
+          </p>
+          <p class="small" style="color:var(--muted)">
+            ده الرصيد وقت إقفال الشهر — مش رصيدك دلوقتي.
+            لو فيه حاجة مش مظبوطة، قول قبل ما الشهر يتقفل.</p>
           <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
             <button class="btn primary sm"
-              onclick="ackMonth('${esc2(ap.id)}','${esc2(period)}','ok')">
-              ✅ راجعت وموافق</button>
+              onclick="ackMonth('${esc2(ap.id)}','${esc2(r.period)}','ok')">
+              ✅ طابقت وموافق</button>
             <button class="btn sm"
-              onclick="ackDispute('${esc2(ap.id)}','${esc2(period)}')">
+              onclick="ackDispute('${esc2(ap.id)}','${esc2(r.period)}')">
               ⚠️ عندي ملاحظة</button>
+            <button class="btn ghost sm"
+              onclick="showMonthDetail('${esc2(ap.id)}','${esc2(r.period)}')">
+              📄 شوف حركات الشهر</button>
           </div>
+          ${more>0?`<p class="small mtop" style="color:var(--muted)">
+            وكمان ${more} شهر مستني المطابقة.</p>`:''}
         </div>
       </div></div>`;
   };
 
-  async function loadMyAck(ap, period){
+  window.showMonthDetail = async function(apId, period){
+    const ap = (D.apartments||[]).find(x => x.id === apId);
+    if (!ap || !ap.__uuid) return;
+    let st = null;
     try{
-      const s = sb(); if (!s) return;
-      const { data } = await s.from('month_ack').select('status')
-        .eq('apartment_id', ap.__uuid || ap.id).eq('period', period).maybeSingle();
-      ACK = { period, done: !!data };
-      if (data && window.renderContent) renderContent();
-    }catch(e){ ACK = { period, done:false }; }
-  }
+      const { data } = await sb().rpc('my_month_statement',
+        { p_apartment: ap.__uuid, p_month: period });
+      st = (data && data[0]) || null;
+    }catch(e){}
+    if (!st) return showMessage('تعذّر جلب الكشف.');
+
+    const rows = (D.ledger||[])
+      .filter(l => l.apartmentId === apId
+                && String(l.date||'').slice(0,7) === period)
+      .sort((a,b) => String(a.date).localeCompare(String(b.date)));
+    const M = n => window.money ? money(n) : n;
+
+    openModal(`
+      <h3>📄 حركات ${esc2(mLabel(period))}</h3>
+      <div class="card mtop" style="background:var(--tint)">
+        <div class="grid g2 small">
+          <div><b>رصيد أول الشهر:</b> ${M(st.opening)}</div>
+          <div><b>مستحقات الشهر:</b> ${M(st.charges)}</div>
+          <div><b>اللي دفعته:</b> ${M(st.payments)}</div>
+          <div><b>رصيد آخر الشهر:</b>
+            <b style="color:${Number(st.closing)>0?'var(--red)':'var(--accent)'}">
+            ${M(st.closing)}</b></div>
+        </div>
+      </div>
+      <div class="table-wrap mtop2" style="max-height:44vh;overflow:auto">
+        <table><thead><tr><th>التاريخ</th><th>البيان</th><th>المبلغ</th></tr></thead>
+        <tbody>${rows.length?rows.map(l=>`<tr>
+          <td class="small">${esc2(l.date)}</td>
+          <td class="small">${esc2(l.note||l.type)}</td>
+          <td><b style="color:${l.type==='دفعة'?'var(--accent)':'var(--red)'}">
+            ${l.type==='دفعة'?'−':'+'}${M(l.amount)}</b></td>
+        </tr>`).join(''):'<tr><td colspan="3" class="small">مفيش حركات.</td></tr>'}
+        </tbody></table></div>
+      <div class="modal-actions">
+        <button class="btn primary" onclick="closeModal()">تمام</button>
+      </div>`, true);
+  };
 
   window.ackMonth = async function(apId, period, status, note){
     try{
@@ -14318,11 +14380,11 @@
         p_apartment: uuid, p_month: period,
         p_status: status, p_note: note || null });
       if (error) throw error;
-      ACK = { period, done:true };
+      PEND = null;
       showMessage(status === 'ok'
-        ? '✅ اتسجّلت مراجعتك — شكرًا.'
+        ? '✅ اتسجّلت مطابقتك عن ' + mLabel(period) + ' — شكرًا.'
         : '⚠️ اتسجّلت ملاحظتك ووصلت لرئيس الاتحاد.');
-      if (window.renderContent) renderContent();
+      loadPending(ap);
     }catch(e){ showMessage(e.message || 'تعذّر التسجيل'); }
   };
 
@@ -14342,8 +14404,30 @@
       </div>`);
   };
 
+  /* ===== شارة في القائمة الجانبية =====
+     الكارت في الصفحة الرئيسية بس مش كفاية — الساكن ممكن يكون في
+     شاشة تانية. الشارة بتفضل باينة لحد ما يطابق. */
+  window.paintAckNav = function(){
+    try{
+      const n = pendingAckCount();
+      document.querySelectorAll('.nav-subitem[data-page="home"]').forEach(el => {
+        let b = el.querySelector('.ack-dot');
+        if (!n){ if (b) b.remove(); return; }
+        if (!b){
+          b = document.createElement('span');
+          b.className = 'ack-dot badge r';
+          b.style.cssText = 'margin-inline-start:auto;font-size:10px;padding:1px 6px';
+          el.appendChild(b);
+        }
+        b.textContent = n;
+        b.title = 'مطابقة الحساب مستنية';
+      });
+    }catch(e){}
+  };
+  setInterval(() => { try{ paintAckNav(); }catch(e){} }, 1500);
+
   document.addEventListener('emartna:building-complete',
-    () => { ST = null; ACK = null; });
+    () => { ST = null; PEND = null; });
 
   console.log('[عمارتنا] إقفال الشهر جاهز');
 })();
