@@ -14445,7 +14445,11 @@
           </div>`
         : checks.map(c=>{
             const v = SEV[c.severity] || SEV.info;
-            return `<div class="card mtop" style="border-inline-start:3px solid ${v.color}">
+            /* ⚠️ الرقم المبهم مالوش فايدة — الضغط بيفتح الوحدات
+               أو الحركات المعنية بالظبط مع إرشاد للإصلاح. */
+            return `<div class="card mtop" style="border-inline-start:3px solid ${v.color};
+              cursor:pointer" onclick="mcDetail('${esc2(period)}','${esc2(c.code)}','${
+              esc2(c.label)}')">
               <div class="flexrow" style="gap:9px;align-items:flex-start">
                 <span style="font-size:18px">${v.ic}</span>
                 <div style="flex:1">
@@ -14455,6 +14459,7 @@
                   <div class="small mtop" style="color:var(--muted)">
                     ${esc2(c.detail||'')}</div>
                 </div>
+                <span style="color:var(--muted);font-size:13px">شوف التفاصيل ←</span>
               </div></div>`;
           }).join('')}
     </div>
@@ -14532,6 +14537,56 @@
         ST = null; load(period);
       }catch(e){ showMessage(e.message || 'تعذّر الإقفال'); }
     });
+  };
+
+  /* تفاصيل الملاحظة: الوحدات أو الحركات المعنية + إزاي تصلحها */
+  window.mcDetail = async function(period, code, label){
+    const s = sb(), b = bUuid();
+    if (!s || !b) return;
+    openModal('<h3>⏳ بنجيب التفاصيل...</h3>');
+    let rows = [];
+    try{
+      const { data, error } = await s.rpc('month_check_detail',
+        { p_building:b, p_month:period, p_code:code });
+      if (error) throw error;
+      rows = data || [];
+    }catch(e){ return showMessage(e.message || 'تعذّر جلب التفاصيل'); }
+
+    if (!rows.length) return showMessage('مفيش تفاصيل — يمكن اتصلحت خلاص.');
+
+    const hint = rows[0].hint || '';
+    const M = n => window.money ? money(Number(n)||0) : (Number(n)||0);
+    /* الوجهة حسب نوع الملاحظة */
+    const goTo = {
+      neg_account:'treasury', missing_charge:'collections',
+      payment_no_account:'collections', expense_no_cat:'expenses',
+      payment_no_receipt:'collections', odd_expense:'expenses',
+    }[code] || 'collections';
+
+    openModal(`
+      <h3>${esc2(label)}</h3>
+      <div class="card mtop" style="background:var(--tint-warning)">
+        <b class="small">🛠️ إزاي تصلحها</b>
+        <div class="small">${esc2(hint)}</div>
+      </div>
+
+      <p class="small mtop2"><b>${rows.length}</b> عنصر</p>
+      <div class="table-wrap mtop" style="max-height:42vh;overflow:auto">
+        <table style="font-size:12.5px"><thead><tr>
+          <th>البند</th><th>التفاصيل</th><th>المبلغ</th>
+        </tr></thead><tbody>
+        ${rows.map(r=>`<tr>
+          <td><b>${esc2(r.title||'')}</b></td>
+          <td class="small">${esc2(r.subtitle||'')}</td>
+          <td>${r.amount!=null?M(r.amount):'—'}</td>
+        </tr>`).join('')}
+        </tbody></table></div>
+
+      <div class="modal-actions">
+        <button class="btn primary" onclick="closeModal();go('${goTo}')">
+          ← روح أصلحها</button>
+        <button class="btn ghost" onclick="closeModal()">إغلاق</button>
+      </div>`, true);
   };
 
   window.mcRemind = function(period){
@@ -14666,21 +14721,61 @@
   };
 
   window.ackMonth = async function(apId, period, status, note){
+    const ap = (D.apartments||[]).find(x => x.id === apId);
+    if (!ap || !ap.__uuid)
+      return showMessage('الوحدة لسه بتتزامن — جرّب بعد لحظات.');
+
+    /* ⚠️ الرصيد تراكمي: اللي بيوافق على رصيد آخر أكتوبر بيوافق
+       ضمنًا على كل اللي قبله. بس المطابقة إقرار — فبنسأله صراحةً
+       بدل ما نسجّل نيابةً عنه. */
+    const older = (PEND && PEND.rows || []).filter(r => r.period < period);
+    if (status === 'ok' && older.length){
+      window.__ackCtx = { ap, period, status, note };
+      return openModal(`
+        <h3>✅ طابقت ${esc2(mLabel(period))}</h3>
+        <p class="small mtop">فيه <b>${older.length} شهر</b> قبله لسه
+          ما طابقتهمش:</p>
+        <div class="card mtop" style="background:var(--tint)">
+          ${older.map(r => `<div class="flexrow" style="justify-content:space-between;
+            padding:5px 0;border-bottom:1px solid var(--line)">
+            <span class="small">${esc2(mLabel(r.period))}</span>
+            <b class="small">${window.money?money(r.closing):r.closing}</b>
+          </div>`).join('')}
+        </div>
+        <p class="small mtop" style="color:var(--muted)">
+          الرصيد اللي وافقت عليه دلوقتي <b>ناتج من الشهور دي كلها</b> —
+          يعني موافقتك عليه معناها إنها مظبوطة.</p>
+        <div class="modal-actions">
+          <button class="btn primary" onclick="ackGo(true)">
+            ✅ اعتبرها كلها متطابقة</button>
+          <button class="btn ghost" onclick="ackGo(false)">
+            الشهر ده بس</button>
+        </div>`, true);
+    }
+    doAck(ap, period, status, note, false);
+  };
+
+  window.ackGo = function(cascade){
+    const c = window.__ackCtx; if (!c) return;
+    closeModal();
+    doAck(c.ap, c.period, c.status, c.note, cascade);
+  };
+
+  async function doAck(ap, period, status, note, cascade){
     try{
-      const ap = (D.apartments||[]).find(x => x.id === apId);
-      const uuid = ap && ap.__uuid;
-      if (!uuid) return showMessage('الوحدة لسه بتتزامن — جرّب بعد لحظات.');
-      const { error } = await sb().rpc('ack_month', {
-        p_apartment: uuid, p_month: period,
+      const fn = cascade ? 'ack_month_cascade' : 'ack_month';
+      const { data, error } = await sb().rpc(fn, {
+        p_apartment: ap.__uuid, p_month: period,
         p_status: status, p_note: note || null });
       if (error) throw error;
       PEND = null;
+      const extra = (cascade && data) ? ` ومعاها ${data} شهر سابق` : '';
       showMessage(status === 'ok'
-        ? '✅ اتسجّلت مطابقتك عن ' + mLabel(period) + ' — شكرًا.'
+        ? '✅ اتسجّلت مطابقتك عن ' + mLabel(period) + extra + ' — شكرًا.'
         : '⚠️ اتسجّلت ملاحظتك ووصلت لرئيس الاتحاد.');
       loadPending(ap);
     }catch(e){ showMessage(e.message || 'تعذّر التسجيل'); }
-  };
+  }
 
   window.ackDispute = function(apId, period){
     openModal(`
