@@ -336,9 +336,11 @@ tr:hover td{background:#faf8f2}
 .col-quick-menu{position:absolute;z-index:600;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.15);min-width:220px;padding:4px;display:flex;flex-direction:column}
 /* القائمة المحسوبة بالجافاسكريبت بتحدد عرضها وموضعها بنفسها —
    min-width كان بيدوس عليها ويخلّيها تخرج برّه الشاشة. */
-#tblMenu{position:fixed !important;min-width:0 !important}
+/* ⚠️ القوائم المنبثقة لازم تبقى فوق النوافذ (modal-overlay = 999).
+   الرقم في نافذة كان بيفتح قائمة وراها فمش باينة. */
+#tblMenu{position:fixed !important;min-width:0 !important;z-index:1200 !important}
 #tblMenu .btn{justify-content:flex-start}
-.var-autocomplete{position:absolute;z-index:700;top:100%;right:0;left:0;background:var(--panel);border:1px solid var(--accent);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-height:220px;overflow-y:auto;margin-top:2px}
+.var-autocomplete{position:absolute;z-index:1210;top:100%;right:0;left:0;background:var(--panel);border:1px solid var(--accent);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-height:220px;overflow-y:auto;margin-top:2px}
 .var-item{padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--line)}
 .var-item:hover{background:var(--bg)}
 .var-item:last-child{border-bottom:0}
@@ -8397,7 +8399,7 @@ window.openChatMsgMenu = function(evt, mid){
   let left=Math.min(Math.max(8, r.right-W), window.innerWidth-W-8);
   el.style.cssText=`position:fixed;top:${r.bottom+6}px;left:${left}px;width:${W}px;
     background:var(--card);border:1px solid var(--line);border-radius:11px;
-    padding:5px;z-index:900;display:flex;flex-direction:column;gap:2px;
+    padding:5px;z-index:1200;display:flex;flex-direction:column;gap:2px;
     box-shadow:0 8px 24px rgba(0,0,0,.18)`;
   el.innerHTML=items.map(it=>`<button class="btn ghost"
     style="width:100%;justify-content:flex-start;gap:9px;padding:9px 11px;
@@ -11814,7 +11816,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.08';
+const APP_BUILD='2.09';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12017,25 +12019,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.08"></script>
-<script type="module" src="emartna-auth.js?v=2.08"></script>
-<script type="module" src="emartna-profile.js?v=2.08"></script>
-<script type="module" src="emartna-users.js?v=2.08"></script>
-<script type="module" src="emartna-platform.js?v=2.08"></script>
-<script type="module" src="emartna-contactlog.js?v=2.08"></script>
-<script type="module" src="emartna-permreport.js?v=2.08"></script>
-<script type="module" src="emartna-finops.js?v=2.08"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.08"></script>
-<script type="module" src="emartna-planscreens.js?v=2.08"></script>
+<script type="module" src="emartna-cloud.js?v=2.09"></script>
+<script type="module" src="emartna-auth.js?v=2.09"></script>
+<script type="module" src="emartna-profile.js?v=2.09"></script>
+<script type="module" src="emartna-users.js?v=2.09"></script>
+<script type="module" src="emartna-platform.js?v=2.09"></script>
+<script type="module" src="emartna-contactlog.js?v=2.09"></script>
+<script type="module" src="emartna-permreport.js?v=2.09"></script>
+<script type="module" src="emartna-finops.js?v=2.09"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.09"></script>
+<script type="module" src="emartna-planscreens.js?v=2.09"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.08"></script>
+<script type="module" src="emartna-perms.js?v=2.09"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.08"></script>
+<script type="module" src="emartna-bundle.js?v=2.09"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح

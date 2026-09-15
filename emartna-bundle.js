@@ -13460,7 +13460,7 @@
     const left = Math.min(Math.max(8, r.right - W), window.innerWidth - W - 8);
     el.style.cssText = `position:fixed;top:${r.bottom+6}px;left:${left}px;
       width:${W}px;background:var(--card);border:1px solid var(--line);
-      border-radius:12px;padding:5px;z-index:950;display:flex;
+      border-radius:12px;padding:5px;z-index:1200;display:flex;
       flex-direction:column;gap:2px;box-shadow:0 8px 26px rgba(0,0,0,.2)`;
 
     const item = (ic,label,onclick,sub) => `<button class="btn ghost"
