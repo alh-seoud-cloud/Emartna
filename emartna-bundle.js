@@ -13018,3 +13018,220 @@
 })();
 
 })();
+
+/* ═══ emartna-health.js ═══ */
+(function(){
+/* ============================================================
+   عمارتنا — صحة المنصة
+   ------------------------------------------------------------
+   صاحب البرنامج محتاج يعرف هو فين من حدود الباقة قبل ما تفاجئه:
+   القاعدة والمرفقات وأكبر الجداول.
+
+   وسجل التدقيق بيكبر أسرع من كل حاجة — عمارة واحدة نشطة ولّدت
+   ١٣ ألف صف. فالشاشة بتديه أدوات: يشوف الحجم بالشهر، ينزّل نسخة
+   قبل المسح، ويمسح فترة محددة.
+   ============================================================ */
+
+(function(){
+  'use strict';
+
+  const esc2 = s => (window.esc ? esc(s) : String(s == null ? '' : s));
+  const sb   = () => (window.CLOUD && window.CLOUD._sb) || null;
+  const MB   = n => (Number(n||0)/1048576);
+
+  let H = null, T = null, A = null;
+
+  async function load(){
+    try{
+      const s = sb(); if (!s) return;
+      const [h,t,a] = await Promise.all([
+        s.rpc('platform_health'),
+        s.rpc('platform_tables', { p_limit:12 }),
+        s.rpc('audit_by_month'),
+      ]);
+      H = h.data || []; T = t.data || []; A = a.data || [];
+    }catch(e){ H = []; T = []; A = []; }
+    if (window.renderSysContent) renderSysContent();
+  }
+  window.reloadPlatformHealth = function(){ H = null; load(); };
+
+  const get = k => (H||[]).find(x => x.metric === k) || {};
+
+  function bar(used, limit, warnAt){
+    const pct = limit ? Math.min(100, used/limit*100) : 0;
+    const col = pct >= 90 ? 'var(--red)' : pct >= (warnAt||70) ? 'var(--gold)' : 'var(--accent)';
+    return `<div style="height:9px;background:var(--line);border-radius:5px;
+      overflow:hidden;margin-top:6px">
+      <div style="width:${pct}%;height:100%;background:${col}"></div></div>
+      <div class="small mtop" style="color:var(--muted)">${pct.toFixed(1)}% مستخدم</div>`;
+  }
+
+  window.pageSysHealth = function(){
+    if (H === null){ load(); return '<p class="small">⏳ بيقيس المساحة...</p>'; }
+
+    const db = get('db_size'), st = get('storage_size');
+    const auditMB = MB(get('audit_size').value_num);
+    const dbMB    = MB(db.value_num);
+    const auditShare = dbMB ? (auditMB/dbMB*100) : 0;
+
+    return `
+    <div class="card content-narrow">
+      <div class="flexrow" style="justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <h3>🩺 صحة المنصة</h3>
+        <button class="btn sm ghost" onclick="reloadPlatformHealth()">🔄 تحديث</button>
+      </div>
+      <p class="small mtop">الأرقام دي بتتقاس من السيرفر مباشرة.</p>
+    </div>
+
+    <div class="grid g2 mtop2">
+      <div class="card">
+        <b>🗄️ قاعدة البيانات</b>
+        <div class="val" style="font-size:22px;margin-top:4px">${esc2(db.value_txt||'—')}</div>
+        <div class="small" style="color:var(--muted)">من 500 م.ب (الباقة المجانية)</div>
+        ${bar(db.value_num, 500*1048576)}
+      </div>
+      <div class="card">
+        <b>📎 المرفقات</b>
+        <div class="val" style="font-size:22px;margin-top:4px">${esc2(st.value_txt||'—')}</div>
+        <div class="small" style="color:var(--muted)">
+          من 1 ج.ب · ${esc2(get('files').value_txt||0)} ملف</div>
+        ${bar(st.value_num, 1024*1048576)}
+      </div>
+    </div>
+
+    ${auditShare > 40 ? `<div class="card content-narrow mtop2"
+      style="background:var(--tint-warning)">
+      <b>⚠️ سجل التدقيق واكل ${auditShare.toFixed(0)}% من قاعدة البيانات</b>
+      <div class="small">${esc2(get('audit_rows').value_txt)} صف ·
+        ${esc2(get('audit_size').value_txt)}. تقدر تنزّل نسخة وتمسح الفترات القديمة
+        من تحت.</div></div>` : ''}
+
+    <div class="card content-narrow mtop2">
+      <h3 style="font-size:14px">أكبر الجداول</h3>
+      <div class="table-wrap mtop">
+        <table><thead><tr><th>الجدول</th><th>الصفوف</th><th>الحجم</th><th>النسبة</th>
+        </tr></thead><tbody>
+        ${(T||[]).map(r=>{
+          const pct = db.value_num ? (r.size_bytes/db.value_num*100) : 0;
+          return `<tr>
+            <td class="small">${esc2(r.table_name)}</td>
+            <td>${Number(r.rows_count).toLocaleString('ar-EG')}</td>
+            <td>${esc2(r.size_txt)}</td>
+            <td><span class="badge ${pct>30?'r':pct>10?'y':'n'}">${pct.toFixed(0)}%</span></td>
+          </tr>`;
+        }).join('')}
+        </tbody></table></div>
+    </div>
+
+    <div class="card content-narrow mtop2">
+      <h3 style="font-size:14px">🔒 سجل التدقيق المالي</h3>
+      <p class="small mtop">بيسجّل مين عدّل أو حذف أي حركة مالية وإمتى —
+        بيحمي رئيس الاتحاد لو حصل خلاف. بيكبر بسرعة، فينفع تمسح القديم
+        <b>بعد ما تنزّل نسخة</b>.</p>
+
+      <div class="grid g2 mtop2">
+        <div class="field2"><label>من تاريخ</label>
+          <input type="date" id="auFrom" value="${defFrom()}"></div>
+        <div class="field2"><label>إلى تاريخ</label>
+          <input type="date" id="auTo" value="${defTo()}"></div>
+      </div>
+
+      <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
+        <button class="btn primary" onclick="auditDownload()">⬇️ نزّل نسخة (Excel)</button>
+        <button class="btn red" onclick="auditPurge()">🗑 امسح الفترة</button>
+      </div>
+      <p class="hint">⚠️ المسح نهائي. آخر ٩٠ يوم محمية ومش هتتمسح.</p>
+
+      <div class="table-wrap mtop2" style="max-height:34vh;overflow:auto">
+        <table><thead><tr><th>الشهر</th><th>صفوف</th><th>الحجم</th><th></th>
+        </tr></thead><tbody>
+        ${(A||[]).map(r=>`<tr>
+          <td>${esc2(r.period)}</td>
+          <td>${Number(r.rows_count).toLocaleString('ar-EG')}</td>
+          <td>${esc2(r.size_txt)}</td>
+          <td><button class="btn sm ghost"
+            onclick="auditPickMonth('${esc2(r.period)}')">اختار</button></td>
+        </tr>`).join('') || '<tr><td colspan="4" class="small">مفيش سجلات.</td></tr>'}
+        </tbody></table></div>
+    </div>`;
+  };
+
+  function defFrom(){
+    const d = new Date(); d.setFullYear(d.getFullYear()-1);
+    return d.toISOString().slice(0,10);
+  }
+  function defTo(){
+    /* الافتراضي: لحد ٩٠ يوم فاتوا — نفس حارس الخادم */
+    const d = new Date(); d.setDate(d.getDate()-91);
+    return d.toISOString().slice(0,10);
+  }
+
+  window.auditPickMonth = function(period){
+    const [y,m] = period.split('-').map(Number);
+    const from = new Date(y, m-1, 1), to = new Date(y, m, 0);
+    const f = document.getElementById('auFrom'), t = document.getElementById('auTo');
+    if (f) f.value = from.toISOString().slice(0,10);
+    if (t) t.value = to.toISOString().slice(0,10);
+    if (window.toast) toast('اتحددت الفترة: ' + period);
+  };
+
+  window.auditDownload = async function(){
+    const from = (document.getElementById('auFrom')||{}).value;
+    const to   = (document.getElementById('auTo')||{}).value;
+    if (!from || !to) return showMessage('اختار الفترة الأول');
+    if (typeof XLSX === 'undefined') return showMessage('تعذر تحميل مكتبة إكسيل.');
+
+    if (window.toast) toast('بنجهّز النسخة...');
+    let rows = [];
+    try{
+      const { data, error } = await sb().rpc('audit_export', { p_from:from, p_to:to });
+      if (error) throw error;
+      rows = data || [];
+    }catch(e){ return showMessage(e.message || 'تعذّر التصدير'); }
+
+    if (!rows.length) return showMessage('مفيش سجلات في الفترة دي.');
+
+    const cols = ['العمارة','الجدول','العملية','مين عملها','التاريخ والوقت','التفاصيل'];
+    const body = rows.map(r => [
+      r.building_name, r.table_name,
+      ({INSERT:'إضافة',UPDATE:'تعديل',DELETE:'حذف'})[r.op] || r.op,
+      r.changed_by_name,
+      new Date(r.changed_at).toLocaleString('ar-EG'),
+      JSON.stringify(r.changes || {}),
+    ]);
+    const ws = XLSX.utils.aoa_to_sheet([cols, ...body]);
+    ws['!cols'] = [24,16,10,22,22,80].map(w=>({wch:w}));
+    ws['!views'] = [{ RTL:true }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'سجل التدقيق');
+    XLSX.writeFile(wb, `سجل التدقيق ${from} إلى ${to}.xlsx`);
+    showMessage(`اتنزّلت النسخة — ${rows.length} سجل.\n\n` +
+      'احفظها في مكان آمن قبل ما تمسح.');
+  };
+
+  window.auditPurge = function(){
+    const from = (document.getElementById('auFrom')||{}).value;
+    const to   = (document.getElementById('auTo')||{}).value;
+    if (!from || !to) return showMessage('اختار الفترة الأول');
+
+    confirmAction(
+      `مسح سجل التدقيق من ${from} إلى ${to}؟\n\n` +
+      '⚠️ المسح نهائي ومش بيرجع.\n' +
+      'لو حصل خلاف على حركة في الفترة دي، مش هتقدر تثبت مين عدّلها.\n\n' +
+      'نزّلت نسخة الأول؟',
+      async () => {
+        try{
+          const { data, error } = await sb().rpc('audit_purge',
+            { p_from:from, p_to:to });
+          if (error) throw error;
+          showMessage(`اتمسح ${data} سجل.\n\n` +
+            'المساحة هترجع خلال ساعات مع التنظيف الدوري للقاعدة.');
+          reloadPlatformHealth();
+        }catch(e){ showMessage(e.message || 'تعذّر المسح'); }
+      });
+  };
+
+  console.log('[عمارتنا] صحة المنصة جاهزة');
+})();
+
+})();
