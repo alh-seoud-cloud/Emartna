@@ -118,6 +118,40 @@
     renderContent();
   };
 
+  /* ⚠️ العميل بيقفل الشريط ويكمّل — وبعدين ينسى الخطوة الناقصة.
+     ١١ من ١٨ عمارة واقفة عند "الاشتراك الشهري" بالظبط: أدخلوا
+     الوحدات والبرنامج بيبان فاضي لأنه مايقدرش يولّد تحصيل.
+     الخطوة دي تحديدًا مالهاش زرار إخفاء — بتفضل لحد ما تتعمل. */
+  function isCritical(){
+    try{
+      const aps = (window.D && D.apartments) || [];
+      if (!aps.length) return false;
+      const open = aps.filter(a => !a.closed);
+      if (!open.length) return false;
+      /* وحدات موجودة ومفيش ولا واحدة عليها اشتراك = البرنامج معطّل فعليًا */
+      return !open.some(a => Number(a.monthlyFee) > 0);
+    }catch(e){ return false; }
+  }
+
+  function criticalCard(){
+    return `<div class="card mtop" style="border:2px solid var(--gold);
+      background:var(--tint-warning)">
+      <div class="flexrow" style="gap:10px;align-items:flex-start">
+        <span style="font-size:22px">⚠️</span>
+        <div style="flex:1">
+          <b>خطوة واحدة فاضلة عشان البرنامج يشتغل</b>
+          <p class="small mtop">وحداتك متسجّلة 👍 — بس لسه مفيش اشتراك شهري
+            محدّد. من غيره البرنامج <b>مش هيقدر يولّد تحصيل</b> ولا يحسب
+            متأخرات، وهيفضل باين فاضي.</p>
+          <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
+            <button class="btn primary" onclick="go('apartments')">
+              💳 حدّد الاشتراك دلوقتي</button>
+            <button class="btn ghost" onclick="openSetupWizard()">كل الخطوات</button>
+          </div>
+        </div>
+      </div></div>`;
+  }
+
   function dismissed(){
     /* إخفاء مؤقت بأسبوع من زرار ✕ في الشريط */
     try{
@@ -133,7 +167,8 @@
   if (origDash) window.pageAdminDashboard = function(){
     const html = origDash.apply(this, arguments);
     const { done, total, steps: list } = wizardProgress();
-    if (done === total || dismissed()) return html;
+    if (done === total) return html;
+    if (dismissed()) return isCritical() ? criticalCard() + html : html;
 
     const next = list.find(s => !s.done);
     const pct = Math.round(done / total * 100);
@@ -161,6 +196,8 @@
           title="إخفاء لأسبوع" style="flex:0 0 auto;cursor:pointer;opacity:.5;
           font-size:14px;padding:0 3px">✕</span>
       </div>`;
+    /* الخطوة الحرجة بتتعرض ككارت واضح — مش شريط بيتقفل */
+    if (isCritical()) return criticalCard() + bar + html;
     return bar + html;
   };
 

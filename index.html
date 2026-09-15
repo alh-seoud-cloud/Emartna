@@ -3608,7 +3608,7 @@ function renderSysContent(){
   }
   /* الشاشات اللي محتواها نافذة */
   if(SYS_MODAL_PAGES[curPage]){ c.innerHTML=pageSysModalHost(curPage); return; }
-  const fn={sysdash:pageSysDashboard,syslocations:(window.pageSysLocations||(()=>'<p class="small">جاري التحميل…</p>')),syspipeline:(window.pageSysPipeline||pageSysPipeline),sysleads:pageSysMarketingLeads,sysvisits:(window.pageSysVisits||(()=>'<p class="small">جاري التحميل…</p>')),sysoffers:pageSysOffers,syscoupons:pageSysCoupons,sysmessages:pageSysMessageTemplates,sysusers:pageSysUsers,syslicenses:pageSysLicenses,syslicensehistory:pageSysLicenseHistory,sysplans:pageSysPlans,sysrevenue:pageSysRevenue,syslanding:pageSysLandingSettings,sysrenewals:pageSysRenewals,sysproposals:pageSysProposals,systickets:pageSysSupportTickets,sysstaff:pageSupportStaff,systasks:pageSysTasks,sysdailysummary:pageSysDailySummary,sysreports:pageSysReports,sysactivitylog:pageSysActivityLog,sysreferrals:pageSysReferrals,sysversions:pageSysVersions,sysmarketing:pageMarketingCard,systrash:pageSysTrash,sysaisettings:pageSysAISettings,sysaireports:pageSysAIReports,syssettings:pageSysSettings}[curPage]||pageSysDashboard;
+  const fn={sysdash:pageSysDashboard,syslocations:(window.pageSysLocations||(()=>'<p class="small">جاري التحميل…</p>')),syspipeline:(window.pageSysPipeline||pageSysPipeline),sysfunnel:(window.pageSysFunnel||(()=>'<p class="small">جاري التحميل…</p>')),sysleads:pageSysMarketingLeads,sysvisits:(window.pageSysVisits||(()=>'<p class="small">جاري التحميل…</p>')),sysoffers:pageSysOffers,syscoupons:pageSysCoupons,sysmessages:pageSysMessageTemplates,sysusers:pageSysUsers,syslicenses:pageSysLicenses,syslicensehistory:pageSysLicenseHistory,sysplans:pageSysPlans,sysrevenue:pageSysRevenue,syslanding:pageSysLandingSettings,sysrenewals:pageSysRenewals,sysproposals:pageSysProposals,systickets:pageSysSupportTickets,sysstaff:pageSupportStaff,systasks:pageSysTasks,sysdailysummary:pageSysDailySummary,sysreports:pageSysReports,sysactivitylog:pageSysActivityLog,sysreferrals:pageSysReferrals,sysversions:pageSysVersions,sysmarketing:pageMarketingCard,systrash:pageSysTrash,sysaisettings:pageSysAISettings,sysaireports:pageSysAIReports,syssettings:pageSysSettings}[curPage]||pageSysDashboard;
   c.innerHTML=fn();
   if(curPage==='sysmarketing')renderMarketingQr();
   const bw=document.getElementById('sysNotifBellWrap'); if(bw)bw.innerHTML=renderSysNotifBell();
@@ -7019,7 +7019,7 @@ var OWNER_NAV_GROUPS=[
 ];
 var SYS_NAV_GROUPS=[
   {key:'overview',icon:'🏙️',label:'نظرة عامة',items:[['sysdash','🏙️','كل العمارات'],['sysusers','👥','كل المستخدمين'],['sysdailysummary','📊','الملخص اليومي'],['sysreports','📈','تقارير الفترات'],['sysactivitylog','📜','سجل نشاطي']]},
-  {key:'marketing',icon:'📣',label:'التسويق والمبيعات',items:[['syspipeline','🎯','قمع المبيعات'],['sysleads','📋','أرقام تسويقية'],['sysvisits','📈','مصادر الزيارات'],['sysoffers','🎉','عروض العملاء الجدد'],['sysreferrals','🎁','برنامج الإحالة'],['syscoupons','🎟️','أكواد الخصم'],['sysmessages','💬','قوالب الرسائل']]},
+  {key:'marketing',icon:'📣',label:'التسويق والمبيعات',items:[['syspipeline','🎯','قمع المبيعات'],['sysfunnel','🚦','أين يقف العملاء'],['sysleads','📋','أرقام تسويقية'],['sysvisits','📈','مصادر الزيارات'],['sysoffers','🎉','عروض العملاء الجدد'],['sysreferrals','🎁','برنامج الإحالة'],['syscoupons','🎟️','أكواد الخصم'],['sysmessages','💬','قوالب الرسائل']]},
   {key:'subscriptions',icon:'🪪',label:'الاشتراكات والتراخيص',items:[['syslicenses','🪪','التراخيص والاشتراكات'],['sysrenewals','📥','طلبات التجديد'],['sysplans','💲','خطط الاشتراك والأسعار'],['syslicensehistory','📜','سجل حركات الاشتراكات'],['sysrevenue','💰','كشف حساب التحصيلات']]},
   {key:'site',icon:'🖥️',label:'الموقع العام',items:[['syslanding','🖥️','الصفحة الرئيسية وإعدادات العرض'],['sysversions','🆕','سجل الإصدارات والتحديثات'],['sysmarketing','🖨️','بطاقة دعاية للطباعة'],['syslocations','🗺️','المحافظات والمدن']]},
   {key:'feedback',icon:'💬',label:'التواصل مع العملاء',items:[['sysproposals','💡','مقترحات العملاء'],['systickets','🎫','طلبات الدعم الفني'],['syscontactlog','📇','سجل التواصل'],['sysfollowups','📅','متابعات مستحقة'],['sysstaff','🧑‍💼','فريق الدعم الفني'],['systasks','✅','مهام الفريق']]},
@@ -11601,7 +11601,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.96';
+const APP_BUILD='1.97';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11804,25 +11804,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.96"></script>
-<script type="module" src="emartna-auth.js?v=1.96"></script>
-<script type="module" src="emartna-profile.js?v=1.96"></script>
-<script type="module" src="emartna-users.js?v=1.96"></script>
-<script type="module" src="emartna-platform.js?v=1.96"></script>
-<script type="module" src="emartna-contactlog.js?v=1.96"></script>
-<script type="module" src="emartna-permreport.js?v=1.96"></script>
-<script type="module" src="emartna-finops.js?v=1.96"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.96"></script>
-<script type="module" src="emartna-planscreens.js?v=1.96"></script>
+<script type="module" src="emartna-cloud.js?v=1.97"></script>
+<script type="module" src="emartna-auth.js?v=1.97"></script>
+<script type="module" src="emartna-profile.js?v=1.97"></script>
+<script type="module" src="emartna-users.js?v=1.97"></script>
+<script type="module" src="emartna-platform.js?v=1.97"></script>
+<script type="module" src="emartna-contactlog.js?v=1.97"></script>
+<script type="module" src="emartna-permreport.js?v=1.97"></script>
+<script type="module" src="emartna-finops.js?v=1.97"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.97"></script>
+<script type="module" src="emartna-planscreens.js?v=1.97"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=1.96"></script>
+<script type="module" src="emartna-perms.js?v=1.97"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=1.96"></script>
+<script type="module" src="emartna-bundle.js?v=1.97"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح

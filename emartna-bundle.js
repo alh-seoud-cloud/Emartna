@@ -5587,6 +5587,40 @@
     renderContent();
   };
 
+  /* ⚠️ العميل بيقفل الشريط ويكمّل — وبعدين ينسى الخطوة الناقصة.
+     ١١ من ١٨ عمارة واقفة عند "الاشتراك الشهري" بالظبط: أدخلوا
+     الوحدات والبرنامج بيبان فاضي لأنه مايقدرش يولّد تحصيل.
+     الخطوة دي تحديدًا مالهاش زرار إخفاء — بتفضل لحد ما تتعمل. */
+  function isCritical(){
+    try{
+      const aps = (window.D && D.apartments) || [];
+      if (!aps.length) return false;
+      const open = aps.filter(a => !a.closed);
+      if (!open.length) return false;
+      /* وحدات موجودة ومفيش ولا واحدة عليها اشتراك = البرنامج معطّل فعليًا */
+      return !open.some(a => Number(a.monthlyFee) > 0);
+    }catch(e){ return false; }
+  }
+
+  function criticalCard(){
+    return `<div class="card mtop" style="border:2px solid var(--gold);
+      background:var(--tint-warning)">
+      <div class="flexrow" style="gap:10px;align-items:flex-start">
+        <span style="font-size:22px">⚠️</span>
+        <div style="flex:1">
+          <b>خطوة واحدة فاضلة عشان البرنامج يشتغل</b>
+          <p class="small mtop">وحداتك متسجّلة 👍 — بس لسه مفيش اشتراك شهري
+            محدّد. من غيره البرنامج <b>مش هيقدر يولّد تحصيل</b> ولا يحسب
+            متأخرات، وهيفضل باين فاضي.</p>
+          <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
+            <button class="btn primary" onclick="go('apartments')">
+              💳 حدّد الاشتراك دلوقتي</button>
+            <button class="btn ghost" onclick="openSetupWizard()">كل الخطوات</button>
+          </div>
+        </div>
+      </div></div>`;
+  }
+
   function dismissed(){
     /* إخفاء مؤقت بأسبوع من زرار ✕ في الشريط */
     try{
@@ -5602,7 +5636,8 @@
   if (origDash) window.pageAdminDashboard = function(){
     const html = origDash.apply(this, arguments);
     const { done, total, steps: list } = wizardProgress();
-    if (done === total || dismissed()) return html;
+    if (done === total) return html;
+    if (dismissed()) return isCritical() ? criticalCard() + html : html;
 
     const next = list.find(s => !s.done);
     const pct = Math.round(done / total * 100);
@@ -5630,6 +5665,8 @@
           title="إخفاء لأسبوع" style="flex:0 0 auto;cursor:pointer;opacity:.5;
           font-size:14px;padding:0 3px">✕</span>
       </div>`;
+    /* الخطوة الحرجة بتتعرض ككارت واضح — مش شريط بيتقفل */
+    if (isCritical()) return criticalCard() + bar + html;
     return bar + html;
   };
 
@@ -12845,6 +12882,139 @@
   setTimeout(() => { try{ loadServerCities(); }catch(e){} }, 2500);
 
   console.log('[عمارتنا] مدن المحافظات جاهزة');
+})();
+
+})();
+
+/* ═══ emartna-funnel.js ═══ */
+(function(){
+/* ============================================================
+   عمارتنا — تقرير التوقف (أين يقف العملاء)
+   ------------------------------------------------------------
+   ١٨ عمارة سجّلت، ١١ منها واقفة عند نفس النقطة: أدخلوا الوحدات
+   وما حدّدوش الاشتراك الشهري — فالبرنامج مايقدرش يولّد تحصيل،
+   والعميل بيحس إنه فاضي فيسيبه.
+
+   الشاشة دي بتوري صاحب البرنامج فين كل عميل واقف، ومعاها رقمه
+   عشان يكلّمه. الرقم أهم من التقرير: البيانات بتقول "فين"،
+   والمكالمة بتقول "ليه".
+   ============================================================ */
+
+(function(){
+  'use strict';
+
+  const esc2 = s => (window.esc ? esc(s) : String(s == null ? '' : s));
+  const sb   = () => (window.CLOUD && window.CLOUD._sb) || null;
+  const wa   = p => String(p||'').replace(/\D/g,'');
+
+  const STAGE_COLOR = {
+    '٠':'var(--red)', '١':'var(--red)', '٢':'var(--gold)',
+    '٣':'var(--gold)', '٤':'var(--accent)', '٥':'var(--accent)',
+  };
+
+  window.pageSysFunnel = function(){
+    if (!window.__funnelRows){
+      loadFunnel();
+      return '<p class="small">⏳ بيحمّل التقرير...</p>';
+    }
+    const rows = window.__funnelRows;
+    if (!rows.length) return '<p class="small">مفيش عمارات.</p>';
+
+    /* تجميع بالمرحلة */
+    const byStage = {};
+    rows.forEach(r => (byStage[r.stage] = byStage[r.stage] || []).push(r));
+    const stages = Object.keys(byStage).sort();
+
+    /* أكبر نقطة توقف */
+    const stuck = {};
+    rows.forEach(r => { if (r.stuck_at !== '—')
+      stuck[r.stuck_at] = (stuck[r.stuck_at]||0)+1; });
+    const worst = Object.entries(stuck).sort((a,b)=>b[1]-a[1])[0];
+
+    return `
+    <div class="card content-narrow">
+      <h3>🎯 أين يقف العملاء</h3>
+      <p class="small mtop">كل عمارة فين وصلت، وفين وقفت — ومعاها رقم رئيس
+        الاتحاد عشان تكلّمه.</p>
+      ${worst ? `<div class="card mtop" style="background:var(--tint-warning)">
+        <b>أكبر نقطة توقف: ${esc2(worst[0])}</b>
+        <div class="small">${worst[1]} عمارة من ${rows.length} واقفة هنا.
+          لو اتصلت بتلاتة منهم وعرفت السبب، هتحل مشكلة ${worst[1]} عميل مرة واحدة.</div>
+      </div>` : ''}
+    </div>
+
+    <div class="grid g4 mtop2">
+      ${stages.map(s => `<div class="kpi" style="border-inline-start:3px solid ${
+        STAGE_COLOR[s[0]] || 'var(--line)'}">
+        <div class="lbl" style="font-size:11.5px">${esc2(s)}</div>
+        <div class="val">${byStage[s].length}</div></div>`).join('')}
+    </div>
+
+    ${stages.slice().reverse().map(s => `
+      <div class="card content-narrow mtop2">
+        <h3 style="font-size:14px">${esc2(s)} — ${byStage[s].length} عمارة</h3>
+        <div class="table-wrap mtop">
+          <table><thead><tr>
+            <th>العمارة</th><th>الوحدات</th><th>واقف عند</th>
+            <th>من</th><th>رئيس الاتحاد</th><th></th>
+          </tr></thead><tbody>
+          ${byStage[s].map(r => `<tr>
+            <td><b>${esc2(r.building_name)}</b>
+              <div class="small" style="color:var(--muted)">${esc2(r.code||'')}</div></td>
+            <td>${r.units}${r.units_with_fee ? '' :
+              '<div class="small" style="color:var(--red)">بلا اشتراك</div>'}</td>
+            <td class="small">${r.stuck_at === '—'
+              ? '<span class="badge g">ماشي</span>'
+              : `<span style="color:var(--red)">${esc2(r.stuck_at)}</span>`}</td>
+            <td class="small">${r.days_since} يوم</td>
+            <td class="small">${esc2(r.admin_name||'—')}
+              <div dir="ltr" style="color:var(--muted)">${esc2(r.admin_phone||'')}</div></td>
+            <td>${r.admin_phone ? `<div class="flexrow" style="gap:4px">
+              <a class="btn sm ghost" href="tel:${esc2(r.admin_phone)}">📞</a>
+              <a class="btn sm gold" target="_blank"
+                href="https://wa.me/${wa(r.admin_phone)}?text=${
+                encodeURIComponent(msgFor(r))}">💬</a></div>` : ''}</td>
+          </tr>`).join('')}
+          </tbody></table></div>
+      </div>`).join('')}`;
+  };
+
+  /* رسالة جاهزة حسب نقطة التوقف — مش نص عام */
+  function msgFor(r){
+    const n = r.admin_name ? ' أ/' + r.admin_name : '';
+    const base = `السلام عليكم${n} 👋\nأنا من فريق عمارتنا.\n\n`;
+    if (r.units === 0)
+      return base + 'شفت إنك سجّلت العمارة بس لسه ما أدخلتش الوحدات. ' +
+        'تحب أساعدك أدخلها معاك؟ ممكن كمان نرفعها من ملف إكسل في دقيقة.';
+    if (!r.units_with_fee)
+      return base + `شفت إنك أدخلت ${r.units} وحدة — تمام كده 👍\n\n` +
+        'فاضل خطوة واحدة عشان البرنامج يبدأ يشتغل معاك: تحديد ' +
+        'الاشتراك الشهري للوحدات. من غيرها البرنامج مش هيقدر يولّد التحصيل.\n\n' +
+        'تحب أعملها معاك دلوقتي؟';
+    if (r.ledger_rows === 0)
+      return base + 'العمارة جاهزة والوحدات متظبطة 👍\n\n' +
+        'فاضل تسجّل أول تحصيل — بعدها هتشوف المتأخرات والتقارير شغّالة. ' +
+        'تحب أوريك إزاي؟';
+    if (r.residents_joined === 0)
+      return base + 'البرنامج شغّال معاك 👍 فاضل تدعو السكان عشان يشوفوا ' +
+        'حساباتهم ويسددوا من غير ما تكلّمهم واحد واحد. تحب أساعدك؟';
+    return base + 'حبيت أطمن إن كل حاجة ماشية معاك. لو محتاج أي مساعدة أنا موجود.';
+  }
+
+  async function loadFunnel(){
+    try{
+      const { data, error } = await sb().rpc('onboarding_funnel');
+      if (error) throw error;
+      window.__funnelRows = data || [];
+    }catch(e){
+      window.__funnelRows = [];
+      if (window.showMessage) showMessage('تعذّر التحميل: ' + (e.message||''));
+    }
+    if (window.renderSysContent) renderSysContent();
+  }
+  window.reloadFunnel = function(){ window.__funnelRows = null; loadFunnel(); };
+
+  console.log('[عمارتنا] تقرير التوقف جاهز');
 })();
 
 })();
