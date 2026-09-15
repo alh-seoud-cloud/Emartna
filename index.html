@@ -11750,6 +11750,101 @@ function resetAllData(){
 }
 
 /* ---------- الصفحة الرئيسية للمالك/المستأجر ---------- */
+/* ===== كشف حساب الشقة =====
+   كان جدول بلا فلترة ولا رصيد تراكمي — الساكن بيشوف حركات متفرقة
+   ومش عارف رصيده اتغيّر إزاي.
+
+   دلوقتي: فلترة بفترة، ورصيد افتتاحي وختامي، وعمود رصيد بعد كل
+   حركة. الرصيد بيتحسب تصاعديًا من الأقدم، والعرض بيتقلب للأحدث
+   فوق — لأن ده اللي الساكن بيدوّر عليه. */
+window.__ownerStFrom = null;
+window.__ownerStTo   = null;
+
+window.setOwnerStRange = function(months){
+  const to = new Date();
+  const from = new Date();
+  if (months) from.setMonth(from.getMonth() - months);
+  window.__ownerStFrom = months ? from.toISOString().slice(0,10) : '';
+  window.__ownerStTo   = months ? to.toISOString().slice(0,10) : '';
+  renderContent();
+};
+window.setOwnerStField = function(k, v){
+  if (k === 'from') window.__ownerStFrom = v; else window.__ownerStTo = v;
+  renderContent();
+};
+
+function ownerStatementHTML(a){
+  if (!a) return '';
+  const from = window.__ownerStFrom, to = window.__ownerStTo;
+  const all = D.ledger.filter(l => l.apartmentId === a.id)
+    .slice().sort((x,y) => String(x.date||'').localeCompare(String(y.date||'')));
+  const sign = l => (l.type === 'دفعة' || l.type === 'صرف') ? -1 : 1;
+
+  let run = Number(a.openingBalance) || 0;
+  let opening = run;
+  const rows = [];
+  let seen = false;
+  all.forEach(l => {
+    const d = String(l.date || '');
+    const inRange = (!from || d >= from) && (!to || d <= to);
+    if (!inRange && !seen){ run = money2(run + sign(l)*Number(l.amount)); opening = run; return; }
+    if (!inRange) return;
+    seen = true;
+    run = money2(run + sign(l)*Number(l.amount));
+    rows.push(Object.assign({}, l, { __run: run }));
+  });
+  const closing = rows.length ? rows[rows.length-1].__run : opening;
+  const view = rows.slice().reverse();
+  const charges  = money2(rows.filter(l=>sign(l)>0).reduce((s,l)=>s+Number(l.amount),0));
+  const payments = money2(rows.filter(l=>sign(l)<0).reduce((s,l)=>s+Number(l.amount),0));
+  const q = (lbl, m) => `<button class="btn sm ghost" onclick="setOwnerStRange(${m})">${lbl}</button>`;
+
+  return `
+  <div class="section-title"><h3>كشف حساب شقتي</h3></div>
+
+  <div class="card">
+    <div class="flexrow" style="gap:6px;flex-wrap:wrap">
+      ${q('آخر 3 شهور',3)}${q('آخر 6 شهور',6)}${q('آخر سنة',12)}${q('الكل',0)}
+    </div>
+    <div class="grid g2 mtop">
+      <div class="field2"><label>من تاريخ</label>
+        <input type="date" value="${esc(from||'')}"
+          onchange="setOwnerStField('from',this.value)"></div>
+      <div class="field2"><label>إلى تاريخ</label>
+        <input type="date" value="${esc(to||'')}"
+          onchange="setOwnerStField('to',this.value)"></div>
+    </div>
+  </div>
+
+  <div class="card mtop2" style="background:var(--tint)">
+    <div class="grid g4 small">
+      <div><b>الرصيد الافتتاحي</b>
+        <div style="font-size:15px">${money(opening)}</div></div>
+      <div><b>مستحقات الفترة</b>
+        <div style="font-size:15px;color:var(--red)">+${money(charges)}</div></div>
+      <div><b>اللي دفعته</b>
+        <div style="font-size:15px;color:var(--accent)">−${money(payments)}</div></div>
+      <div><b>الرصيد الختامي</b>
+        <div style="font-size:17px;font-weight:700;
+          color:${closing>0?'var(--red)':'var(--accent)'}">
+          ${money(closing)}${closing>0?' عليك':closing<0?' لك':''}</div></div>
+    </div>
+  </div>
+
+  ${sortableTable('ownerLedger',view,[
+    {key:'date',label:'التاريخ',value:l=>l.date,cell:l=>esc(l.date||'')},
+    {key:'type',label:'النوع',value:l=>l.type,cell:l=>ledgerBadge(l.type)},
+    {key:'note',label:'البيان',value:l=>l.note||l.project||'',
+     cell:l=>esc(l.note||l.project||(l.month?'اشتراك '+monthLabel(l.month):''))},
+    {key:'amount',label:'له / عليه',value:l=>Number(l.amount),
+     cell:l=>`<b style="color:${sign(l)<0?'var(--accent)':'var(--red)'}">${
+       sign(l)<0?'−':'+'}${money(l.amount)}</b>`},
+    {key:'run',label:'الرصيد',value:l=>Number(l.__run),
+     cell:l=>`<b>${money(l.__run)}</b>`},
+  ],null,{defaultKey:'date',emptyText:'مفيش حركات في الفترة دي',
+    exportName:'كشف حساب شقتي',rowClick:l=>`openLedgerDetail('${l.id}',true)`})}`;
+}
+
 function pageOwnerHome(u){
   const a=myApartment(); if(!a)return '<p>لا توجد شقة مرتبطة بهذا الحساب</p>';
   const bal=apBalance(a.id);
@@ -11802,13 +11897,7 @@ function pageOwnerHome(u){
   </div>`:''}
   <div class="section-title"><h3>واجهة العمارة <span class="small" style="font-weight:400">(اضغط على أي وحدة للتواصل مع صاحبها)</span></h3></div>
   ${buildingIllustration('owner')}
-  <div class="section-title"><h3>كشف حساب شقتي</h3></div>
-  ${sortableTable('ownerLedger',rows,[
-    {key:'type',label:'النوع',value:l=>l.type,cell:l=>ledgerBadge(l.type)},
-    {key:'note',label:'البيان',value:l=>l.note||l.project||'',cell:l=>esc(l.note||l.project||(l.month?'اشتراك '+monthLabel(l.month):''))},
-    {key:'amount',label:'المبلغ',value:l=>Number(l.amount),cell:l=>(l.type==='دفعة'||l.type==='صرف'?'-':'')+money(l.amount)},
-    {key:'date',label:'التاريخ',value:l=>l.date,cell:l=>esc(l.date||'')},
-  ],null,{emptyText:'لا توجد حركات على شقتك بعد',exportName:'كشف حساب شقتي',rowClick:l=>`openLedgerDetail('${l.id}',true)`})}
+  ${ownerStatementHTML(a)}
   <p class="small mtop">هذا الكشف خاص بشقتك فقط، ولا يمكنك الاطلاع على أرصدة الشقق الأخرى. اضغط على أي حركة لعرض تفاصيلها أو طباعتها.</p>`;
 }
 
@@ -11867,7 +11956,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.15';
+const APP_BUILD='2.16';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12070,25 +12159,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.15"></script>
-<script type="module" src="emartna-auth.js?v=2.15"></script>
-<script type="module" src="emartna-profile.js?v=2.15"></script>
-<script type="module" src="emartna-users.js?v=2.15"></script>
-<script type="module" src="emartna-platform.js?v=2.15"></script>
-<script type="module" src="emartna-contactlog.js?v=2.15"></script>
-<script type="module" src="emartna-permreport.js?v=2.15"></script>
-<script type="module" src="emartna-finops.js?v=2.15"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.15"></script>
-<script type="module" src="emartna-planscreens.js?v=2.15"></script>
+<script type="module" src="emartna-cloud.js?v=2.16"></script>
+<script type="module" src="emartna-auth.js?v=2.16"></script>
+<script type="module" src="emartna-profile.js?v=2.16"></script>
+<script type="module" src="emartna-users.js?v=2.16"></script>
+<script type="module" src="emartna-platform.js?v=2.16"></script>
+<script type="module" src="emartna-contactlog.js?v=2.16"></script>
+<script type="module" src="emartna-permreport.js?v=2.16"></script>
+<script type="module" src="emartna-finops.js?v=2.16"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.16"></script>
+<script type="module" src="emartna-planscreens.js?v=2.16"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.15"></script>
+<script type="module" src="emartna-perms.js?v=2.16"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.15"></script>
+<script type="module" src="emartna-bundle.js?v=2.16"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
