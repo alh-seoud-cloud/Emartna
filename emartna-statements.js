@@ -253,7 +253,13 @@
     const path = `stmt/${bid}/${Date.now()}_${Math.random().toString(36).slice(2,8)}.${ext}`;
     const { error } = await sb().storage.from('attachments')
       .upload(path, file, { contentType: file.type || 'application/octet-stream' });
-    if (error) throw error;
+    if (error){
+      const msg = String(error.message||'');
+      if (/policy|row-level|violates/i.test(msg))
+        throw new Error('المساحة خلصت.\n\nأرشف المرفقات القديمة من: ' +
+          'الإعدادات ← مساحة المرفقات، أو كلّم الدعم لزيادة الحصة.');
+      throw error;
+    }
     return { path, name:file.name, mime:file.type, size:file.size, is_main:!!isMain };
   }
 

@@ -787,7 +787,7 @@
 })();
 
 /* ═══ emartna-chatatt.js ═══ */
-(function(){
+(async function(){
 /* ============================================================
    عمارتنا — مرفقات الشات (صورة أو PDF)
    ------------------------------------------------------------
@@ -874,7 +874,18 @@
 
     const { error } = await s.storage.from('attachments')
       .upload(path, blob, { contentType: blob.type, upsert:false });
-    if (error) throw error;
+    if (error){
+      /* رفض بسبب الحصة بيرجع كخطأ سياسة — بنترجمه لرسالة مفهومة */
+      const msg = String(error.message||'');
+      if (/policy|row-level|violates/i.test(msg)){
+        const q = await loadQuota();
+        throw new Error(
+          'المساحة خلصت' + (q ? ` (${q.quota_mb} ميجا)` : '') + '.\n\n' +
+          'أرشف المرفقات القديمة من: الإعدادات ← مساحة المرفقات، ' +
+          'أو كلّم الدعم لزيادة الحصة.');
+      }
+      throw error;
+    }
 
     return { path, kind, name:file.name, size:blob.size, saved:file.size - blob.size };
   }
@@ -1008,6 +1019,99 @@
   document.addEventListener('emartna:building-complete', () => setTimeout(warnIfNear, 4000));
 
   /* بطاقة في شاشة الإعدادات */
+  /* ===== أرشفة المرفقات القديمة =====
+     المساحة محدودة (٢٠ ميجا)، والمرفقات القديمة نادرًا بتتفتح.
+     الأرشفة بتشيل الملف وتسيب سجل الرسالة بعلامة "مؤرشف" — فالمحادثة
+     تفضل مفهومة والمساحة تتفرّغ. */
+  window.openArchiveAttachments = async function(){
+    const s = sb(), b = bUuid(); if (!s || !b) return;
+    openModal('<h3>⏳ بنجهّز القائمة...</h3>');
+    let rows = [];
+    try{
+      const { data, error } = await s.rpc('archivable_attachments',
+        { p_building:b, p_before:null });
+      if (error) throw error;
+      rows = data || [];
+    }catch(e){ return showMessage(e.message || 'تعذّر جلب المرفقات'); }
+
+    if (!rows.length) return showMessage('مفيش مرفقات قابلة للأرشفة.');
+
+    const totalMB = rows.reduce((n,r)=>n+(r.size||0),0)/1048576;
+    const older = (d) => rows.filter(r =>
+      (Date.now() - new Date(r.created_at).getTime()) > d*86400000);
+
+    window.__archRows = rows;
+    openModal(`
+      <h3>🗄️ أرشفة المرفقات القديمة</h3>
+      <p class="small mtop">الأرشفة بتشيل <b>الملف</b> وتسيب الرسالة مكانها
+        بعلامة «مرفق مؤرشف» — المحادثة تفضل مفهومة والمساحة تتفرّغ.</p>
+      <div class="card mtop" style="background:var(--tint-warning)">
+        <b class="small">⚠️ الملفات المؤرشفة مش بترجع</b>
+        <div class="small">نزّل اللي محتاجه قبل الأرشفة.</div>
+      </div>
+
+      <p class="mtop2"><b>${rows.length}</b> مرفق ·
+        <b>${totalMB.toFixed(1)} ميجا</b> إجمالي</p>
+
+      <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
+        ${[[365,'أقدم من سنة'],[180,'أقدم من ٦ شهور'],[90,'أقدم من ٣ شهور']]
+          .map(([d,lbl])=>{
+            const n=older(d).length;
+            const mb=older(d).reduce((x,r)=>x+(r.size||0),0)/1048576;
+            return n ? `<button class="btn sm" onclick="archiveOlderThan(${d})">
+              ${lbl} (${n} · ${mb.toFixed(1)}م.ب)</button>` : '';
+          }).join('')}
+      </div>
+
+      <div class="table-wrap mtop2" style="max-height:44vh;overflow:auto">
+        <table><thead><tr><th>الملف</th><th>الحجم</th><th>التاريخ</th><th></th></tr></thead>
+        <tbody>${rows.slice(0,120).map(r=>`<tr>
+          <td class="small">${esc2(r.name||'مرفق')}</td>
+          <td class="small">${kb(r.size||0)}</td>
+          <td class="small">${esc2(String(r.created_at).slice(0,10))}</td>
+          <td><button class="btn sm ghost"
+            onclick="archiveOne('${esc2(r.source)}','${esc2(r.id)}','${esc2(r.path)}')">
+            🗄️</button></td></tr>`).join('')}
+        </tbody></table></div>
+
+      <div class="modal-actions">
+        <button class="btn ghost" onclick="closeModal()">إغلاق</button>
+      </div>`, true);
+  };
+
+  window.archiveOne = async function(source, id, path){
+    try{
+      await sb().storage.from('attachments').remove([path]);
+      const { error } = await sb().rpc('mark_attachment_archived',
+        { p_source:source, p_id:id });
+      if (error) throw error;
+      if (window.toast) toast('اتأرشف');
+      openArchiveAttachments();
+    }catch(e){ showMessage(e.message || 'تعذّرت الأرشفة'); }
+  };
+
+  window.archiveOlderThan = function(days){
+    const rows = (window.__archRows||[]).filter(r =>
+      (Date.now() - new Date(r.created_at).getTime()) > days*86400000);
+    if (!rows.length) return;
+    const mb = rows.reduce((n,r)=>n+(r.size||0),0)/1048576;
+    confirmAction(
+      `أرشفة ${rows.length} مرفق (${mb.toFixed(1)} ميجا)؟\n\n` +
+      'الملفات هتتشال نهائيًا والرسائل هتفضل مكانها بعلامة «مؤرشف».',
+      async () => {
+        let done = 0;
+        for (const r of rows){
+          try{
+            await sb().storage.from('attachments').remove([r.path]);
+            await sb().rpc('mark_attachment_archived',{ p_source:r.source, p_id:r.id });
+            done++;
+          }catch(e){}
+        }
+        showMessage(`اتأرشف ${done} مرفق — المساحة اتفرّغت.`);
+        openArchiveAttachments();
+      });
+  };
+
   window.openStorageUsage = async function(){
     openModal('<h3>⏳ بنحسب المساحة...</h3>');
     const q = await loadQuota();
@@ -1027,10 +1131,16 @@
           — ${(q.used_bytes/1048576).toFixed(1)} من ${q.quota_mb} ميجا
           · ${q.files} ملف</span></p>
 
-      ${pct >= 70 ? `<div class="card mtop" style="background:var(--tint-warning)">
+      ${pct >= 100 ? `<div class="card mtop" style="background:var(--tint-warning)">
+        <b class="small">🚫 المساحة خلصت</b>
+        <div class="small">مفيش مرفقات جديدة هتترفع لحد ما تفرّغ مساحة.
+          أرشف القديم أو كلّم الدعم لزيادة الحصة.</div></div>`
+      : pct >= 70 ? `<div class="card mtop" style="background:var(--tint-warning)">
         <b class="small">المساحة قربت تخلص</b>
-        <div class="small">المرفقات مش هتتمنع — بس يفضّل تمسح القديم
-          اللي مش محتاجه، أو تكلّم الدعم لزيادة المساحة.</div></div>` : ''}
+        <div class="small">يفضّل تأرشف المرفقات القديمة قبل ما تمتلئ.</div></div>` : ''}
+
+      <button class="btn ${pct>=70?'primary':''} mtop2" style="width:100%"
+        onclick="openArchiveAttachments()">🗄️ أرشفة المرفقات القديمة</button>
 
       <p class="small mtop2" style="color:var(--muted)">
         💡 الصور بتتضغط تلقائيًا قبل الرفع، فالصورة بتاخد حوالي ربع ميجا
