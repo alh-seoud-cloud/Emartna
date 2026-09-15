@@ -14451,3 +14451,451 @@
 })();
 
 })();
+
+/* ═══ emartna-matchgrid.js ═══ */
+(function(){
+/* ============================================================
+   عمارتنا — مطابقة الوحدات شهر بشهر
+   ------------------------------------------------------------
+   شاشة إقفال الشهر كانت بتدّي أرقام مجمّعة: كام طابق وكام لأ.
+   رئيس الاتحاد محتاج يعرف مين بالظبط عشان يكلّمه.
+
+   الشبكة دي: كل وحدة في صف، وكل شهر في عمود، والخانة فيها
+   الرصيد وحالة المطابقة. والضغط على الخانة بيفتح خيارات:
+   مطابقة تليفونية أو كشف حساب كامل.
+
+   ⚠️ المطابقة التليفونية بتتسجّل بعلامة واضحة إن الإدارة هي اللي
+   سجّلتها — عشان ما تختلطش بمطابقة الساكن بنفسه.
+   ============================================================ */
+
+(function(){
+  'use strict';
+
+  const esc2 = s => (window.esc ? esc(s) : String(s == null ? '' : s));
+  const sb   = () => (window.CLOUD && window.CLOUD._sb) || null;
+  const bUuid= () => { try{ return CLOUD._cache.buildingUuid[window.activeBuildingId] || null; }
+                       catch(e){ return null; } };
+  const M    = n => window.money ? money(Number(n)||0) : (Number(n)||0);
+
+  const AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو',
+              'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  const mShort = p => { const [y,m]=String(p).split('-').map(Number);
+                        return (AR[m-1]||p); };
+
+  let G = null, MONTHS = 6, FILTER = 'all';
+
+  async function load(){
+    const s = sb(), b = bUuid();
+    if (!s || !b){ G = []; return; }
+    try{
+      const { data, error } = await s.rpc('month_match_grid',
+        { p_building: b, p_months: MONTHS });
+      if (error) throw error;
+      G = data || [];
+    }catch(e){ G = []; }
+    if (window.renderContent) renderContent();
+  }
+  window.reloadMatchGrid = function(){ G = null; load(); };
+
+  window.mgMonths = function(n){
+    MONTHS = n; G = null;
+    /* ⚠️ الأعمدة بتتبني من الشهور — لو اتغيّر عددها، حالة الأعمدة
+       المحفوظة بتبقى قديمة وبتخفي أعمدة جديدة. بنمسحها. */
+    try{
+      ['matchGrid_order','matchGrid_vis','matchGrid_widths','matchGrid_filters']
+        .forEach(k => { localStorage.removeItem(k); delete window[k]; });
+    }catch(e){}
+    load();
+  };
+  window.mgFilter = function(f){ FILTER = f; renderContent(); };
+
+  window.pageMatchGrid = function(){
+    if (G === null){ load(); return '<p class="small">⏳ بيحمّل المطابقات...</p>'; }
+
+    /* تجميع: وحدة → شهر */
+    const units = {}, periods = [];
+    G.forEach(r => {
+      if (!periods.includes(r.period)) periods.push(r.period);
+      const u = units[r.apartment_id] = units[r.apartment_id] || {
+        id:r.apartment_id, no:r.unit_no, label:r.unit_label, floor:r.floor,
+        owner:r.owner_name, phone:r.owner_phone,
+        tenant:r.tenant_name, tphone:r.tenant_phone, cells:{},
+      };
+      u.cells[r.period] = { bal:r.closing, st:r.status,
+                            note:r.note, at:r.acked_at, by:r.acked_by };
+    });
+    periods.sort();
+    let list = Object.values(units).sort((a,b)=>a.no-b.no);
+
+    /* فلترة */
+    const pending = u => periods.some(p => (u.cells[p]||{}).st === 'none');
+    const disputed = u => periods.some(p => (u.cells[p]||{}).st === 'dispute');
+    if (FILTER === 'pending')  list = list.filter(pending);
+    if (FILTER === 'disputed') list = list.filter(disputed);
+    if (FILTER === 'owing')    list = list.filter(u =>
+      Number((u.cells[periods[periods.length-1]]||{}).bal||0) > 0);
+
+    const total = Object.keys(units).length;
+    const nDone = G.filter(r=>r.status==='ok').length;
+    const nDisp = G.filter(r=>r.status==='dispute').length;
+    const nNone = G.filter(r=>r.status==='none').length;
+
+    /* الأعمدة بتتبني من الشهور — فالبحث والترتيب والتصدير بيشتغلوا
+       عليها زي أي جدول في البرنامج. */
+    const cols = [
+      { key:'unit', label:'الوحدة', value:u=>u.no,
+        cell:u=>`<b>${esc2(u.label)}</b>${u.floor
+          ?`<div class="small" style="color:var(--muted)">${esc2(u.floor)}</div>`:''}` },
+      { key:'owner', label:'المالك', value:u=>u.owner||'',
+        cell:u=>`${esc2(u.owner||'—')}${u.tenant
+          ?`<div class="small" style="color:var(--muted)">🔑 ${esc2(u.tenant)}</div>`:''}` },
+      { key:'phone', label:'الهاتف', value:u=>u.phone||'',
+        cell:u=>u.phone?`<span class="small" dir="ltr">${esc2(u.phone)}</span>`:'—' },
+    ];
+
+    periods.forEach(p => {
+      cols.push({
+        key:'m_'+p, label:mShort(p),
+        /* الترتيب بالرصيد — الأهم للمستخدم */
+        value:u=>Number((u.cells[p]||{}).bal)||0,
+        cell:u=>{
+          const c = u.cells[p] || {};
+          const bal = Number(c.bal)||0;
+          const ic = c.st==='ok' ? '✅' : c.st==='dispute' ? '⚠️' : '⏳';
+          const col = c.st==='ok' ? 'var(--accent)'
+                    : c.st==='dispute' ? 'var(--red)' : 'var(--muted)';
+          return `<span style="cursor:pointer;display:inline-block;text-align:center"
+            onclick="event.stopPropagation();mgCell('${esc2(u.id)}','${esc2(p)}')"
+            title="${c.st==='ok'?'مطابق':c.st==='dispute'?'عليه اعتراض':'لسه ما طابقش'}">
+            <span style="color:${bal>0?'var(--red)':'var(--text)'}">${M(bal)}</span>
+            <span style="margin-inline-start:4px">${ic}</span></span>`;
+        },
+      });
+    });
+
+    /* عمود الحالة العامة — بيخلي البحث بكلمة «لسه» أو «اعتراض» شغّال */
+    cols.push({ key:'state', label:'الحالة',
+      value:u=>{
+        const st = periods.map(p=>(u.cells[p]||{}).st);
+        return st.includes('dispute') ? 'اعتراض'
+             : st.includes('none') ? 'لسه ما طابق' : 'مطابق';
+      },
+      cell:u=>{
+        const st = periods.map(p=>(u.cells[p]||{}).st);
+        return st.includes('dispute') ? '<span class="badge r">اعتراض</span>'
+             : st.includes('none') ? '<span class="badge y">لسه</span>'
+             : '<span class="badge g">مطابق</span>';
+      } });
+
+    return `
+    <div class="card content-narrow">
+      <div class="flexrow" style="justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <h3>📊 مطابقة الوحدات شهر بشهر</h3>
+        <button class="btn sm ghost" onclick="reloadMatchGrid()">🔄</button>
+      </div>
+      <p class="small mtop">رصيد كل وحدة في كل شهر، ومين طابق ومين لأ.
+        اضغط على أي خانة للتفاصيل أو المطابقة تليفونيًا.</p>
+
+      <div class="flexrow mtop2" style="gap:6px;flex-wrap:wrap">
+        ${[[1,'آخر شهر'],[3,'3 شهور'],[6,'6 شهور'],[12,'سنة']]
+          .map(([n,l])=>`<button class="btn sm ${MONTHS===n?'primary':'ghost'}"
+            onclick="mgMonths(${n})">${l}</button>`).join('')}
+      </div>
+      <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
+        ${[['all','الكل'],['pending','لسه ما طابقوش'],
+           ['disputed','عندهم اعتراض'],['owing','عليهم متأخرات']]
+          .map(([k,l])=>`<button class="btn sm ${FILTER===k?'':'ghost'}"
+            onclick="mgFilter('${k}')">${l}</button>`).join('')}
+      </div>
+    </div>
+
+    <div class="grid g4 mtop2">
+      <div class="kpi"><div class="ic">🏢</div><div class="lbl">وحدات</div>
+        <div class="val">${total}</div></div>
+      <div class="kpi"><div class="ic">✅</div><div class="lbl">مطابقات</div>
+        <div class="val">${nDone}</div></div>
+      <div class="kpi ${nDisp?'owe':''}"><div class="ic">⚠️</div>
+        <div class="lbl">اعتراضات</div><div class="val">${nDisp}</div></div>
+      <div class="kpi"><div class="ic">⏳</div><div class="lbl">لسه</div>
+        <div class="val">${nNone}</div></div>
+    </div>
+
+    <div class="mtop2">
+      ${sortableTable('matchGrid', list, cols, null, {
+        defaultKey:'unit',
+        emptyText:'مفيش وحدات مطابقة للفلتر ده',
+        exportName:'مطابقة الوحدات',
+      })}
+      <p class="hint">✅ طابق · ⚠️ عليه اعتراض · ⏳ لسه ما طابقش —
+        اضغط على أي رصيد للتفاصيل</p>
+    </div>`;
+  };
+
+  /* ---------- خيارات الخانة ---------- */
+
+  window.mgCell = function(apId, period){
+    const r = (G||[]).find(x => x.apartment_id === apId && x.period === period);
+    if (!r) return;
+    const bal = Number(r.closing)||0;
+    const st = r.status;
+
+    openModal(`
+      <h3>🚪 ${esc2(r.unit_label)} — ${esc2(mShort(period))} ${esc2(period.slice(0,4))}</h3>
+      <p class="small" style="color:var(--muted)">${esc2(r.owner_name||'')}
+        ${r.tenant_name?' · 🔑 '+esc2(r.tenant_name):''}</p>
+
+      <div class="card mtop2" style="background:var(--tint)">
+        <div class="flexrow" style="justify-content:space-between">
+          <span class="small"><b>رصيد آخر الشهر</b></span>
+          <b style="font-size:17px;color:${bal>0?'var(--red)':'var(--accent)'}">
+            ${M(bal)}${bal>0?' عليه':bal<0?' له':''}</b>
+        </div>
+        <div class="flexrow mtop" style="justify-content:space-between">
+          <span class="small"><b>حالة المطابقة</b></span>
+          <span>${st==='ok'?'<span class="badge g">✅ طابق</span>'
+            : st==='dispute'?'<span class="badge r">⚠️ عليه اعتراض</span>'
+            : '<span class="badge">⏳ لسه ما طابقش</span>'}</span>
+        </div>
+        ${r.note?`<p class="small mtop" style="color:var(--muted)">
+          ${esc2(r.note)}</p>`:''}
+        ${r.acked_at?`<p class="small" style="color:var(--muted)">
+          ${esc2(new Date(r.acked_at).toLocaleString('ar-EG'))}
+          ${r.acked_by?' · '+esc2(r.acked_by):''}</p>`:''}
+      </div>
+
+      <div class="flexrow mtop2" style="gap:6px;flex-wrap:wrap">
+        <button class="btn primary sm"
+          onclick="mgStatement('${esc2(apId)}','${esc2(period)}')">
+          📄 كشف الحساب</button>
+        ${st!=='ok' ? `<button class="btn sm"
+          onclick="mgPhoneAck('${esc2(apId)}','${esc2(period)}')">
+          📞 مطابقة تليفونية</button>` : ''}
+        ${r.owner_phone?`<a class="btn sm gold" target="_blank"
+          href="https://wa.me/${String(r.owner_phone).replace(/\\D/g,'')}?text=${
+          encodeURIComponent(waText(r))}">💬 واتساب</a>`:''}
+      </div>
+      <div class="modal-actions">
+        <button class="btn ghost" onclick="closeModal()">إغلاق</button>
+      </div>`, true);
+  };
+
+  function waText(r){
+    const bal = Number(r.closing)||0;
+    return `السلام عليكم${r.owner_name?' أ/'+r.owner_name:''} 👋\n\n` +
+      `بخصوص حساب ${r.unit_label} عن ${mShort(r.period)} ${r.period.slice(0,4)}:\n` +
+      `الرصيد: ${bal} جنيه${bal>0?' مستحق':''}\n\n` +
+      'برجاء مراجعة الحساب وتأكيده من التطبيق، أو الرد علينا لو فيه أي ملاحظة.';
+  }
+
+  window.mgPhoneAck = function(apId, period){
+    openModal(`
+      <h3>📞 مطابقة تليفونية</h3>
+      <p class="small mtop">بتسجّل إن صاحب الوحدة راجع حسابه معاك تليفونيًا.
+        هتتسجّل باسمك وبعلامة واضحة إنها مطابقة تليفونية.</p>
+      <div class="field2 mtop2"><label>النتيجة</label>
+        <select id="mgSt">
+          <option value="ok">✅ راجع وموافق</option>
+          <option value="dispute">⚠️ عنده ملاحظة</option>
+        </select></div>
+      <div class="field2"><label>ملاحظة (اختياري)</label>
+        <input id="mgNote" placeholder="مثال: اتكلمنا يوم 3/10"></div>
+      <div class="modal-actions">
+        <button class="btn primary" onclick="mgSaveAck('${esc2(apId)}','${esc2(period)}')">
+          💾 سجّل</button>
+        <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+      </div>`);
+  };
+
+  window.mgSaveAck = async function(apId, period){
+    const st = (document.getElementById('mgSt')||{}).value || 'ok';
+    const note = ((document.getElementById('mgNote')||{}).value||'').trim();
+    try{
+      const { error } = await sb().rpc('ack_on_behalf', {
+        p_apartment: apId, p_month: period,
+        p_status: st, p_note: note || null });
+      if (error) throw error;
+      closeModal(); toast('اتسجّلت المطابقة');
+      reloadMatchGrid();
+    }catch(e){ showMessage(e.message || 'تعذّر التسجيل'); }
+  };
+
+  /* ---------- كشف حساب الوحدة ---------- */
+
+  window.mgStatement = function(apId, period){
+    const d1 = period + '-01';
+    const d2 = new Date(Number(period.slice(0,4)), Number(period.slice(5,7)), 0)
+      .toISOString().slice(0,10);
+    window.__mgFrom = d1; window.__mgTo = d2; window.__mgAp = apId;
+    renderStatement();
+  };
+
+  window.mgSetRange = function(k, v){
+    if (k === 'from') window.__mgFrom = v; else window.__mgTo = v;
+    renderStatement();
+  };
+  window.mgQuick = function(months){
+    const to = new Date(), from = new Date();
+    from.setMonth(from.getMonth() - months);
+    window.__mgFrom = from.toISOString().slice(0,10);
+    window.__mgTo   = to.toISOString().slice(0,10);
+    renderStatement();
+  };
+
+  async function renderStatement(){
+    const apId = window.__mgAp, from = window.__mgFrom, to = window.__mgTo;
+    const u = (G||[]).find(x => x.apartment_id === apId) || {};
+    openModal('<h3>⏳ بنجهّز الكشف...</h3>');
+    let rows = [];
+    try{
+      const { data, error } = await sb().rpc('unit_statement',
+        { p_apartment: apId, p_from: from, p_to: to });
+      if (error) throw error;
+      rows = data || [];
+    }catch(e){ return showMessage(e.message || 'تعذّر جلب الكشف'); }
+
+    const open = rows.length
+      ? Number(rows[0].running) - (rows[0].entry_type==='دفعة'||rows[0].entry_type==='صرف'
+          ? -Number(rows[0].amount) : Number(rows[0].amount))
+      : 0;
+    const close = rows.length ? Number(rows[rows.length-1].running) : open;
+    const ch = rows.filter(r=>!['دفعة','صرف'].includes(r.entry_type))
+      .reduce((s,r)=>s+Number(r.amount),0);
+    const pd = rows.filter(r=>['دفعة','صرف'].includes(r.entry_type))
+      .reduce((s,r)=>s+Number(r.amount),0);
+
+    window.__mgRows = rows;
+
+    openModal(`
+      <h3>📄 كشف حساب ${esc2(u.unit_label||'')}</h3>
+      <p class="small" style="color:var(--muted)">${esc2(u.owner_name||'')}</p>
+
+      <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
+        ${[[1,'آخر شهر'],[3,'3 شهور'],[6,'6 شهور'],[12,'سنة']]
+          .map(([n,l])=>`<button class="btn sm ghost" onclick="mgQuick(${n})">${l}</button>`).join('')}
+      </div>
+      <div class="grid g2 mtop">
+        <div class="field2"><label>من</label><input type="date" value="${esc2(from)}"
+          onchange="mgSetRange('from',this.value)"></div>
+        <div class="field2"><label>إلى</label><input type="date" value="${esc2(to)}"
+          onchange="mgSetRange('to',this.value)"></div>
+      </div>
+
+      <div class="card mtop2" style="background:var(--tint)">
+        <div class="grid g4 small">
+          <div><b>افتتاحي</b><div>${M(open)}</div></div>
+          <div><b>مستحقات</b><div style="color:var(--red)">+${M(ch)}</div></div>
+          <div><b>مدفوع</b><div style="color:var(--accent)">−${M(pd)}</div></div>
+          <div><b>ختامي</b><div style="font-weight:700;
+            color:${close>0?'var(--red)':'var(--accent)'}">${M(close)}</div></div>
+        </div>
+      </div>
+
+      <div class="table-wrap mtop2" style="max-height:38vh;overflow:auto">
+        <table style="font-size:12.5px"><thead><tr>
+          <th>التاريخ</th><th>البيان</th><th>له/عليه</th><th>الرصيد</th>
+        </tr></thead><tbody>
+        ${rows.length?rows.map(r=>{
+          const neg = ['دفعة','صرف'].includes(r.entry_type);
+          return `<tr><td class="small">${esc2(r.entry_date)}</td>
+            <td class="small">${esc2(r.note)}</td>
+            <td><b style="color:${neg?'var(--accent)':'var(--red)'}">
+              ${neg?'−':'+'}${M(r.amount)}</b></td>
+            <td><b>${M(r.running)}</b></td></tr>`;
+        }).join(''):'<tr><td colspan="4" class="small">مفيش حركات.</td></tr>'}
+        </tbody></table></div>
+
+      <div class="flexrow mtop2" style="gap:6px;flex-wrap:wrap">
+        <button class="btn" onclick="mgPrint()">🖨️ طباعة / PDF</button>
+        <button class="btn ghost" onclick="mgShare()">📤 مشاركة</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn primary" onclick="closeModal()">إغلاق</button>
+      </div>`, true);
+  }
+
+  window.mgPrint = function(){
+    const rows = window.__mgRows || [];
+    const u = (G||[]).find(x => x.apartment_id === window.__mgAp) || {};
+    const b = (window.D && D.building) || {};
+    const w = window.open('', '_blank');
+    if (!w) return showMessage('اسمح بالنوافذ المنبثقة للطباعة');
+    const close = rows.length ? rows[rows.length-1].running : 0;
+
+    w.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head>
+      <meta charset="utf-8"><title>كشف حساب ${esc2(u.unit_label||'')}</title>
+      <style>@page{margin:14mm}
+        body{font-family:Tahoma,Arial,sans-serif;color:#1c2622;margin:0}
+        h1{font-size:18px;margin:0 0 2px} h2{font-size:13px;margin:0;
+          color:#6b7a76;font-weight:400}
+        .hd{border-bottom:2px solid #159A8C;padding-bottom:10px;margin-bottom:14px}
+        table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12.5px}
+        th,td{border:1px solid #d8e0dd;padding:6px 8px;text-align:right}
+        thead th{background:#f0f6f4;font-size:12px}
+        tfoot th{background:#f0f6f4}
+        .ft{margin-top:16px;font-size:11px;color:#6b7a76;
+          border-top:1px solid #d8e0dd;padding-top:8px}
+        @media print{.no-print{display:none}}
+      </style></head><body>
+      ${window.printBackBar?printBackBar():''}
+      <div class="hd">
+        <h1>${esc2(b.name||'العمارة')} — كشف حساب ${esc2(u.unit_label||'')}</h1>
+        <h2>${esc2(u.owner_name||'')} · من ${esc2(window.__mgFrom)}
+          إلى ${esc2(window.__mgTo)}</h2>
+      </div>
+      <table><thead><tr><th>التاريخ</th><th>البيان</th>
+        <th>له/عليه</th><th>الرصيد</th></tr></thead><tbody>
+      ${rows.map(r=>{
+        const neg = ['دفعة','صرف'].includes(r.entry_type);
+        return `<tr><td>${esc2(r.entry_date)}</td><td>${esc2(r.note)}</td>
+          <td>${neg?'−':'+'}${M(r.amount)}</td><td>${M(r.running)}</td></tr>`;
+      }).join('')}
+      </tbody><tfoot><tr><th colspan="3">الرصيد الختامي</th>
+        <th>${M(close)}</th></tr></tfoot></table>
+      <div class="ft">اتطبع في ${esc2(new Date().toLocaleString('ar-EG'))}
+        · نظام عمارتنا</div>
+      <script>setTimeout(function(){window.print()},350)<\/script>
+      </body></html>`);
+    w.document.close();
+  };
+
+  window.mgShare = async function(){
+    const rows = window.__mgRows || [];
+    const u = (G||[]).find(x => x.apartment_id === window.__mgAp) || {};
+    const b = (window.D && D.building) || {};
+    const close = rows.length ? rows[rows.length-1].running : 0;
+    const txt = `📄 كشف حساب ${u.unit_label||''} — ${b.name||''}\n` +
+      `الفترة: ${window.__mgFrom} إلى ${window.__mgTo}\n\n` +
+      rows.slice(-12).map(r=>{
+        const neg = ['دفعة','صرف'].includes(r.entry_type);
+        return `${r.entry_date} · ${r.note} · ${neg?'−':'+'}${r.amount}`;
+      }).join('\n') +
+      `\n\n💰 الرصيد الختامي: ${close} جنيه\n— نظام عمارتنا`;
+
+    if (navigator.share){
+      try{ await navigator.share({ title:'كشف حساب', text:txt }); return; }
+      catch(e){ if (e && e.name === 'AbortError') return; }
+    }
+    const wa = String(u.owner_phone||'').replace(/\D/g,'');
+    openModal(`
+      <h3>📤 مشاركة الكشف</h3>
+      <textarea rows="10" id="mgShareTxt" style="width:100%;font-size:12.5px"
+        onclick="this.select()">${esc2(txt)}</textarea>
+      <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
+        ${wa?`<a class="btn gold" target="_blank"
+          href="https://wa.me/${wa}?text=${encodeURIComponent(txt)}">
+          💬 واتساب للمالك</a>`:''}
+        <button class="btn ghost" onclick="
+          navigator.clipboard.writeText(document.getElementById('mgShareTxt').value);
+          toast('اتنسخ');">📋 نسخ</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn primary" onclick="closeModal()">تمام</button>
+      </div>`, true);
+  };
+
+  document.addEventListener('emartna:building-complete', () => { G = null; });
+
+  console.log('[عمارتنا] مطابقة الوحدات جاهزة');
+})();
+
+})();

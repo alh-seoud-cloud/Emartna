@@ -7171,7 +7171,7 @@ function submitRenewalRequest(){
 var ADMIN_NAV_GROUPS=[
   {key:'home',icon:'🏠',label:'الرئيسية',items:[['dashboard','📊','لوحة التحكم'],['analytics','📈','التحليلات والاتجاهات']]},
   {key:'building',icon:'🏢',label:'العمارة والملاك',items:[['building','🏢','بيانات العمارة'],['blocks','🏘️','مباني وفلل الكمبوند'],['apartments','🚪','الشقق والملاك'],['users','👥','المستخدمون'],['vendors','🛠️','مقاولون وموردون'],['maintenance','🔧','بلاغات الصيانة']]},
-  {key:'finance',icon:'💰',label:'الماليات',items:[['collections','🧾','التحصيل والدفعات'],['paymentRequests','📥','طلبات دفع من الملاك'],['projects','🏗️','المشاريع'],['treasury','🏦','الخزينة والحسابات'],['expenses','💳','المصروفات'],['expreport','📑','تقرير المصروفات'],['statements','🗂️','كشوف المصروفات الشهرية'],['monthclose','🔒','إقفال الشهر'],['floors','🏗️','تقرير الأدوار']]},
+  {key:'finance',icon:'💰',label:'الماليات',items:[['collections','🧾','التحصيل والدفعات'],['paymentRequests','📥','طلبات دفع من الملاك'],['projects','🏗️','المشاريع'],['treasury','🏦','الخزينة والحسابات'],['expenses','💳','المصروفات'],['expreport','📑','تقرير المصروفات'],['statements','🗂️','كشوف المصروفات الشهرية'],['monthclose','🔒','إقفال الشهر'],['matchgrid','📊','مطابقة الوحدات'],['floors','🏗️','تقرير الأدوار']]},
   {key:'engage',icon:'💬',label:'التواصل مع الملاك',items:[['chat','💬','محادثة السكان'],['polls','🗳️','استطلاعات الرأي'],['announcements','📢','الإعلانات'],['suggestions','💡','المقترحات'],['meetings','🗓️','الاجتماعات']]},
   {key:'settings',icon:'⚙️',label:'الإعدادات والأدوات',items:[['settings','⚙️','الإعدادات'],['expenseCategories','📋','بنود الصرف'],['distweights','⚖️','نسب توزيع المصروفات'],['aireports','🤖','تقارير الذكاء الاصطناعي'],['license','🪪','الرخصة والاشتراك'],['activity','📜','سجل النشاط'],['support','🎫','المساعدة والدعم']]},
 ];
@@ -7438,12 +7438,12 @@ function renderContent(){
   }
   window.__navExpandedGroup=findGroupKeyForPage(visibleNavGroups(u),curPage)||window.__navExpandedGroup;
   const nc=document.getElementById('navContainer'); if(nc)nc.innerHTML=renderNavGroups(visibleNavGroups(u));
-  const titleMap={dashboard:'لوحة التحكم',building:'بيانات العمارة',blocks:'مباني وفلل الكمبوند',apartments:'الشقق والملاك',collections:'التحصيل والدفعات',paymentRequests:'طلبات الدفع',projects:'المشاريع',treasury:'الخزينة والحسابات',expenses:'المصروفات',expreport:'تقرير المصروفات',statements:'كشوف المصروفات الشهرية',monthclose:'إقفال الشهر',expenseCategories:'بنود الصرف',distweights:'نسب توزيع المصروفات',polls:'استطلاعات الرأي',announcements:'الإعلانات',suggestions:'المقترحات',meetings:'الاجتماعات',chat:'محادثة السكان',users:'المستخدمون',vendors:'مقاولون وموردون',maintenance:'بلاغات الصيانة',floors:'تقرير الأدوار',analytics:'التحليلات والاتجاهات',settings:'الإعدادات',aireports:'تقارير الذكاء الاصطناعي',license:'الرخصة والاشتراك',referral:'برنامج الإحالة',activity:'سجل النشاط',myproposals:'مقترحاتي لصاحب البرنامج',support:'الدعم الفني',whatsnew:'ما الجديد',home:'حسابي وشقتي',profile:'بياناتي'};
+  const titleMap={dashboard:'لوحة التحكم',building:'بيانات العمارة',blocks:'مباني وفلل الكمبوند',apartments:'الشقق والملاك',collections:'التحصيل والدفعات',paymentRequests:'طلبات الدفع',projects:'المشاريع',treasury:'الخزينة والحسابات',expenses:'المصروفات',expreport:'تقرير المصروفات',statements:'كشوف المصروفات الشهرية',monthclose:'إقفال الشهر',matchgrid:'مطابقة الوحدات',expenseCategories:'بنود الصرف',distweights:'نسب توزيع المصروفات',polls:'استطلاعات الرأي',announcements:'الإعلانات',suggestions:'المقترحات',meetings:'الاجتماعات',chat:'محادثة السكان',users:'المستخدمون',vendors:'مقاولون وموردون',maintenance:'بلاغات الصيانة',floors:'تقرير الأدوار',analytics:'التحليلات والاتجاهات',settings:'الإعدادات',aireports:'تقارير الذكاء الاصطناعي',license:'الرخصة والاشتراك',referral:'برنامج الإحالة',activity:'سجل النشاط',myproposals:'مقترحاتي لصاحب البرنامج',support:'الدعم الفني',whatsnew:'ما الجديد',home:'حسابي وشقتي',profile:'بياناتي'};
   const t=document.getElementById('pageTitle'); if(t)t.textContent=titleMap[curPage]||'';
   const c=document.getElementById('content');
   const fn={
     dashboard:pageAdminDashboard,building:pageBuilding,apartments:pageApartments,collections:pageCollections,paymentRequests:pagePaymentRequests,projects:pageProjects,
-    treasury:pageTreasury,expenses:pageExpenses,expreport:(window.pageExpenseReport||(()=>'<p class="small">جاري التحميل…</p>')),statements:(window.pageStatements||(()=>'<p class="small">جاري التحميل…</p>')),monthclose:(window.pageMonthClose||(()=>'<p class="small">جاري التحميل…</p>')),expenseCategories:pageExpenseCategories,distweights:pageDistributionWeights,polls:pagePolls,announcements:pageAnnouncements,suggestions:pageSuggestions,meetings:pageMeetings,users:pageUsers,
+    treasury:pageTreasury,expenses:pageExpenses,expreport:(window.pageExpenseReport||(()=>'<p class="small">جاري التحميل…</p>')),statements:(window.pageStatements||(()=>'<p class="small">جاري التحميل…</p>')),monthclose:(window.pageMonthClose||(()=>'<p class="small">جاري التحميل…</p>')),matchgrid:(window.pageMatchGrid||(()=>'<p class="small">جاري التحميل…</p>')),expenseCategories:pageExpenseCategories,distweights:pageDistributionWeights,polls:pagePolls,announcements:pageAnnouncements,suggestions:pageSuggestions,meetings:pageMeetings,users:pageUsers,
     settings:pageSettings,aireports:pageAIReports,blocks:pageCompoundBlocks,vendors:pageVendors,maintenance:pageMaintenance,floors:()=>pageFloorsReport(),analytics:pageAnalytics,chat:pageBuildingChat,license:pageLicense,referral:pageReferralProgram,activity:pageActivity,myproposals:pageMyProposals,support:pageMySupportTickets,whatsnew:pageWhatsNew,home:pageOwnerHome,profile:pageProfile
   }[curPage]||pageAdminDashboard;
   c.innerHTML=(isStaffRole(u.role)?licenseBannerHTML():'')+fn(u);
@@ -11956,7 +11956,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.16';
+const APP_BUILD='2.18';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12159,25 +12159,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.16"></script>
-<script type="module" src="emartna-auth.js?v=2.16"></script>
-<script type="module" src="emartna-profile.js?v=2.16"></script>
-<script type="module" src="emartna-users.js?v=2.16"></script>
-<script type="module" src="emartna-platform.js?v=2.16"></script>
-<script type="module" src="emartna-contactlog.js?v=2.16"></script>
-<script type="module" src="emartna-permreport.js?v=2.16"></script>
-<script type="module" src="emartna-finops.js?v=2.16"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.16"></script>
-<script type="module" src="emartna-planscreens.js?v=2.16"></script>
+<script type="module" src="emartna-cloud.js?v=2.18"></script>
+<script type="module" src="emartna-auth.js?v=2.18"></script>
+<script type="module" src="emartna-profile.js?v=2.18"></script>
+<script type="module" src="emartna-users.js?v=2.18"></script>
+<script type="module" src="emartna-platform.js?v=2.18"></script>
+<script type="module" src="emartna-contactlog.js?v=2.18"></script>
+<script type="module" src="emartna-permreport.js?v=2.18"></script>
+<script type="module" src="emartna-finops.js?v=2.18"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.18"></script>
+<script type="module" src="emartna-planscreens.js?v=2.18"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.16"></script>
+<script type="module" src="emartna-perms.js?v=2.18"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.16"></script>
+<script type="module" src="emartna-bundle.js?v=2.18"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
