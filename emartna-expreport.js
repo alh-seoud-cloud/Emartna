@@ -272,7 +272,7 @@
     if (!w) return showMessage('المتصفح منع فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة.');
     w.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head>
       <meta charset="utf-8"><title>${esc2(head)} — ${esc2(b.name||'')}</title>
-      <style>
+      <style>${window.printBackCSS||""}
         @page{margin:14mm}
         body{font-family:Tahoma,Arial,sans-serif;color:#1c2622;padding:0;margin:0}
         h1{font-size:19px;margin:0 0 2px} h2{font-size:14px;margin:0;color:#6b7a76;font-weight:400}
@@ -286,7 +286,7 @@
         .ft{margin-top:16px;font-size:11px;color:#6b7a76;
             border-top:1px solid #d8e0dd;padding-top:8px}
         @media print{ .noprint{display:none} }
-      </style></head><body>
+      </style></head><body>${window.printBackBar?printBackBar():""}
       <div class="hd">
         <h1>${esc2(b.name||'العمارة')} — ${esc2(head)}</h1>
         <h2>الفترة: ${esc2(period)}${st.cat?' · البند: '+esc2(st.cat):''}</h2>

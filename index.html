@@ -2408,6 +2408,29 @@ function exportSortableTableToExcel(tableId){if(!guardAction(curPage,'export'))r
   XLSX.utils.book_append_sheet(wb,ws,'بيانات');
   XLSX.writeFile(wb,(opts.exportName||tableId)+' - '+todayISO()+'.xlsx');
 }
+/* ⚠️ نوافذ الطباعة كانت بتفتح بلا أي طريقة رجوع — على الموبايل
+   مفيش زرار "رجوع" في المتصفح لما التطبيق مثبّت، فالمستخدم بيبقى
+   عالق ولازم يقفل التاب يدوي.
+   الشريط ده بيتحط فوق كل نافذة طباعة، وبيختفي وقت الطباعة نفسها. */
+window.printBackBar = function(){
+  return `
+  <div class="no-print" style="position:sticky;top:0;z-index:99;display:flex;
+    gap:8px;align-items:center;padding:9px 12px;background:#0F7A6F;color:#fff;
+    font:600 13px system-ui;box-shadow:0 2px 8px rgba(0,0,0,.18)">
+    <button onclick="try{window.close()}catch(e){};
+      setTimeout(function(){ if(!window.closed) history.back(); },250)"
+      style="border:0;background:rgba(255,255,255,.2);
+      color:#fff;border-radius:8px;padding:7px 13px;font:700 13px system-ui;
+      cursor:pointer">← رجوع للبرنامج</button>
+    <button onclick="window.print()" style="border:0;background:#fff;color:#0F7A6F;
+      border-radius:8px;padding:7px 13px;font:700 13px system-ui;cursor:pointer">
+      🖨️ طباعة / PDF</button>
+    <span style="flex:1"></span>
+    <span style="font-size:11.5px;opacity:.85">للحفظ PDF اختار «حفظ كـPDF»</span>
+  </div>`;
+};
+window.printBackCSS = '@media print{.no-print{display:none !important}}';
+
 function printSortableTable(tableId){if(!guardAction(curPage,'print'))return;
   const{filtered,columns,opts}=getFilteredSortedRows(tableId); if(!filtered)return;
   const visible=orderedVisibleCols(tableId+'_order',tableId+'_vis',columns);
@@ -2421,13 +2444,13 @@ function printSortableTable(tableId){if(!guardAction(curPage,'print'))return;
     return`<td>${esc(cellText)}</td>`;
   }).join('')}</tr>`).join('');
   w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>${esc(title)}</title>
-    <style>body{font-family:Tahoma,Arial,sans-serif;padding:24px;color:#1c2622}
+    <style>${printBackCSS}body{font-family:Tahoma,Arial,sans-serif;padding:24px;color:#1c2622}
     h2{color:#159A8C;border-bottom:2px solid #159A8C;padding-bottom:10px;margin-bottom:4px}
     .sub{color:#666;font-size:12px;margin-bottom:16px}
     table{width:100%;border-collapse:collapse;font-size:12px}
     th{background:#f5f5f5;padding:8px 6px;text-align:right;border-bottom:2px solid #ddd;font-size:11px}
     td{padding:6px;border-bottom:1px solid #eee}
-    .foot{margin-top:20px;font-size:11px;color:#888;text-align:center}</style></head><body>
+    .foot{margin-top:20px;font-size:11px;color:#888;text-align:center}</style></head><body>${printBackBar()}
     <h2>${esc(title)}</h2>
     <p class="sub">${esc(buildingName)}${buildingName?' - ':''}تاريخ الطباعة: ${esc(new Date().toLocaleString('ar-EG'))} - عدد الصفوف: ${filtered.length}</p>
     <table><thead><tr>${printCols.map(c=>`<th>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${rowsHtml||`<tr><td colspan="${printCols.length}">لا توجد بيانات</td></tr>`}</tbody></table>
@@ -2890,10 +2913,10 @@ function printPrivacyPolicy(){
   if(!w)return showMessage('اسمح بالنوافذ المنبثقة عشان تقدر تطبع');
   w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
     <title>سياسة الخصوصية - عمارتنا</title>
-    <style>body{font-family:system-ui,'Segoe UI',Tahoma,sans-serif;line-height:2;padding:36px;max-width:820px;margin:auto;color:#1b2b28}
+    <style>${printBackCSS}body{font-family:system-ui,'Segoe UI',Tahoma,sans-serif;line-height:2;padding:36px;max-width:820px;margin:auto;color:#1b2b28}
     h1{color:#159A8C;border-bottom:3px solid #D8A33B;padding-bottom:10px}
     h2{color:#159A8C;font-size:16px;margin-top:26px}
-    .meta{color:#6b7c78;font-size:13px}</style></head><body>
+    .meta{color:#6b7c78;font-size:13px}</style></head><body>${printBackBar()}
     <h1>عمارتنا — سياسة الخصوصية وشروط الاستخدام</h1>
     <p class="meta">نظام إدارة اتحاد الملاك · آخر تحديث: ${new Date().toLocaleDateString('ar-EG')}</p>
     ${sections.map(s=>`<h2>${esc(s.title)}</h2><p>${esc(s.body)}</p>`).join('')}
@@ -6179,14 +6202,14 @@ function printMarketingCard(){
   const w=window.open('','_blank','width=420,height=600');
   if(!w)return showMessage('يرجى السماح بالنوافذ المنبثقة للطباعة');
   w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>بطاقة عمارتنا الدعائية</title>
-    <style>body{font-family:Tahoma,Arial,sans-serif;padding:40px;text-align:center;color:#1c2622}
+    <style>${printBackCSS}body{font-family:Tahoma,Arial,sans-serif;padding:40px;text-align:center;color:#1c2622}
     h1{color:#159A8C;font-size:28px}
     .tag{color:#666;margin-top:6px}
     .feat{text-align:right;display:inline-block;margin-top:24px;font-size:14px;line-height:2}
     .qrbox{margin-top:24px;display:flex;justify-content:center}
     .phone{margin-top:16px;font-size:14px}
     .logo{max-width:110px;margin:0 auto}
-    .fallback{margin-top:16px;font-size:12px;color:#999;word-break:break-all}</style></head><body>
+    .fallback{margin-top:16px;font-size:12px;color:#999;word-break:break-all}</style></head><body>${printBackBar()}
     <div class="logo">${appLogoSVG(110)}</div>
     <h1>${esc(card.title)}</h1>
     <p class="tag">${esc(card.tagline)}</p>
@@ -7582,9 +7605,9 @@ function printReceipt(title,rows){if(!guardAction(curPage,'print'))return;
   const w=window.open('','_blank','width=420,height=600');
   if(!w)return showMessage('يرجى السماح بالنوافذ المنبثقة للطباعة');
   w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>${esc(title)}</title>
-    <style>body{font-family:Tahoma,Arial,sans-serif;padding:24px;color:#1c2622}h2{border-bottom:2px solid #159A8C;padding-bottom:10px;margin-bottom:16px}
+    <style>${printBackCSS}body{font-family:Tahoma,Arial,sans-serif;padding:24px;color:#1c2622}h2{border-bottom:2px solid #159A8C;padding-bottom:10px;margin-bottom:16px}
     table{width:100%;border-collapse:collapse}td{padding:8px 4px;border-bottom:1px solid #eee}td:first-child{font-weight:700;width:35%;color:#555}
-    .foot{margin-top:24px;font-size:11px;color:#888;text-align:center}</style></head><body>
+    .foot{margin-top:24px;font-size:11px;color:#888;text-align:center}</style></head><body>${printBackBar()}
     <h2>${esc(title)}</h2>
     <table>${rows.map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(String(r[1]))}</td></tr>`).join('')}</table>
     <div class="foot">تمت الطباعة بتاريخ ${todayISO()}</div>
@@ -7767,7 +7790,7 @@ function printApartmentStatement(apId){if(!guardAction(curPage,'print'))return;
   if(!w)return showMessage('يرجى السماح بالنوافذ المنبثقة للطباعة');
   const logoSrc=(typeof REG!=='undefined'&&REG&&REG.brandSettings&&REG.brandSettings.logoDataUrl)?REG.brandSettings.logoDataUrl:DEFAULT_LOGO_DATAURI;
   w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>كشف حساب - ${unitLabel(a)}</title>
-    <style>body{font-family:Tahoma,Arial,sans-serif;padding:20px;color:#1c2622;font-size:13px}
+    <style>${printBackCSS}body{font-family:Tahoma,Arial,sans-serif;padding:20px;color:#1c2622;font-size:13px}
     .header{text-align:center;border-bottom:2px solid #159A8C;padding-bottom:12px;margin-bottom:14px}
     .header img{width:60px;height:60px}
     .brand-name{color:#159A8C;font-size:18px;font-weight:800;margin-top:4px}
@@ -7778,7 +7801,7 @@ function printApartmentStatement(apId){if(!guardAction(curPage,'print'))return;
     th,td{border:1px solid #ddd;padding:6px 8px;text-align:center;font-size:12px}
     th{background:#f0f0ee}
     .bal-row td{background:#f7f9fb;font-weight:700}
-    .footer{margin-top:16px;font-weight:700}</style></head><body>
+    .footer{margin-top:16px;font-weight:700}</style></head><body>${printBackBar()}
     <div class="header">
       <img src="${logoSrc}">
       <div class="brand-name">عمارتنا</div>
@@ -7868,11 +7891,11 @@ function printVendorProfile(id){if(!guardAction('vendors','print'))return;
   const w=window.open('','_blank','width=420,height=600');
   if(!w)return showMessage('يرجى السماح بالنوافذ المنبثقة للطباعة');
   w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>ملف المقاول/المورد</title>
-    <style>body{font-family:Tahoma,Arial,sans-serif;padding:24px;color:#1c2622}
+    <style>${printBackCSS}body{font-family:Tahoma,Arial,sans-serif;padding:24px;color:#1c2622}
     h1{color:#159A8C;font-size:20px}
     .meta{color:#666;font-size:13px;margin-top:4px}
     .hist{border-right:2px solid #ddd;padding-right:12px;margin-top:6px}
-    .hist p{margin:6px 0;font-size:13px}</style></head><body>
+    .hist p{margin:6px 0;font-size:13px}</style></head><body>${printBackBar()}
     <h1>${esc(v.name)}</h1>
     <p class="meta">${D.building.name?esc(D.building.name)+' - ':''}${esc(v.category)}</p>
     ${v.phone?`<p class="meta">📱 ${esc(v.phoneCountry||'')} ${esc(v.phone)}</p>`:''}
@@ -8657,11 +8680,11 @@ function printMaintenanceReport(id){if(!guardAction('maintenance','print'))retur
   const w=window.open('','_blank','width=420,height=600');
   if(!w)return showMessage('يرجى السماح بالنوافذ المنبثقة للطباعة');
   w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>بلاغ صيانة</title>
-    <style>body{font-family:Tahoma,Arial,sans-serif;padding:24px;color:#1c2622}
+    <style>${printBackCSS}body{font-family:Tahoma,Arial,sans-serif;padding:24px;color:#1c2622}
     h1{color:#159A8C;font-size:20px}
     .meta{color:#666;font-size:13px;margin-top:4px}
     .hist{border-right:2px solid #ddd;padding-right:12px;margin-top:6px}
-    .hist p{margin:6px 0;font-size:13px}</style></head><body>
+    .hist p{margin:6px 0;font-size:13px}</style></head><body>${printBackBar()}
     <h1>${esc(r.title)}</h1>
     <p class="meta">${D.building.name?esc(D.building.name)+' - ':''}${ap?unitLabel(ap):''}</p>
     <p class="meta">تاريخ الإنشاء: ${esc(new Date(r.createdAt).toLocaleString('ar-EG'))}</p>
@@ -11396,7 +11419,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='1.89';
+const APP_BUILD='1.90';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -11599,25 +11622,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=1.89"></script>
-<script type="module" src="emartna-auth.js?v=1.89"></script>
-<script type="module" src="emartna-profile.js?v=1.89"></script>
-<script type="module" src="emartna-users.js?v=1.89"></script>
-<script type="module" src="emartna-platform.js?v=1.89"></script>
-<script type="module" src="emartna-contactlog.js?v=1.89"></script>
-<script type="module" src="emartna-permreport.js?v=1.89"></script>
-<script type="module" src="emartna-finops.js?v=1.89"></script>
-<script type="module" src="emartna-chatrooms.js?v=1.89"></script>
-<script type="module" src="emartna-planscreens.js?v=1.89"></script>
+<script type="module" src="emartna-cloud.js?v=1.90"></script>
+<script type="module" src="emartna-auth.js?v=1.90"></script>
+<script type="module" src="emartna-profile.js?v=1.90"></script>
+<script type="module" src="emartna-users.js?v=1.90"></script>
+<script type="module" src="emartna-platform.js?v=1.90"></script>
+<script type="module" src="emartna-contactlog.js?v=1.90"></script>
+<script type="module" src="emartna-permreport.js?v=1.90"></script>
+<script type="module" src="emartna-finops.js?v=1.90"></script>
+<script type="module" src="emartna-chatrooms.js?v=1.90"></script>
+<script type="module" src="emartna-planscreens.js?v=1.90"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=1.89"></script>
+<script type="module" src="emartna-perms.js?v=1.90"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=1.89"></script>
+<script type="module" src="emartna-bundle.js?v=1.90"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
