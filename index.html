@@ -3053,7 +3053,74 @@ function modeToggleBtnHTML(){
 }
 
 /* ---------- تسجيل الدخول (بوابة واحدة) ---------- */
-window.__viewMode='landing'; // 'landing' | 'login' | 'signup' | 'recover'
+window.__viewMode='landing'; // 'landing' | 'login' | 'signup' | 'recover' | 'newpass'
+
+/* ============================================================
+   شاشة تحديد كلمة مرور جديدة — بعد الضغط على رابط الاسترداد
+   ------------------------------------------------------------
+   ⚠️ الشاشة دي كانت ناقصة تمامًا. الرابط كان بيرجّع المستخدم
+      للصفحة الرئيسية، فيفتكر إن الرابط باظ ويطلب تاني ويقع في
+      نفس الدايرة.
+   ============================================================ */
+function newPasswordHTML(){
+  return `
+  <div class="login-wrap">
+    <div class="skyline-bg">${heroSkylineSVG(true)}</div>
+    <div class="login-card">
+      <div class="login-logo"><div class="mark">${appLogoSVG(92)}</div>
+        <h1>كلمة مرور جديدة</h1>
+        <p>اختار كلمة مرور جديدة لحسابك</p></div>
+      <div class="login-error" id="loginErr"></div>
+
+      <div class="field">
+        <label>كلمة المرور الجديدة</label>
+        <input id="npPass" type="password" autocomplete="new-password"
+          placeholder="٨ حروف على الأقل">
+      </div>
+      <div class="field">
+        <label>أعد كتابتها</label>
+        <input id="npPass2" type="password" autocomplete="new-password"
+          placeholder="نفس كلمة المرور">
+      </div>
+
+      <button class="login-btn" id="npBtn" onclick="saveNewPassword()">
+        💾 احفظ كلمة المرور وادخل</button>
+
+      <p class="small mtop" style="color:var(--muted);text-align:center">
+        بعد الحفظ هتدخل على طول من غير ما تكتبها تاني.</p>
+    </div>
+  </div>`;
+}
+
+async function saveNewPassword(){
+  const p1=(document.getElementById('npPass')||{}).value||'';
+  const p2=(document.getElementById('npPass2')||{}).value||'';
+  if(p1.length<8) return showLoginError('كلمة المرور لازم تكون ٨ حروف على الأقل');
+  if(p1!==p2)     return showLoginError('الكلمتين مش زي بعض — راجعهم');
+  if(window.passwordPolicyError){
+    const e=passwordPolicyError(p1); if(e) return showLoginError(e);
+  }
+  const btn=document.getElementById('npBtn');
+  if(btn){ btn.disabled=true; btn.textContent='بيحفظ…'; }
+  try{
+    const sb=window.CLOUD && window.CLOUD._sb;
+    if(!sb) throw new Error('مفيش اتصال بالخادم');
+    const { error } = await sb.auth.updateUser({ password: p1 });
+    if(error) throw error;
+
+    window.__recoveryMode=false;
+    showLoginError('');
+    toast('اتغيّرت كلمة المرور ✅');
+    /* الجلسة شغالة من الرابط — ندخل على طول */
+    window.__viewMode='login';
+    await establishSession();
+    window.curPage='dashboard';
+    renderRoot(); resetHistoryBase(); resetIdleTimer();
+  }catch(e){
+    if(btn){ btn.disabled=false; btn.textContent='💾 احفظ كلمة المرور وادخل'; }
+    showLoginError((window.cloudErrorText?cloudErrorText(e):'')||e.message||'مقدرناش نحفظ كلمة المرور');
+  }
+}
 window.__recoveryStep=1;
 window.__recoveryMatches=[];
 window.__recoveryTarget=null;
@@ -3221,6 +3288,7 @@ function loginHTML(){
   if(window.__viewMode==='landing')return landingHTML();
   if(window.__viewMode==='signup')return signupHTML();
   if(window.__viewMode==='recover')return recoverHTML();
+  if(window.__viewMode==='newpass')return newPasswordHTML();
   return `
   <div class="login-wrap">
     <div class="skyline-bg">${heroSkylineSVG(true)}</div>
@@ -12736,7 +12804,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.40';
+const APP_BUILD='2.42';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12927,6 +12995,18 @@ document.addEventListener('DOMContentLoaded',async()=>{
   if(el)el.textContent='بيحمّل بياناتك…';
   await step(loadRegistry(),15000,'تحميل البيانات');
 
+  /* رابط استرداد كلمة المرور: cloudAuthBoot قرا العنوان وحطّ العلامة.
+     لو الرمز سليم بنعرض شاشة كلمة المرور الجديدة، ولو منتهي بنعرض
+     شاشة الاسترداد برسالة واضحة بدل ما نسيبه في الصفحة الرئيسية. */
+  try{
+    if(window.__recoveryMode){
+      window.__viewMode='newpass';
+    }else if(window.__recoveryError){
+      window.__viewMode='recover';
+      setTimeout(()=>{ try{ showLoginError(window.__recoveryError); }catch(e){} },80);
+    }
+  }catch(e){}
+
   hideBootSplash();
   captureCampaignSource();
   setupPWA();
@@ -12939,25 +13019,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.40"></script>
-<script type="module" src="emartna-auth.js?v=2.40"></script>
-<script type="module" src="emartna-profile.js?v=2.40"></script>
-<script type="module" src="emartna-users.js?v=2.40"></script>
-<script type="module" src="emartna-platform.js?v=2.40"></script>
-<script type="module" src="emartna-contactlog.js?v=2.40"></script>
-<script type="module" src="emartna-permreport.js?v=2.40"></script>
-<script type="module" src="emartna-finops.js?v=2.40"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.40"></script>
-<script type="module" src="emartna-planscreens.js?v=2.40"></script>
+<script type="module" src="emartna-cloud.js?v=2.42"></script>
+<script type="module" src="emartna-auth.js?v=2.42"></script>
+<script type="module" src="emartna-profile.js?v=2.42"></script>
+<script type="module" src="emartna-users.js?v=2.42"></script>
+<script type="module" src="emartna-platform.js?v=2.42"></script>
+<script type="module" src="emartna-contactlog.js?v=2.42"></script>
+<script type="module" src="emartna-permreport.js?v=2.42"></script>
+<script type="module" src="emartna-finops.js?v=2.42"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.42"></script>
+<script type="module" src="emartna-planscreens.js?v=2.42"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.40"></script>
+<script type="module" src="emartna-perms.js?v=2.42"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.40"></script>
+<script type="module" src="emartna-bundle.js?v=2.42"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح

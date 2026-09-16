@@ -760,10 +760,51 @@ window.cloudAuthBoot = async function(){
       + 'cursor:pointer">🔄 تحديث الصفحة</button></div>';
     return;
   }
+  /* ============================================================
+     رابط استرداد كلمة المرور
+     ------------------------------------------------------------
+     ⚠️ ده كان ناقص تمامًا. Supabase بترجّع رمز الاسترداد في الجزء
+        اللي بعد # في العنوان:
+          myemartna.com/#access_token=...&type=recovery
+        والبرنامج مكانش بيقرا الجزء ده خالص — فكان بيتجاهله ويعرض
+        الصفحة الرئيسية. النتيجة: كل رابط استرداد بيوصل لأي عميل
+        كان بيوديه للصفحة الرئيسية بدل شاشة تغيير كلمة المرور،
+        وهو فاكر إن الرابط باظ.
+
+     ⚠️ بنقرا العنوان **قبل** فحص الجلسة العادي، لأن مكتبة
+        Supabase بتستهلك الـhash وتمسحه أول ما تشتغل.
+     ============================================================ */
+  try{
+    const h = String(location.hash || '');
+    /* أي خطأ في الرابط يتقال للمستخدم — مش بس المنتهي */
+    if (h.includes('type=recovery') || h.includes('error_code=')){
+      const hp = new URLSearchParams(h.replace(/^#/, ''));
+      const errCode = hp.get('error_code');
+      /* ننضّف العنوان عشان الرمز مايفضلش ظاهر ولا يتكرر مع التحديث */
+      try{ history.replaceState(null,'',location.pathname+location.search); }catch(e){}
+
+      if (errCode){
+        window.__recoveryError = (errCode === 'otp_expired')
+          ? 'الرابط ده انتهت صلاحيته. اطلب رابط جديد من شاشة استرداد الدخول.'
+          : 'الرابط مش صالح. اطلب رابط جديد.';
+      } else {
+        const at = hp.get('access_token'), rt = hp.get('refresh_token');
+        if (at && rt){
+          try{
+            await window.CLOUD._sb.auth.setSession({ access_token: at, refresh_token: rt });
+            window.__recoveryMode = true;     /* الشاشة تعرض تغيير كلمة المرور */
+          }catch(e){
+            window.__recoveryError = 'مقدرناش نتحقق من الرابط. اطلب رابط جديد.';
+          }
+        }
+      }
+    }
+  }catch(e){ /* مايوقفش التحميل مهما حصل */ }
+
   try{
     const sb = window.CLOUD._sb;
     const { data:{ session } } = await sb.auth.getSession();
-    if (session) await establishSession();
+    if (session && !window.__recoveryMode) await establishSession();
   }catch(e){
     console.warn('[عمارتنا/دخول]', e.message);
     __sess = null;
