@@ -3176,11 +3176,30 @@ async function saveNewPassword(){
     window.__recoveryMode=false;
     showLoginError('');
     toast('اتغيّرت كلمة المرور ✅');
-    /* الجلسة شغالة من الرابط — ندخل على طول */
+
+    /* ⚠️ كلمة المرور اتحفظت خلاص. أي فشل بعد كده مايتحسبش فشل
+       في العملية — فبنفصل الخطوتين. لو الدخول التلقائي ما نفعش،
+       بنوديه لشاشة الدخول برسالة واضحة بدل ما نرمي له خطأ تقني
+       يخليه يفتكر إن كلمة المرور ماتغيرتش ويعيد الدورة كلها. */
     window.__viewMode='login';
-    await establishSession();
-    window.curPage='dashboard';
-    renderRoot(); resetHistoryBase(); resetIdleTimer();
+    try{
+      const es = window.establishSession;
+      if (typeof es === 'function'){
+        await es();
+        window.curPage='dashboard';
+        renderRoot(); resetHistoryBase(); resetIdleTimer();
+      } else {
+        renderRoot();
+        setTimeout(()=>{ try{
+          showLoginError('اتغيّرت كلمة المرور ✅ — ادخل بيها دلوقتي.');
+        }catch(_){ } }, 80);
+      }
+    }catch(_){
+      renderRoot();
+      setTimeout(()=>{ try{
+        showLoginError('اتغيّرت كلمة المرور ✅ — ادخل بيها دلوقتي.');
+      }catch(_2){ } }, 80);
+    }
   }catch(e){
     if(btn){ btn.disabled=false; btn.textContent='💾 احفظ كلمة المرور وادخل'; }
     /* ⚠️ الكتالوج العام كان بيبلع السبب ويطلّع «البيانات مرفوضة من
@@ -12913,7 +12932,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.45';
+const APP_BUILD='2.46';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -13128,25 +13147,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.45"></script>
-<script type="module" src="emartna-auth.js?v=2.45"></script>
-<script type="module" src="emartna-profile.js?v=2.45"></script>
-<script type="module" src="emartna-users.js?v=2.45"></script>
-<script type="module" src="emartna-platform.js?v=2.45"></script>
-<script type="module" src="emartna-contactlog.js?v=2.45"></script>
-<script type="module" src="emartna-permreport.js?v=2.45"></script>
-<script type="module" src="emartna-finops.js?v=2.45"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.45"></script>
-<script type="module" src="emartna-planscreens.js?v=2.45"></script>
+<script type="module" src="emartna-cloud.js?v=2.46"></script>
+<script type="module" src="emartna-auth.js?v=2.46"></script>
+<script type="module" src="emartna-profile.js?v=2.46"></script>
+<script type="module" src="emartna-users.js?v=2.46"></script>
+<script type="module" src="emartna-platform.js?v=2.46"></script>
+<script type="module" src="emartna-contactlog.js?v=2.46"></script>
+<script type="module" src="emartna-permreport.js?v=2.46"></script>
+<script type="module" src="emartna-finops.js?v=2.46"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.46"></script>
+<script type="module" src="emartna-planscreens.js?v=2.46"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.45"></script>
+<script type="module" src="emartna-perms.js?v=2.46"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.45"></script>
+<script type="module" src="emartna-bundle.js?v=2.46"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح

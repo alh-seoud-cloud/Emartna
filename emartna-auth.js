@@ -83,6 +83,9 @@ window.unitUrl = function(b){
   return location.origin + location.pathname + '?' + q.toString();
 };
 
+/* ⚠️ لازم تتنشر على window — شاشة «كلمة مرور جديدة» في index.html
+   بتناديها، والوحدات هنا معزولة في IIFE فمش شايفة بعضها.
+   (القاعدة رقم ٨) */
 async function establishSession(preferBuildingId){
   const sb = window.CLOUD._sb;
 
@@ -164,6 +167,8 @@ async function establishSession(preferBuildingId){
 /* ============================================================
    2) المستخدم الحالي
    ============================================================ */
+
+window.establishSession = establishSession;
 
 window.currentUser = function(){
   const s = __sess;
