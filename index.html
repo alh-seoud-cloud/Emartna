@@ -2110,6 +2110,7 @@ function syncUsageTypeDefault(){
   /* التسمية تتبع النوع: «رقم الشقة» أو «رقم المحل» */
   const lbl=document.getElementById('mLabelLbl');
   if(lbl)lbl.textContent='رقم '+(type==='shop'?'المحل':'الشقة')+' — زي ما هو مكتوب على الباب';
+  if(window.mSyncShownAs) mSyncShownAs();
 }
 /* ⚠️ كانت بترجّع الترقيم المتسلسل (شقة ٦٧) — والمستخدم بيعرف
    وحدته برقم بابها (٨٠٧). الرقم المتسلسل مالوش معنى عنده.
@@ -9830,13 +9831,14 @@ function openApartmentModal(id){if(!guardAction('apartments','edit'))return;
         <option value="عيادة" ${a&&a.usageType==='عيادة'?'selected':''}>عيادة</option>
       </select></div>
       <div class="field2"><label id="mLabelLbl">رقم ${(a&&a.type==='shop')?'المحل':'الشقة'} — زي ما هو مكتوب على الباب</label>
-        <input id="mLabel" placeholder="مثال: ٤٠٢ · A-12 · محل ٣" value="${a?esc(a.label||''):''}">
+        <input id="mLabel" placeholder="مثال: ٤٠٢ · A-12 · محل ٣" value="${a?esc(a.label||''):''}" oninput="mSyncShownAs()">
         <p class="small">ده الرقم اللي بيظهر للسكان وفي كل الكشوف والتقارير.
           سيبه فاضي والبرنامج هيرقّمه بنمط العمارة تلقائيًا.</p></div>
       ${D.building.communityType==='compound'?`<div class="field2"><label>اسم/رقم المبنى أو الفيلا</label><input id="mBlockName" placeholder="مثال: عمارة 3 أو فيلا 12" value="${a?esc(a.blockName||''):''}"></div>`:''}
       <div class="field2"><label>حالة الوحدة</label><label class="checkline"><input type="checkbox" id="mClosed" ${a&&a.closed?'checked':''}> الوحدة مقفولة/غير مستخدمة حاليًا</label><p class="small mtop">بتأثر على نسبة توزيع المصروفات المشتركة (لو فعّلت التوزيع النسبي).</p></div>
-      <div class="field2"><label>الترتيب الداخلي</label><input id="mNumber" type="number" value="${a?a.number:nextNum}" onchange="document.getElementById('mFloor').value=floorLabel(Number(this.value),${groundCount},${perFloor})">
-        <p class="small">بيحدد الدور وترتيب العرض في القوايم. الساكن ما بيشوفهوش.</p></div>
+      <div class="field2"><label>الترتيب الداخلي</label><input id="mNumber" type="number" value="${a?a.number:nextNum}" onchange="document.getElementById('mFloor').value=floorLabel(Number(this.value),${groundCount},${perFloor});mSyncShownAs()">
+        <p class="small">بيحدد الدور وترتيب العرض في القوايم. الساكن ما بيشوفهوش.</p>
+        <p class="small" id="mShownAs" style="color:var(--muted);margin-top:4px"></p></div>
       <div class="field2"><label>الدور</label>${floorSelectHTML('mFloor',a?(allFloorLabels().includes(a.floor)?a.floor:floorLabel(a.number,groundCount,perFloor)):floorLabel(nextNum,groundCount,perFloor))}</div>
       <div class="field2"><label>اسم المالك</label><input id="mOwner" value="${a?esc(a.ownerName):''}"></div>
       <div class="field2"><label>اسم المستأجر (إن وجد)</label><input id="mTenant" value="${a?esc(a.tenantName||''):''}"></div>
@@ -9858,7 +9860,48 @@ function openApartmentModal(id){if(!guardAction('apartments','edit'))return;
       <button class="btn ghost" onclick="closeModal()">إلغاء</button>
       ${a?`<button class="btn red" onclick="deleteApartment('${a.id}')" style="margin-right:auto">حذف الوحدة</button>`:''}
     </div>`);
+  /* السطر يظهر أول ما الشاشة تتفتح، مش بس لما يعدّل */
+  setTimeout(()=>{ try{ mSyncShownAs(); }catch(e){} }, 0);
 }
+/* ============================================================
+   D3 — «بيظهر للسكان باسم: ٤٠٢»
+   ------------------------------------------------------------
+   ليه: الشاشة فيها رقمين — رقم الشقة (٤٠٢) والترتيب الداخلي (٣٤).
+   الواجهة بتعرض ٤٠٢، فلما رئيس الاتحاد يفتح التعديل ويلاقي ٣٤،
+   بيفتكر إن فيه حاجة ضايعة. وده سؤال اتسأل فعلًا.
+
+   السطر ده بيقول بالظبط إيه اللي الساكن هيشوفه، وبيتحدّث وهو
+   بيكتب — فمفيش مفاجأة بعد الحفظ.
+   ============================================================ */
+function mSyncShownAs(){
+  const out=document.getElementById('mShownAs'); if(!out)return;
+  const lbl=((document.getElementById('mLabel')||{}).value||'').trim();
+  const num=Number((document.getElementById('mNumber')||{}).value||0);
+  const type=((document.getElementById('mType')||{}).value)||'apartment';
+  const tn=(type==='shop'?'محل':'شقة');
+
+  if(lbl){
+    const shown=/^[0-9\u0660-\u0669]+$/.test(lbl) ? (tn+' '+lbl) : lbl;
+    out.innerHTML='🚪 بيظهر للسكان باسم: <b>'+esc(shown)+'</b>';
+    return;
+  }
+  /* فاضي: البرنامج هيرقّم تلقائيًا — بنوريه النتيجة المتوقعة */
+  const b=D.building||{};
+  const ground=Number(b.groundFloorCount||4), per=Number(b.apartmentsPerFloor||4);
+  let guess='';
+  if(num>0){
+    if(num<=ground) guess=String(num);
+    else{
+      const f=Math.floor((num-ground-1)/per)+1;
+      const idx=((num-ground-1)%per)+1;
+      guess=String(f*100+idx);
+    }
+  }
+  out.innerHTML=guess
+    ? '🚪 سيبه فاضي؟ البرنامج هيرقّمه: <b>'+esc(tn+' '+guess)+'</b>'
+    : '';
+}
+
 async function saveApartment(id){
   const number=Number(document.getElementById('mNumber').value);
   let username=document.getElementById('mUser').value.trim();
@@ -9888,6 +9931,30 @@ async function saveApartment(id){
   if(isUsernameTaken(username,activeBuildingId,ownerUserId))return showMessage('اسم المستخدم هذا مستخدم بالفعل، اختر اسمًا آخر');
   const blockNameEl=document.getElementById('mBlockName');
   const labelEl=document.getElementById('mLabel');
+
+  /* ============================================================
+     D2 — نمنع الرقم المكرر هنا، قبل الحفظ.
+     ------------------------------------------------------------
+     القاعدة عندها قيد uq_apartment_label بيرفض التكرار — بس
+     الرفض ده بيحصل وقت المزامنة، يعني بعد ما المستخدم يفتكر
+     إنه حفظ. فبيلاقي المؤشر أحمر ومايعرفش ليه.
+
+     المقارنة بتتجاهل المسافات وحالة الحروف — زي القيد في
+     القاعدة بالظبط، عشان الاتنين يقولوا نفس الكلام. */
+  const __lbl=(labelEl?labelEl.value:'').trim();
+  if(__lbl){
+    const norm=x=>String(x||'').trim().toLowerCase();
+    const clash=D.apartments.find(x=>x.id!==id && norm(x.label)===norm(__lbl));
+    if(clash){
+      if(window.showErrorDialog){
+        showErrorDialog({message:'duplicate key value violates unique constraint "uq_apartment_label"',code:'23505'},
+                        'حفظ بيانات '+unitLabel(clash));
+      }else{
+        showMessage('الرقم ده مستعمل في وحدة تانية في نفس العمارة: '+unitLabel(clash));
+      }
+      return;
+    }
+  }
   const data={number,label:labelEl?labelEl.value.trim():'',
     blockName:blockNameEl?blockNameEl.value.trim():'',type:document.getElementById('mType').value,usageType:document.getElementById('mUsage').value,closed:document.getElementById('mClosed').checked,openingBalance:Number(document.getElementById('mOpeningBalance').value||0),floor:document.getElementById('mFloor').value.trim(),ownerName,tenantName:document.getElementById('mTenant').value.trim(),tenantPhone:((document.getElementById('mTenantPhone')||{}).value||'').trim(),phoneCountry:document.getElementById('mCountry').value,phone,email:document.getElementById('mEmail').value.trim(),monthlyFee:fee,username,notes:document.getElementById('mNotes').value.trim()};
   const pass=document.getElementById('mPass').value;
@@ -12272,7 +12339,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.31';
+const APP_BUILD='2.32';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12475,25 +12542,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.31"></script>
-<script type="module" src="emartna-auth.js?v=2.31"></script>
-<script type="module" src="emartna-profile.js?v=2.31"></script>
-<script type="module" src="emartna-users.js?v=2.31"></script>
-<script type="module" src="emartna-platform.js?v=2.31"></script>
-<script type="module" src="emartna-contactlog.js?v=2.31"></script>
-<script type="module" src="emartna-permreport.js?v=2.31"></script>
-<script type="module" src="emartna-finops.js?v=2.31"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.31"></script>
-<script type="module" src="emartna-planscreens.js?v=2.31"></script>
+<script type="module" src="emartna-cloud.js?v=2.32"></script>
+<script type="module" src="emartna-auth.js?v=2.32"></script>
+<script type="module" src="emartna-profile.js?v=2.32"></script>
+<script type="module" src="emartna-users.js?v=2.32"></script>
+<script type="module" src="emartna-platform.js?v=2.32"></script>
+<script type="module" src="emartna-contactlog.js?v=2.32"></script>
+<script type="module" src="emartna-permreport.js?v=2.32"></script>
+<script type="module" src="emartna-finops.js?v=2.32"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.32"></script>
+<script type="module" src="emartna-planscreens.js?v=2.32"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.31"></script>
+<script type="module" src="emartna-perms.js?v=2.32"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.31"></script>
+<script type="module" src="emartna-bundle.js?v=2.32"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
