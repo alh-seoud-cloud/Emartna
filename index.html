@@ -3835,7 +3835,7 @@ function renderSysContent(){
   }
   /* الشاشات اللي محتواها نافذة */
   if(SYS_MODAL_PAGES[curPage]){ c.innerHTML=pageSysModalHost(curPage); return; }
-  const fn={sysdash:pageSysDashboard,syslocations:(window.pageSysLocations||(()=>'<p class="small">جاري التحميل…</p>')),syspipeline:(window.pageSysPipeline||pageSysPipeline),sysfunnel:(window.pageSysFunnel||(()=>'<p class="small">جاري التحميل…</p>')),syshealth:(window.pageSysHealth||(()=>'<p class="small">جاري التحميل…</p>')),syserrors:pageSysErrors,sysretention:(window.pageSysRetention||(()=>'<p class="small">جاري التحميل…</p>')),sysorphans:(window.pageSysOrphans||(()=>'<p class="small">جاري التحميل…</p>')),sysleads:pageSysMarketingLeads,sysvisits:(window.pageSysVisits||(()=>'<p class="small">جاري التحميل…</p>')),sysoffers:pageSysOffers,syscoupons:pageSysCoupons,sysmessages:pageSysMessageTemplates,sysusers:pageSysUsers,syslicenses:pageSysLicenses,syslicensehistory:pageSysLicenseHistory,sysplans:pageSysPlans,sysrevenue:pageSysRevenue,syslanding:pageSysLandingSettings,sysrenewals:pageSysRenewals,sysproposals:pageSysProposals,systickets:pageSysSupportTickets,sysstaff:pageSupportStaff,systasks:pageSysTasks,sysdailysummary:pageSysDailySummary,sysreports:pageSysReports,sysactivitylog:pageSysActivityLog,sysreferrals:pageSysReferrals,sysversions:pageSysVersions,sysmarketing:pageMarketingCard,systrash:pageSysTrash,sysaisettings:pageSysAISettings,sysaireports:pageSysAIReports,syssettings:pageSysSettings}[curPage]||pageSysDashboard;
+  const fn={sysdash:pageSysDashboard,syslocations:(window.pageSysLocations||(()=>'<p class="small">جاري التحميل…</p>')),syspipeline:(window.pageSysPipeline||pageSysPipeline),sysfunnel:(window.pageSysFunnel||(()=>'<p class="small">جاري التحميل…</p>')),syshealth:(window.pageSysHealth||(()=>'<p class="small">جاري التحميل…</p>')),syserrors:pageSysErrors,sysvisitors:pageSysVisitors,sysretention:(window.pageSysRetention||(()=>'<p class="small">جاري التحميل…</p>')),sysorphans:(window.pageSysOrphans||(()=>'<p class="small">جاري التحميل…</p>')),sysleads:pageSysMarketingLeads,sysvisits:(window.pageSysVisits||(()=>'<p class="small">جاري التحميل…</p>')),sysoffers:pageSysOffers,syscoupons:pageSysCoupons,sysmessages:pageSysMessageTemplates,sysusers:pageSysUsers,syslicenses:pageSysLicenses,syslicensehistory:pageSysLicenseHistory,sysplans:pageSysPlans,sysrevenue:pageSysRevenue,syslanding:pageSysLandingSettings,sysrenewals:pageSysRenewals,sysproposals:pageSysProposals,systickets:pageSysSupportTickets,sysstaff:pageSupportStaff,systasks:pageSysTasks,sysdailysummary:pageSysDailySummary,sysreports:pageSysReports,sysactivitylog:pageSysActivityLog,sysreferrals:pageSysReferrals,sysversions:pageSysVersions,sysmarketing:pageMarketingCard,systrash:pageSysTrash,sysaisettings:pageSysAISettings,sysaireports:pageSysAIReports,syssettings:pageSysSettings}[curPage]||pageSysDashboard;
   c.innerHTML=fn();
   if(curPage==='sysmarketing')renderMarketingQr();
   const bw=document.getElementById('sysNotifBellWrap'); if(bw)bw.innerHTML=renderSysNotifBell();
@@ -5630,6 +5630,82 @@ function pendingRenewalsCount(){return(REG.renewalRequests||[]).filter(r=>r.stat
    ============================================================ */
 let __sysErrRows = null;
 
+/* ============================================================
+   👣 سجل الزوّار
+   ------------------------------------------------------------
+   كل زائر جرّب البرنامج: مصدره، الدور اللي جرّبه، دخل إمتى وقعد
+   قد إيه، ورقمه لو اداه. والأهم: **اتسجّل ولا لأ** — بنطابق
+   الرقم مع التسجيلات، ولو بقى عميل بنوري اسمه وعمارته.
+
+   ⚠️ «قفل» معناها آخر ظهور بقاله أكتر من ٣ دقايق — مش خروج
+      صريح. المتصفح مابيبلّغش بثقة لما التاب يتقفل، خصوصًا على
+      الموبايل، فالتقدير ده أدق حاجة متاحة.
+   ⚠️ الموقع الجغرافي مش متسجّل — بقرار.
+   ============================================================ */
+let __visRows = null, __visFilter = 'all';
+
+function setVisFilter(v){ __visFilter = v; renderSysContent(); }
+
+function pageSysVisitors(){
+  if (__visRows === null){ __visRows = []; loadVisitors(); return '<p class="small">جاري التحميل…</p>'; }
+  const all = __visRows;
+  const live = all.filter(r => r['الحالة'] === 'على الموقع');
+  const rows = __visFilter === 'live' ? live
+             : __visFilter === 'closed' ? all.filter(r => r['الحالة'] !== 'على الموقع')
+             : __visFilter === 'signed' ? all.filter(r => r['اتسجّل'])
+             : all;
+
+  const btn = (k,txt,n) => `<button class="btn sm ${__visFilter===k?'primary':'ghost'}"
+    onclick="setVisFilter('${k}')">${txt} (${n})</button>`;
+
+  const cols = [
+    {key:'الحالة', label:'الحالة', value:r=>r['الحالة'],
+     render:r=>r['الحالة']==='على الموقع'
+       ? '<span class="badge g">🟢 على الموقع</span>'
+       : '<span class="badge" style="opacity:.6">⚪ قفل</span>'},
+    {key:'المصدر', label:'المصدر', value:r=>r['المصدر']||'-'},
+    {key:'الدور', label:'جرّب كـ', value:r=>r['الدور']||'-'},
+    {key:'الرقم', label:'الرقم', value:r=>r['الرقم']||'',
+     render:r=>r['الرقم']?`<span style="direction:ltr;display:inline-block">${esc(r['الرقم'])}</span>`
+                         :'<span class="small" style="color:var(--muted)">ما اداهوش</span>'},
+    {key:'الاسم', label:'الاسم', value:r=>r['الاسم']||'-'},
+    {key:'اتسجّل', label:'اتسجّل؟', value:r=>r['اتسجّل']?1:0,
+     render:r=>r['اتسجّل']
+       ? `<span class="badge g">✅ ${esc(r['اسم_العمارة']||'')} ${r['كود_العمارة']?'· '+esc(r['كود_العمارة']):''}</span>`
+       : '<span class="small" style="color:var(--muted)">لأ</span>'},
+    {key:'الدخول', label:'الدخول', value:r=>r['الدخول']||'',
+     render:r=>`<span class="small">${esc(String(r['الدخول']||'').slice(0,16).replace('T',' '))}</span>`},
+    {key:'آخر_ظهور', label:'آخر ظهور', value:r=>r['آخر_ظهور']||'',
+     render:r=>`<span class="small">${esc(String(r['آخر_ظهور']||'').slice(0,16).replace('T',' '))}</span>`},
+    {key:'المدة_بالدقايق', label:'المدة', value:r=>r['المدة_بالدقايق']||0,
+     render:r=>{const m=Number(r['المدة_بالدقايق']||0);
+       return m>=60 ? Math.floor(m/60)+' س '+(m%60)+' د' : m+' د';}},
+  ];
+
+  return `<h2>👣 سجل الزوّار</h2>
+    <p class="small" style="color:var(--muted)">
+      كل زائر جرّب البرنامج — الأحدث فوق. «قفل» يعني مظهرش من أكتر من ٣ دقايق.</p>
+    <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
+      ${btn('all','الكل',all.length)}
+      ${btn('live','🟢 على الموقع دلوقتي',live.length)}
+      ${btn('closed','⚪ قفل',all.length-live.length)}
+      ${btn('signed','✅ اتسجّلوا',all.filter(r=>r['اتسجّل']).length)}
+      <button class="btn sm ghost" onclick="__visRows=null;renderSysContent()">🔄 تحديث</button>
+    </div>
+    <div class="mtop">${sortableTable('sysVisTable', rows, cols, null,
+      {defaultKey:'آخر_ظهور', emptyText:'مفيش زوّار في المدة دي', exportName:'سجل الزوّار'})}</div>`;
+}
+
+async function loadVisitors(){
+  try{
+    const sb = window.CLOUD && window.CLOUD._sb;
+    if (!sb) { __visRows = []; return renderSysContent(); }
+    const { data, error } = await sb.rpc('visitors_log', { p_days: 30 });
+    __visRows = (error || !data) ? [] : data;
+  }catch(e){ __visRows = []; }
+  try{ renderSysContent(); }catch(e){}
+}
+
 function pageSysErrors(){
   if (__sysErrRows === null){
     __sysErrRows = [];
@@ -7356,7 +7432,7 @@ var OWNER_NAV_GROUPS=[
   {key:'profile',icon:'👤',label:'حسابي',items:[['profile','👤','بياناتي']]},
 ];
 var SYS_NAV_GROUPS=[
-  {key:'overview',icon:'🏙️',label:'نظرة عامة',items:[['sysdash','🏙️','كل العمارات'],['sysusers','👥','كل المستخدمين'],['sysdailysummary','📊','الملخص اليومي'],['sysreports','📈','تقارير الفترات'],['sysactivitylog','📜','سجل نشاطي']]},
+  {key:'overview',icon:'🏙️',label:'نظرة عامة',items:[['sysdash','🏙️','كل العمارات'],['sysusers','👥','كل المستخدمين'],['sysvisitors','👣','سجل الزوّار'],['sysdailysummary','📊','الملخص اليومي'],['sysreports','📈','تقارير الفترات'],['sysactivitylog','📜','سجل نشاطي']]},
   {key:'marketing',icon:'📣',label:'التسويق والمبيعات',items:[['syspipeline','🎯','قمع المبيعات'],['sysfunnel','🚦','أين يقف العملاء'],['sysleads','📋','أرقام تسويقية'],['sysvisits','📈','مصادر الزيارات'],['sysoffers','🎉','عروض العملاء الجدد'],['sysreferrals','🎁','برنامج الإحالة'],['syscoupons','🎟️','أكواد الخصم'],['sysmessages','💬','قوالب الرسائل']]},
   {key:'subscriptions',icon:'🪪',label:'الاشتراكات والتراخيص',items:[['syslicenses','🪪','التراخيص والاشتراكات'],['sysrenewals','📥','طلبات التجديد'],['sysplans','💲','خطط الاشتراك والأسعار'],['syslicensehistory','📜','سجل حركات الاشتراكات'],['sysrevenue','💰','كشف حساب التحصيلات']]},
   {key:'site',icon:'🖥️',label:'الموقع العام',items:[['syslanding','🖥️','الصفحة الرئيسية وإعدادات العرض'],['sysversions','🆕','سجل الإصدارات والتحديثات'],['sysmarketing','🖨️','بطاقة دعاية للطباعة'],['syslocations','🗺️','المحافظات والمدن']]},
@@ -12606,7 +12682,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.38';
+const APP_BUILD='2.39';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12809,25 +12885,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.38"></script>
-<script type="module" src="emartna-auth.js?v=2.38"></script>
-<script type="module" src="emartna-profile.js?v=2.38"></script>
-<script type="module" src="emartna-users.js?v=2.38"></script>
-<script type="module" src="emartna-platform.js?v=2.38"></script>
-<script type="module" src="emartna-contactlog.js?v=2.38"></script>
-<script type="module" src="emartna-permreport.js?v=2.38"></script>
-<script type="module" src="emartna-finops.js?v=2.38"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.38"></script>
-<script type="module" src="emartna-planscreens.js?v=2.38"></script>
+<script type="module" src="emartna-cloud.js?v=2.39"></script>
+<script type="module" src="emartna-auth.js?v=2.39"></script>
+<script type="module" src="emartna-profile.js?v=2.39"></script>
+<script type="module" src="emartna-users.js?v=2.39"></script>
+<script type="module" src="emartna-platform.js?v=2.39"></script>
+<script type="module" src="emartna-contactlog.js?v=2.39"></script>
+<script type="module" src="emartna-permreport.js?v=2.39"></script>
+<script type="module" src="emartna-finops.js?v=2.39"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.39"></script>
+<script type="module" src="emartna-planscreens.js?v=2.39"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.38"></script>
+<script type="module" src="emartna-perms.js?v=2.39"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.38"></script>
+<script type="module" src="emartna-bundle.js?v=2.39"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
