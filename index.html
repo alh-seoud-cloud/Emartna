@@ -3344,19 +3344,26 @@ function signupHTML(){
 
         <div class="field"><label>ترقيم الوحدات</label>
           <select id="suNumStyle" onchange="suNumStyleChanged()">
-            <option value="floor">دور + رقم — ١٠١ · ١٠٢ · ٢٠١</option>
-            <option value="plain">متسلسل بالعربي — ١ · ٢ · ٣</option>
-            <option value="en">متسلسل بالإنجليزي — 1 · 2 · 3</option>
-            <option value="typed">بالنوع — شقة ١ · محل ١</option>
+            <option value="floor">دور + رقم — 101 · 102 · 201 · 1001</option>
+            <option value="plain">متسلسل — 1 · 2 · 3 · 4</option>
+            <option value="typed">بالنوع — شقة 1 · محل 1</option>
             <option value="custom">هحددها بنفسي لكل دور</option>
           </select>
           <p class="small" id="suNumHint">زي اللي مكتوب على أبواب الشقق.</p></div>
 
         <div id="suNumCustom" class="field hidden">
           <label>نمط الترقيم لكل دور</label>
+          <div class="flexrow" style="gap:6px;flex-wrap:wrap;margin-bottom:8px">
+            <span class="small" style="align-self:center">نماذج جاهزة:</span>
+            <button type="button" class="btn sm ghost" onclick="suNumTemplate('floor')">101 · 201 · 1001</button>
+            <button type="button" class="btn sm ghost" onclick="suNumTemplate('letter')">A1 · B1 · C1</button>
+            <button type="button" class="btn sm ghost" onclick="suNumTemplate('seq')">1 · 2 · 3</button>
+            <button type="button" class="btn sm ghost" onclick="suNumTemplate('clear')">تفريغ</button>
+          </div>
           <div id="suNumRows" style="max-height:30vh;overflow:auto"></div>
-          <p class="small">مثال: اكتب <b>A</b> في الدور الأول تطلع A1 · A2،
-          أو <b>101</b> تطلع 101 · 102.</p>
+          <p class="small">اضغط نموذج جاهز، أو اكتب بداية كل دور بنفسك.
+          <b>101</b> تطلع 101 · 102 · 103، و<b>A</b> تطلع A1 · A2 · A3.
+          الدور اللي تسيبه فاضي بيتّرقم بالنمط العادي.</p>
         </div>
 
         <div class="field"><div class="card" style="padding:8px 12px;text-align:center">
@@ -9753,9 +9760,9 @@ function pageApartments(){
     </div>`;
   }).join('')}</div>`;
   return `
-  ${unset.length?`<div class="card mtop" style="background:var(--tint-danger);border-color:var(--tint-danger-line);margin-bottom:14px"><div class="flexrow"><span style="font-size:18px">⚠️</span><div style="flex:1"><b>${unset.length} وحدة لسه محتاجة تحديد قيمة الاشتراك الشهري</b><div class="small">افتح كل وحدة واحفظ القيمة المناسبة ليها - القيمة مش بتتحدد تلقائيًا، لازم تدخّلها بنفسك.</div></div></div></div>`:''}
+  ${unset.length?`<div class="card mtop" style="background:var(--tint);margin-bottom:14px"><div class="flexrow" style="align-items:center;gap:10px"><span style="font-size:18px">💡</span><div style="flex:1"><b>${unset.length} وحدة من غير اشتراك شهري محدّد</b><div class="small">لو عمارتك بتحصّل اشتراك ثابت، حدّده. ولو بتصرف وتحاسب آخر الشهر، سيبه فاضي وده مظبوط.</div></div><button class="btn sm primary" onclick="openQuickEntry()">⚡ إدخال سريع</button></div></div>`:''}
   ${blockFilter?`<div class="card mtop" style="background:var(--tint-success)"><div class="flexrow"><span>📍 عرض وحدات "${esc(blockFilter)}" فقط</span><div class="spacer"></div><button class="btn sm ghost" onclick="window.__apBlockFilter=null;renderContent()">مسح الفلتر</button></div></div>`:''}
-  <div class="flexrow">${viewToggle}<div class="spacer"></div><button class="btn ghost" onclick="openImportApartmentsModal()">📥 استيراد من إكسيل</button><button class="btn primary" onclick="openApartmentModal()">+ إضافة وحدة</button></div>
+  <div class="flexrow">${viewToggle}<div class="spacer"></div><button class="btn ghost" onclick="openImportApartmentsModal()">📥 استيراد من إكسيل</button><button class="btn ghost" onclick="openQuickEntry()">⚡ إدخال سريع</button><button class="btn primary" onclick="openApartmentModal()">+ إضافة وحدة</button></div>
   <div class="mtop" id="apartmentsViewWrap">${window.__apartmentsViewMode==='table'?sortableTable('apTable',aps,cols,null,{defaultKey:'number',exportName:'الشقق والملاك'}):cardsView}</div>`;
 }
 function setApartmentsView(mode){window.__apartmentsViewMode=mode;renderContent()}
@@ -9814,6 +9821,122 @@ function removeTenantAccount(userId){
     openApartmentModal(apId);
   });
 }
+/* ============================================================
+   ⚡ إدخال سريع — الاشتراك الشهري والرصيد الافتتاحي
+   ------------------------------------------------------------
+   ليه الشاشة دي موجودة:
+   · ٥٩٥ وحدة على المنصة من غير اشتراك، وصفر رصيد افتتاحي.
+     الطريقة الوحيدة كانت «افتح كل وحدة واحفظ» — ٩١ فتحة وقفلة
+     لعمارة واحدة، ومحدش بيعملها.
+   · رؤساء الاتحادات بيقفلوا الشهر يدوي وبيبدأوا أول الشهر الجاي،
+     فبيحتاجوا ينقلوا أرصدة السكان القديمة مرة واحدة.
+
+   ⚠️ الإشارة: البرنامج شغال بـ«موجب = عليه، سالب = له»، والرصيد
+      الافتتاحي بيتجمع مباشرة على نفس الأساس. رئيس الاتحاد مش
+      محاسب، فمش بنسأله عن إشارة — بيكتب مبلغ موجب ويختار
+      «عليه» ولا «له»، والبرنامج بيحط الإشارة بنفسه. كده مستحيل
+      يغلط الاتجاه.
+
+   ⚠️ الاشتراك اختياري: فيه عمارات بتصرف وتحاسب آخر الشهر،
+      فالفاضي هنا وضع صحيح مش نقص.
+   ============================================================ */
+function openQuickEntry(){
+  if(!guardAction('apartments','edit'))return;
+  const aps=[...D.apartments].sort((x,y)=>(x.number||0)-(y.number||0));
+  if(!aps.length) return showMessage('مفيش وحدات لسه.');
+
+  const row=a=>{
+    const ob=Number(a.openingBalance||0);
+    return `<tr data-ap="${a.id}">
+      <td style="white-space:nowrap"><b>${unitLabel(a)}</b>
+        <div class="small" style="color:var(--muted)">${esc(a.ownerName||'-')}</div></td>
+      <td><input class="qe-fee" type="text" inputmode="numeric" style="width:96px"
+           value="${a.monthlyFee||''}" placeholder="اختياري"
+           oninput="mNormalizeDigits(this)"></td>
+      <td><div class="flexrow" style="gap:4px;align-items:center">
+        <input class="qe-ob" type="text" inputmode="numeric" style="width:92px"
+          value="${ob?Math.abs(ob):''}" placeholder="0" oninput="mNormalizeDigits(this)">
+        <select class="qe-dir" style="width:78px">
+          <option value="on" ${ob>0?'selected':''}>عليه</option>
+          <option value="for" ${ob<0?'selected':''}>له</option>
+        </select></div></td></tr>`;
+  };
+
+  openModal(`
+    <h3>⚡ إدخال سريع — ${aps.length} وحدة</h3>
+    <p class="small" style="color:var(--muted)">
+      املا اللي محتاجه بس. الخانة الفاضية مابتتغيّرش.</p>
+
+    <div class="card mtop" style="background:var(--tint)">
+      <div class="flexrow" style="gap:6px;align-items:center;flex-wrap:wrap">
+        <span class="small" style="min-width:96px">اشتراك موحّد</span>
+        <input id="qeBulk" type="text" inputmode="numeric" style="width:96px"
+               placeholder="مثال: 300" oninput="mNormalizeDigits(this)">
+        <button class="btn sm ghost" onclick="qeApplyAll()">طبّقه على الكل</button>
+      </div>
+      <p class="small mtop" style="color:var(--muted)">
+        لو عمارتك بتصرف وتحاسب آخر الشهر، سيب الاشتراك فاضي — ده وضع مظبوط.</p>
+    </div>
+
+    <div class="mtop" style="max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:8px">
+      <table style="width:100%">
+        <thead><tr>
+          <th style="text-align:right">الوحدة</th>
+          <th style="text-align:right">الاشتراك الشهري</th>
+          <th style="text-align:right">الرصيد الافتتاحي</th>
+        </tr></thead>
+        <tbody id="qeBody">${aps.map(row).join('')}</tbody>
+      </table>
+    </div>
+    <p class="small mtop" style="color:var(--muted)">
+      <b>الرصيد الافتتاحي</b> = اللي كان على الساكن أو له قبل ما تبدأ على البرنامج.
+      اكتب المبلغ موجب واختار «عليه» أو «له» — البرنامج بيحسبها صح لوحده.</p>
+
+    <div class="modal-actions">
+      <button class="btn primary" onclick="qeSave()">💾 حفظ الكل</button>
+      <button class="btn ghost" onclick="closeModal()">إلغاء</button>
+    </div>`);
+}
+
+function qeApplyAll(){
+  const v=(document.getElementById('qeBulk')||{}).value||'';
+  if(!String(v).trim()) return toast('اكتب القيمة الأول');
+  document.querySelectorAll('#qeBody .qe-fee').forEach(i=>{i.value=arDigitsToEn(v).trim();});
+  toast('اتطبّق على الكل — راجعه قبل الحفظ');
+}
+
+async function qeSave(){
+  let fees=0, obs=0;
+  const changes=[];
+  document.querySelectorAll('#qeBody tr').forEach(tr=>{
+    const a=D.apartments.find(x=>x.id===tr.dataset.ap); if(!a)return;
+    const feeRaw=arDigitsToEn((tr.querySelector('.qe-fee')||{}).value||'').trim();
+    const obRaw =arDigitsToEn((tr.querySelector('.qe-ob') ||{}).value||'').trim();
+    const dir   =(tr.querySelector('.qe-dir')||{}).value||'on';
+
+    if(feeRaw!==''){
+      const f=money2(Number(feeRaw)||0);
+      if(f!==Number(a.monthlyFee||0)){ a.monthlyFee=f; fees++; }
+    }
+    if(obRaw!==''){
+      /* موجب = عليه · سالب = له — نفس اتجاه البرنامج */
+      const amt=Math.abs(money2(Number(obRaw)||0));
+      const v=(dir==='for')? -amt : amt;
+      if(v!==Number(a.openingBalance||0)){
+        changes.push(unitLabel(a)+': '+money(Math.abs(v))+(v<0?' له':' عليه'));
+        a.openingBalance=v; obs++;
+      }
+    }
+  });
+
+  if(!fees && !obs){ closeModal(); return toast('مفيش حاجة اتغيّرت'); }
+  logActivity('إدخال سريع', fees+' اشتراك · '+obs+' رصيد افتتاحي');
+  save();
+  closeModal();
+  toast('اتحفظ — '+fees+' اشتراك و'+obs+' رصيد افتتاحي');
+  renderContent();
+}
+
 function openApartmentModal(id){if(!guardAction('apartments','edit'))return;
   const a=id?D.apartments.find(x=>x.id===id):null;
   const nextNum=Math.max(0,...D.apartments.map(x=>x.number))+1;
@@ -9831,12 +9954,12 @@ function openApartmentModal(id){if(!guardAction('apartments','edit'))return;
         <option value="عيادة" ${a&&a.usageType==='عيادة'?'selected':''}>عيادة</option>
       </select></div>
       <div class="field2"><label id="mLabelLbl">رقم ${(a&&a.type==='shop')?'المحل':'الشقة'} — زي ما هو مكتوب على الباب</label>
-        <input id="mLabel" placeholder="مثال: ٤٠٢ · A-12 · محل ٣" value="${a?esc(a.label||''):''}" oninput="mSyncShownAs()">
+        <input id="mLabel" placeholder="مثال: ٤٠٢ · A-12 · محل ٣" value="${a?esc(a.label||''):''}" oninput="mNormalizeDigits(this);mSyncShownAs()">
         <p class="small">ده الرقم اللي بيظهر للسكان وفي كل الكشوف والتقارير.
           سيبه فاضي والبرنامج هيرقّمه بنمط العمارة تلقائيًا.</p></div>
       ${D.building.communityType==='compound'?`<div class="field2"><label>اسم/رقم المبنى أو الفيلا</label><input id="mBlockName" placeholder="مثال: عمارة 3 أو فيلا 12" value="${a?esc(a.blockName||''):''}"></div>`:''}
       <div class="field2"><label>حالة الوحدة</label><label class="checkline"><input type="checkbox" id="mClosed" ${a&&a.closed?'checked':''}> الوحدة مقفولة/غير مستخدمة حاليًا</label><p class="small mtop">بتأثر على نسبة توزيع المصروفات المشتركة (لو فعّلت التوزيع النسبي).</p></div>
-      <div class="field2"><label>الترتيب الداخلي</label><input id="mNumber" type="number" value="${a?a.number:nextNum}" onchange="document.getElementById('mFloor').value=floorLabel(Number(this.value),${groundCount},${perFloor});mSyncShownAs()">
+      <div class="field2"><label>الترتيب الداخلي</label><input id="mNumber" type="text" inputmode="numeric" value="${a?a.number:nextNum}" oninput="mNormalizeDigits(this);mSyncShownAs()" onchange="document.getElementById('mFloor').value=floorLabel(Number(this.value),${groundCount},${perFloor});mSyncShownAs()">
         <p class="small">بيحدد الدور وترتيب العرض في القوايم. الساكن ما بيشوفهوش.</p>
         <p class="small" id="mShownAs" style="color:var(--muted);margin-top:4px"></p></div>
       <div class="field2"><label>الدور</label>${floorSelectHTML('mFloor',a?(allFloorLabels().includes(a.floor)?a.floor:floorLabel(a.number,groundCount,perFloor)):floorLabel(nextNum,groundCount,perFloor))}</div>
@@ -9873,6 +9996,50 @@ function openApartmentModal(id){if(!guardAction('apartments','edit'))return;
    السطر ده بيقول بالظبط إيه اللي الساكن هيشوفه، وبيتحدّث وهو
    بيكتب — فمفيش مفاجأة بعد الحفظ.
    ============================================================ */
+/* ============================================================
+   التخزين إنجليزي دايمًا — والكتابة بأي شكل.
+   ------------------------------------------------------------
+   خانة الترتيب الداخلي type=number فالمتصفح بيرفض العربي فيها
+   خالص. وخانة رقم الشقة نصّية فبتقبله. النتيجة كانت أرقام
+   مخلوطة: ٢٠٢ و 202 — نفس الرقم للعين، ومختلفين للنظام:
+   الترتيب بيبوظ، والبحث مابيلاقيش، وقيد منع التكرار مابيمسكش.
+
+   دلوقتي: تكتب عربي أو فارسي، والبرنامج يحوّله قدام عينك.
+   ============================================================ */
+function arDigitsToEn(v){
+  return String(v==null?'':v)
+    .replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0)-0x0660))   // عربي‑هندي
+    .replace(/[\u06F0-\u06F9]/g, d => String(d.charCodeAt(0)-0x06F0));  // فارسي
+}
+
+/* بيتربط بأي خانة رقم: بيحوّل وهو بيكتب من غير ما يضيّع مكان المؤشر */
+function mNormalizeDigits(el){
+  if(!el) return;
+  const before=el.value, after=arDigitsToEn(before);
+  if(before===after) return;
+  const pos=el.selectionStart;
+  el.value=after;
+  try{ el.setSelectionRange(pos,pos); }catch(e){}
+}
+
+/* نماذج جاهزة لبداية ترقيم كل دور.
+   السبب: رئيس اتحاد برج مكة عنده ١٣ محل في الأرضي، وشركة واحدة
+   في الدور الأول، و٧ شقق من التاني للتاني عشر — وترقيمه 201 و
+   1001. ملء ١٣ صف بالإيد وجع، والنموذج بيملاها في ضغطة. */
+function suNumTemplate(kind){
+  const AB='ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  document.querySelectorAll('#suNumRows .su-nrow').forEach(r=>{
+    const i=Number(r.dataset.i)||0, inp=r.querySelector('.su-np');
+    if(!inp)return;
+    if(kind==='clear')      inp.value='';
+    else if(kind==='floor') inp.value = i===0 ? '1' : String(i*100+1);
+    else if(kind==='letter')inp.value = i===0 ? 'G' : (AB[i-1]||('F'+i));
+    else if(kind==='seq')   inp.value = '';   // المتسلسل مالوش بداية لكل دور
+  });
+  if(window.suNumPreview) try{ suNumPreview(); }catch(e){}
+  if(kind==='seq' && window.toast) toast('المتسلسل مايحتاجش بداية لكل دور — اختار «متسلسل» من القايمة');
+}
+
 function mSyncShownAs(){
   const out=document.getElementById('mShownAs'); if(!out)return;
   const lbl=((document.getElementById('mLabel')||{}).value||'').trim();
@@ -9903,7 +10070,7 @@ function mSyncShownAs(){
 }
 
 async function saveApartment(id){
-  const number=Number(document.getElementById('mNumber').value);
+  const number=Number(arDigitsToEn(document.getElementById('mNumber').value));
   let username=document.getElementById('mUser').value.trim();
   const ownerName=document.getElementById('mOwner').value.trim();
   const phone=document.getElementById('mPhone').value.trim();
@@ -9941,7 +10108,8 @@ async function saveApartment(id){
 
      المقارنة بتتجاهل المسافات وحالة الحروف — زي القيد في
      القاعدة بالظبط، عشان الاتنين يقولوا نفس الكلام. */
-  const __lbl=(labelEl?labelEl.value:'').trim();
+  const __lbl=arDigitsToEn((labelEl?labelEl.value:'')).trim();
+  if(labelEl) labelEl.value=__lbl;   /* التخزين إنجليزي دايمًا */
   if(__lbl){
     const norm=x=>String(x||'').trim().toLowerCase();
     const clash=D.apartments.find(x=>x.id!==id && norm(x.label)===norm(__lbl));
@@ -12339,7 +12507,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.32';
+const APP_BUILD='2.34';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12542,25 +12710,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.32"></script>
-<script type="module" src="emartna-auth.js?v=2.32"></script>
-<script type="module" src="emartna-profile.js?v=2.32"></script>
-<script type="module" src="emartna-users.js?v=2.32"></script>
-<script type="module" src="emartna-platform.js?v=2.32"></script>
-<script type="module" src="emartna-contactlog.js?v=2.32"></script>
-<script type="module" src="emartna-permreport.js?v=2.32"></script>
-<script type="module" src="emartna-finops.js?v=2.32"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.32"></script>
-<script type="module" src="emartna-planscreens.js?v=2.32"></script>
+<script type="module" src="emartna-cloud.js?v=2.34"></script>
+<script type="module" src="emartna-auth.js?v=2.34"></script>
+<script type="module" src="emartna-profile.js?v=2.34"></script>
+<script type="module" src="emartna-users.js?v=2.34"></script>
+<script type="module" src="emartna-platform.js?v=2.34"></script>
+<script type="module" src="emartna-contactlog.js?v=2.34"></script>
+<script type="module" src="emartna-permreport.js?v=2.34"></script>
+<script type="module" src="emartna-finops.js?v=2.34"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.34"></script>
+<script type="module" src="emartna-planscreens.js?v=2.34"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.32"></script>
+<script type="module" src="emartna-perms.js?v=2.34"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.32"></script>
+<script type="module" src="emartna-bundle.js?v=2.34"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
