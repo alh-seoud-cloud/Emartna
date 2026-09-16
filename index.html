@@ -4588,34 +4588,88 @@ async function saveSysOwner(){
 }
 
 /* ---------- كل المستخدمين (عبر كل العمارات) ---------- */
+/* ============================================================
+   كل المستخدمين — عبر كل العمارات
+   ------------------------------------------------------------
+   ⚠️ كانت بتقرا من ذاكرة الجهاز (loadBuildingData لكل عمارة في
+      REG)، والذاكرة مافيهاش غير العمارات اللي اتفتحت على الجهاز
+      ده. فكانت بتوري ٥ حسابات من عمارة واحدة، والحقيقة ٣٧ حساب
+      في ٢٤ عمارة — يعني ١٣٪ من الصورة، والعنوان بيقول «الكل».
+
+      والأخطر: مكانش ينفع تعطّل حساب أو تغيّر كلمة مروره في عمارة
+      ماتفتحتش على الجهاز — الحساب مكانش بيظهر أصلًا.
+
+   دلوقتي بتقرا من الخادم (all_users_report) المحروسة بصاحب
+   المنصة، فبتشوف كل حاجة من أي جهاز.
+   ============================================================ */
+let __allUsersRows = null;
+
 function pageSysUsers(){
-  const rows=[];
-  REG.buildings.forEach(b=>{
-    const d=loadBuildingData(b.id); if(!d)return;
-    (d.users||[]).forEach(u=>{
-      const ap=u.apartmentId?(d.apartments||[]).find(a=>a.id===u.apartmentId):null;
-      let apLabel='';
-      if(ap){
-        const sameType=(d.apartments||[]).filter(x=>x.type===ap.type).sort((x,y)=>x.number-y.number);
-        const idx=sameType.findIndex(x=>x.id===ap.id)+1;
-        apLabel=(ap.type==='shop'?'محل ':'شقة ')+idx;
-      }
-      rows.push({buildingId:b.id,buildingName:b.name,username:u.username,name:u.name,role:u.role,phone:phoneFull(u.phoneCountry,u.phone),email:u.email||'',apLabel,active:u.active!==false});
-    });
-  });
+  if (__allUsersRows === null){
+    __allUsersRows = [];
+    loadAllUsers();
+    return '<p class="small">جاري التحميل…</p>';
+  }
+  const rows = __allUsersRows;
+  const real = rows.filter(r => !r['تجريبية']).length;
+
   const cols=[
-    {key:'building',label:'العمارة',value:r=>r.buildingName,cell:r=>esc(r.buildingName)},
-    {key:'username',label:'اسم المستخدم',value:r=>r.username,cell:r=>`<code>${esc(r.username)}</code>`},
-    {key:'name',label:'الاسم',value:r=>r.name,cell:r=>esc(r.name)},
-    {key:'role',label:'الصلاحية',value:r=>r.role,cell:r=>r.role==='admin'?'<span class="badge b">رئيس اتحاد - كل الصلاحيات</span>':r.role==='tenant'?'<span class="badge y">مستأجر</span>':'<span class="badge n">صاحب شقة</span>'},
-    {key:'phone',label:'الهاتف',value:r=>r.phone,cell:r=>`<span class="small">${esc(r.phone||'-')}</span>`},
-    {key:'email',label:'البريد الإلكتروني',value:r=>r.email,cell:r=>`<span class="small">${esc(r.email||'-')}</span>`},
-    {key:'apartment',label:'الوحدة',value:r=>r.apLabel,cell:r=>esc(r.apLabel||'-')},
-    {key:'active',label:'الحالة',value:r=>r.active?1:0,cell:r=>r.active?'<span class="badge g">نشط</span>':'<span class="badge r">معطّل</span>'},
-    {key:'x',label:'',value:null,cell:r=>`<div class="flexrow"><button class="btn sm" onclick="sysResetUserPassword('${r.buildingId}','${r.username}')">كلمة المرور</button><button class="btn sm ghost" onclick="sysToggleUserActive('${r.buildingId}','${r.username}')">${r.active?'تعطيل':'تفعيل'}</button></div>`}
+    {key:'building',label:'العمارة',value:r=>r['اسم_العمارة']||'',
+     cell:r=>esc(r['اسم_العمارة']||'-')+(r['تجريبية']?' <span class="badge y">تجريبية</span>':'')},
+    {key:'code',label:'الكود',value:r=>r['كود_العمارة']||'',
+     cell:r=>`<code>${esc(r['كود_العمارة']||'-')}</code>`},
+    {key:'name',label:'الاسم',value:r=>r['الاسم']||'',cell:r=>esc(r['الاسم']||'-')},
+    {key:'role',label:'الصفة',value:r=>r['الصفة']||'',
+     cell:r=>r['الصفة']==='رئيس اتحاد'?'<span class="badge b">رئيس اتحاد</span>'
+            :r['الصفة']==='مستأجر'?'<span class="badge y">مستأجر</span>'
+            :'<span class="badge n">'+esc(r['الصفة']||'-')+'</span>'},
+    {key:'phone',label:'الهاتف',value:r=>r['الرقم']||'',
+     cell:r=>`<span class="small" style="direction:ltr;display:inline-block">${esc(r['الرقم']||'-')}</span>`},
+    {key:'email',label:'البريد',value:r=>r['الإيميل']||'',
+     cell:r=>`<span class="small">${esc(r['الإيميل']||'-')}</span>`},
+    {key:'apartment',label:'الوحدة',value:r=>r['الوحدة']||'',cell:r=>esc(r['الوحدة']||'-')},
+    {key:'active',label:'الحالة',value:r=>r['نشط']?1:0,
+     cell:r=>r['نشط']?'<span class="badge g">نشط</span>':'<span class="badge r">معطّل</span>'},
+    {key:'x',label:'',value:null,
+     cell:r=>`<button class="btn sm ghost" onclick="sysToggleMember('${esc(r['membership_id'])}')">${r['نشط']?'تعطيل':'تفعيل'}</button>`},
   ];
-  return `<p class="small">كل حسابات الدخول على كل العمارات المسجّلة على هذا الجهاز (${rows.length} حساب).</p>
-  <div class="mtop">${sortableTable('sysUsersTable',rows,cols,null,{defaultKey:'building',exportName:'كل المستخدمين'})}</div>`;
+  return `<p class="small">كل حسابات الدخول على المنصة —
+    <b>${rows.length}</b> حساب في <b>${new Set(rows.map(r=>r['building_id'])).size}</b> عمارة
+    (${real} في عمارات حقيقية).</p>
+  <div class="mtop">${sortableTable('sysUsersTable',rows,cols,null,
+    {defaultKey:'building',exportName:'كل المستخدمين'})}</div>
+  <div class="modal-actions mtop2">
+    <button class="btn ghost" onclick="__allUsersRows=null;renderSysContent()">🔄 تحديث</button>
+  </div>`;
+}
+
+/* التفعيل/التعطيل بقى على الخادم — بنفس حماية «آخر رئيس اتحاد» */
+async function sysToggleMember(mid){
+  if(!mid) return;
+  try{
+    const sb = window.CLOUD && window.CLOUD._sb;
+    if(!sb) return showMessage('مفيش اتصال بالسحابة.');
+    const { data, error } = await sb.rpc('admin_toggle_member', { p_membership: mid });
+    if(error){
+      if(window.showErrorDialog) return showErrorDialog(error,'تفعيل/تعطيل حساب');
+      return showMessage(String(error.message||error));
+    }
+    toast(data ? 'اتفعّل' : 'اتعطّل');
+    __allUsersRows = null; renderSysContent();
+  }catch(e){
+    if(window.showErrorDialog) showErrorDialog(e,'تفعيل/تعطيل حساب');
+    else showMessage(String(e&&e.message||e));
+  }
+}
+
+async function loadAllUsers(){
+  try{
+    const sb = window.CLOUD && window.CLOUD._sb;
+    if (!sb){ __allUsersRows = []; return renderSysContent(); }
+    const { data, error } = await sb.rpc('all_users_report');
+    __allUsersRows = (error || !data) ? [] : data;
+  }catch(e){ __allUsersRows = []; }
+  try{ renderSysContent(); }catch(e){}
 }
 async function sysResetUserPassword(buildingId,username){
   const d=loadBuildingData(buildingId); const u=d.users.find(x=>x.username===username); if(!u)return;
@@ -12682,7 +12736,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.39';
+const APP_BUILD='2.40';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12885,25 +12939,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.39"></script>
-<script type="module" src="emartna-auth.js?v=2.39"></script>
-<script type="module" src="emartna-profile.js?v=2.39"></script>
-<script type="module" src="emartna-users.js?v=2.39"></script>
-<script type="module" src="emartna-platform.js?v=2.39"></script>
-<script type="module" src="emartna-contactlog.js?v=2.39"></script>
-<script type="module" src="emartna-permreport.js?v=2.39"></script>
-<script type="module" src="emartna-finops.js?v=2.39"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.39"></script>
-<script type="module" src="emartna-planscreens.js?v=2.39"></script>
+<script type="module" src="emartna-cloud.js?v=2.40"></script>
+<script type="module" src="emartna-auth.js?v=2.40"></script>
+<script type="module" src="emartna-profile.js?v=2.40"></script>
+<script type="module" src="emartna-users.js?v=2.40"></script>
+<script type="module" src="emartna-platform.js?v=2.40"></script>
+<script type="module" src="emartna-contactlog.js?v=2.40"></script>
+<script type="module" src="emartna-permreport.js?v=2.40"></script>
+<script type="module" src="emartna-finops.js?v=2.40"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.40"></script>
+<script type="module" src="emartna-planscreens.js?v=2.40"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.39"></script>
+<script type="module" src="emartna-perms.js?v=2.40"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.39"></script>
+<script type="module" src="emartna-bundle.js?v=2.40"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
