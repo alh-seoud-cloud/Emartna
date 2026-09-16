@@ -2018,7 +2018,21 @@ function logout(){
 let __idleTimer=null,__idleWarnTimer=null;
 function resetIdleTimer(){}
 function initIdleWatcher(){}
-function showLoginError(msg){const e=document.getElementById('loginErr');if(e){e.textContent=msg;e.style.display='block';if(e.scrollIntoView)e.scrollIntoView({behavior:'smooth',block:'center'});}}
+/* ⚠️ كانت بتظهر الخانة دايمًا حتى لو الرسالة فاضية — فكان بيفضل
+   شريط وردي فاضي فوق خانة الإيميل في شاشة الاسترداد، والمستخدم
+   يفتكره خانة مطلوب يملاها.
+   دلوقتي: تظهر لو فيه نص فعلًا، وتختفي لو فاضية.
+   وبناخد آخر عنصر مش أول واحد، لأن id="loginErr" متكرر في ٥
+   شاشات، والمعروضة دايمًا هي الأخيرة في الصفحة. */
+function showLoginError(msg){
+  const list=document.querySelectorAll('#loginErr');
+  const e=list.length?list[list.length-1]:null;
+  if(!e)return;
+  const txt=String(msg==null?'':msg).trim();
+  e.textContent=txt;
+  e.style.display = txt ? 'block' : 'none';
+  if(txt&&e.scrollIntoView)e.scrollIntoView({behavior:'smooth',block:'center'});
+}
 
 /* ---------- منع الرجوع للخلف من إغلاق التطبيق ---------- */
 window.__lastBackPressAt=0;
@@ -12804,7 +12818,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.42';
+const APP_BUILD='2.43';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -13019,25 +13033,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.42"></script>
-<script type="module" src="emartna-auth.js?v=2.42"></script>
-<script type="module" src="emartna-profile.js?v=2.42"></script>
-<script type="module" src="emartna-users.js?v=2.42"></script>
-<script type="module" src="emartna-platform.js?v=2.42"></script>
-<script type="module" src="emartna-contactlog.js?v=2.42"></script>
-<script type="module" src="emartna-permreport.js?v=2.42"></script>
-<script type="module" src="emartna-finops.js?v=2.42"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.42"></script>
-<script type="module" src="emartna-planscreens.js?v=2.42"></script>
+<script type="module" src="emartna-cloud.js?v=2.43"></script>
+<script type="module" src="emartna-auth.js?v=2.43"></script>
+<script type="module" src="emartna-profile.js?v=2.43"></script>
+<script type="module" src="emartna-users.js?v=2.43"></script>
+<script type="module" src="emartna-platform.js?v=2.43"></script>
+<script type="module" src="emartna-contactlog.js?v=2.43"></script>
+<script type="module" src="emartna-permreport.js?v=2.43"></script>
+<script type="module" src="emartna-finops.js?v=2.43"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.43"></script>
+<script type="module" src="emartna-planscreens.js?v=2.43"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.42"></script>
+<script type="module" src="emartna-perms.js?v=2.43"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.42"></script>
+<script type="module" src="emartna-bundle.js?v=2.43"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
