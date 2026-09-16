@@ -3088,14 +3088,35 @@ function newPasswordHTML(){
 
       <div class="field">
         <label>كلمة المرور الجديدة</label>
-        <input id="npPass" type="password" autocomplete="new-password"
-          placeholder="٨ حروف على الأقل">
+        <div style="position:relative">
+          <input id="npPass" type="password" autocomplete="new-password"
+            placeholder="اكتب كلمة المرور" oninput="npCheck()" style="padding-inline-end:44px">
+          <button type="button" onclick="npToggle('npPass',this)"
+            style="position:absolute;inset-inline-end:8px;top:50%;transform:translateY(-50%);
+                   background:none;border:0;cursor:pointer;font-size:17px;padding:4px"
+            title="إظهار/إخفاء">👁️</button>
+        </div>
       </div>
       <div class="field">
         <label>أعد كتابتها</label>
-        <input id="npPass2" type="password" autocomplete="new-password"
-          placeholder="نفس كلمة المرور">
+        <div style="position:relative">
+          <input id="npPass2" type="password" autocomplete="new-password"
+            placeholder="نفس كلمة المرور" oninput="npCheck()" style="padding-inline-end:44px">
+          <button type="button" onclick="npToggle('npPass2',this)"
+            style="position:absolute;inset-inline-end:8px;top:50%;transform:translateY(-50%);
+                   background:none;border:0;cursor:pointer;font-size:17px;padding:4px"
+            title="إظهار/إخفاء">👁️</button>
+        </div>
       </div>
+
+      <div class="card" id="npRules" style="background:var(--tint);padding:10px 12px;margin-bottom:12px">
+        <div class="small" id="npR1">⚪ ${PASSWORD_MIN} خانات على الأقل</div>
+        <div class="small mtop" id="npR2">⚪ الكلمتين زي بعض</div>
+        <div class="small mtop" style="color:var(--muted)">
+          ⚠️ لازم تكون <b>مختلفة</b> عن كلمة المرور القديمة.</div>
+      </div>
+
+      <div id="npTech" style="display:none;margin-bottom:12px"></div>
 
       <button class="login-btn" id="npBtn" onclick="saveNewPassword()">
         💾 احفظ كلمة المرور وادخل</button>
@@ -3104,6 +3125,36 @@ function newPasswordHTML(){
         بعد الحفظ هتدخل على طول من غير ما تكتبها تاني.</p>
     </div>
   </div>`;
+}
+
+/* إظهار/إخفاء كلمة المرور — الساكن يشوف اللي كتبه بدل ما يخمّن */
+function npCopyTech(){
+  const t=window.__npTechRaw||'';
+  const txt='عمارتنا — تعذّر حفظ كلمة المرور\nالنسخة: '+(window.APP_BUILD||'-')
+    +'\nالوقت: '+new Date().toLocaleString('ar-EG')+'\n'+t;
+  if(navigator.clipboard&&navigator.clipboard.writeText)
+    navigator.clipboard.writeText(txt).then(()=>toast('اتنسخ — ابعته للدعم'),()=>toast('مقدرش ينسخ'));
+  else toast('مقدرش ينسخ');
+}
+
+function npToggle(id,btn){
+  const el=document.getElementById(id); if(!el)return;
+  const show = el.type==='password';
+  el.type = show?'text':'password';
+  if(btn) btn.textContent = show?'🙈':'👁️';
+}
+
+/* الشروط بتتحدّث وهو بيكتب — مايستناش لحد ما يضغط حفظ */
+function npCheck(){
+  const p1=(document.getElementById('npPass')||{}).value||'';
+  const p2=(document.getElementById('npPass2')||{}).value||'';
+  const set=(id,ok,txt)=>{
+    const el=document.getElementById(id); if(!el)return;
+    el.textContent=(ok?'✅ ':'⚪ ')+txt;
+    el.style.color = ok?'var(--green,#0f766e)':'var(--muted)';
+  };
+  set('npR1', p1.length>=PASSWORD_MIN, PASSWORD_MIN+' خانات على الأقل');
+  set('npR2', p1.length>0 && p1===p2, 'الكلمتين زي بعض');
 }
 
 async function saveNewPassword(){
@@ -3132,7 +3183,51 @@ async function saveNewPassword(){
     renderRoot(); resetHistoryBase(); resetIdleTimer();
   }catch(e){
     if(btn){ btn.disabled=false; btn.textContent='💾 احفظ كلمة المرور وادخل'; }
-    showLoginError((window.cloudErrorText?cloudErrorText(e):'')||e.message||'مقدرناش نحفظ كلمة المرور');
+    /* ⚠️ الكتالوج العام كان بيبلع السبب ويطلّع «البيانات مرفوضة من
+       الخادم» — والمستخدم مايعرفش يعمل إيه. بنترجم أسباب Supabase
+       المعروفة لكلام واضح، وبنسيب الباقي بنصه بدل ما نخفيه. */
+    /* كل رسالة بتقول السبب **واللي يعمله** — مش السبب بس.
+       واللي منعرفوش بيتعرض بنصه الأصلي مع زرار تفاصيل، عشان لو
+       ظهر عند عميل تقدر تشخّصه بدل ما يختفي. */
+    const raw=String((e&&(e.message||e.error_description))||'');
+    const code=(e&&(e.code||e.status))||'';
+    let msg, known=true;
+    if(/should be different|same as the old|different from the old/i.test(raw))
+      msg='كلمة المرور دي هي نفسها القديمة. اختار كلمة مرور جديدة مختلفة.';
+    else if(/at least|too short|length/i.test(raw))
+      msg='كلمة المرور قصيرة. اكتب '+PASSWORD_MIN+' خانات على الأقل.';
+    else if(/weak|pwned|compromis|breach/i.test(raw))
+      msg='كلمة المرور دي مسرّبة في اختراقات سابقة. اختار واحدة مش شائعة.';
+    else if(/expired|invalid.*token|session|missing sub/i.test(raw))
+      msg='انتهت صلاحية الرابط. ارجع لشاشة استرداد الدخول واطلب رابط جديد.';
+    else if(/rate|too many/i.test(raw))
+      msg='محاولات كتير في وقت قصير. استنى دقيقة وجرّب تاني.';
+    else if(/Failed to fetch|NetworkError|network/i.test(raw))
+      msg='مفيش اتصال بالإنترنت. اتأكد من الشبكة وجرّب تاني.';
+    else { known=false;
+      msg='مقدرناش نحفظ كلمة المرور. جرّب تاني، ولو تكرر ابعت التفاصيل للدعم.'; }
+
+    console.error('updateUser failed:', e);
+    showLoginError(msg);
+
+    /* السبب التقني — بيظهر للمجهول بس، ومطوي */
+    try{
+      const box=document.getElementById('npTech');
+      if(box){
+        if(known){ box.style.display='none'; box.innerHTML=''; }
+        else{
+          box.style.display='block';
+          box.innerHTML='<details><summary class="small" style="cursor:pointer;color:var(--muted)">'
+            +'🔧 السبب التقني</summary>'
+            +'<div class="small" style="direction:ltr;text-align:left;background:var(--tint);'
+            +'border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:6px;'
+            +'word-break:break-all">'+esc(String(code||'-'))+' · '+esc(raw.slice(0,200))+'</div>'
+            +'<button type="button" class="btn sm ghost mtop" onclick="npCopyTech()">📋 انسخ للدعم</button>'
+            +'</details>';
+          window.__npTechRaw=(code?code+' · ':'')+raw;
+        }
+      }
+    }catch(_){}
   }
 }
 window.__recoveryStep=1;
@@ -12818,7 +12913,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.43';
+const APP_BUILD='2.45';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -13033,25 +13128,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.43"></script>
-<script type="module" src="emartna-auth.js?v=2.43"></script>
-<script type="module" src="emartna-profile.js?v=2.43"></script>
-<script type="module" src="emartna-users.js?v=2.43"></script>
-<script type="module" src="emartna-platform.js?v=2.43"></script>
-<script type="module" src="emartna-contactlog.js?v=2.43"></script>
-<script type="module" src="emartna-permreport.js?v=2.43"></script>
-<script type="module" src="emartna-finops.js?v=2.43"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.43"></script>
-<script type="module" src="emartna-planscreens.js?v=2.43"></script>
+<script type="module" src="emartna-cloud.js?v=2.45"></script>
+<script type="module" src="emartna-auth.js?v=2.45"></script>
+<script type="module" src="emartna-profile.js?v=2.45"></script>
+<script type="module" src="emartna-users.js?v=2.45"></script>
+<script type="module" src="emartna-platform.js?v=2.45"></script>
+<script type="module" src="emartna-contactlog.js?v=2.45"></script>
+<script type="module" src="emartna-permreport.js?v=2.45"></script>
+<script type="module" src="emartna-finops.js?v=2.45"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.45"></script>
+<script type="module" src="emartna-planscreens.js?v=2.45"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.43"></script>
+<script type="module" src="emartna-perms.js?v=2.45"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.43"></script>
+<script type="module" src="emartna-bundle.js?v=2.45"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
