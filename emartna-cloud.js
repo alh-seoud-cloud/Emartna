@@ -38,6 +38,8 @@ const MAPS = {
       id:'legacy_id', number:'number', label:'label',
       blockName:'block_name', floor:'floor',
       type:'type', usageType:'usage_type', openingBalance:'opening_balance',
+      /* سبب الرصيد الافتتاحي — بيظهر للساكن بدل رقم بلا تفسير */
+      openingBalanceNote:'opening_balance_note',
       ownerName:'owner_name', tenantName:'tenant_name',
       tenantPhone:'tenant_phone',      /* رقم المستأجر — منفصل عن المالك */
       phoneCountry:'phone_country', phone:'phone', email:'email',

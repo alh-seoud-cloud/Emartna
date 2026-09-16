@@ -9859,7 +9859,10 @@ function openQuickEntry(){
         <select class="qe-dir" style="width:78px">
           <option value="on" ${ob>0?'selected':''}>عليه</option>
           <option value="for" ${ob<0?'selected':''}>له</option>
-        </select></div></td></tr>`;
+        </select></div>
+        <input class="qe-obnote" style="width:100%;margin-top:4px;font-size:12px"
+          value="${esc(a.openingBalanceNote||'')}"
+          placeholder="سببه — مثال: متأخرات يوليو وأغسطس"></td></tr>`;
   };
 
   openModal(`
@@ -9918,6 +9921,7 @@ async function qeSave(){
       const f=money2(Number(feeRaw)||0);
       if(f!==Number(a.monthlyFee||0)){ a.monthlyFee=f; fees++; }
     }
+    const note=((tr.querySelector('.qe-obnote')||{}).value||'').trim();
     if(obRaw!==''){
       /* موجب = عليه · سالب = له — نفس اتجاه البرنامج */
       const amt=Math.abs(money2(Number(obRaw)||0));
@@ -9927,8 +9931,20 @@ async function qeSave(){
         a.openingBalance=v; obs++;
       }
     }
+    /* الملاحظة بتتحفظ حتى لو الرصيد ما اتغيّرش — ممكن يعدّل السبب بس */
+    if(note!==String(a.openingBalanceNote||'')) a.openingBalanceNote=note;
   });
 
+  /* رصيد بلا سبب = الساكن هيشوف رقم بلا تفسير ويتصل بالرئيس */
+  const noReason=D.apartments.filter(a=>Number(a.openingBalance||0)!==0
+                    && !String(a.openingBalanceNote||'').trim()).length;
+  if(noReason && !window.__qeWarned){
+    window.__qeWarned=true;
+    return showMessage(noReason+' وحدة ليها رصيد افتتاحي من غير سبب مكتوب.\n\n'+
+      'الساكن هيشوف المبلغ في كشفه بلا تفسير. اكتب السبب في الخانة الصغيرة تحت الرصيد،\n'+
+      'أو اضغط حفظ تاني لو متأكد.');
+  }
+  window.__qeWarned=false;
   if(!fees && !obs){ closeModal(); return toast('مفيش حاجة اتغيّرت'); }
   logActivity('إدخال سريع', fees+' اشتراك · '+obs+' رصيد افتتاحي');
   save();
@@ -9972,7 +9988,21 @@ function openApartmentModal(id){if(!guardAction('apartments','edit'))return;
       ${phoneField('mCountry','mPhone',a?a.phoneCountry:'+20',a?esc(a.phone||''):'','رقم الهاتف',true)}
       <div class="field2"><label>البريد الإلكتروني (اختياري)</label><input id="mEmail" type="email" value="${a?esc(a.email||''):''}"></div>
       <div class="field2"><label>الاشتراك الشهري <span style="color:var(--red)">*</span></label><input id="mFee" type="number" value="${a?a.monthlyFee:''}" placeholder="أدخل القيمة" min="0"></div>
-      <div class="field2"><label>رصيد افتتاحي <span style="font-weight:400">(موجب = عليه من قبل، سالب = دائن/دفع مقدمًا)</span></label><input id="mOpeningBalance" type="number" value="${a?(a.openingBalance||0):0}"></div>
+      <div class="field2"><label>رصيد افتتاحي <span style="font-weight:400">(اللي كان عليه أو له قبل البرنامج)</span></label>
+        <div class="flexrow" style="gap:6px;align-items:center">
+          <input id="mOpeningBalance" type="text" inputmode="numeric" style="flex:1"
+            value="${a?(Math.abs(Number(a.openingBalance||0))||''):''}" placeholder="0"
+            oninput="mNormalizeDigits(this)">
+          <select id="mOBDir" style="width:84px">
+            <option value="on" ${(a&&Number(a.openingBalance||0)>0)?'selected':''}>عليه</option>
+            <option value="for" ${(a&&Number(a.openingBalance||0)<0)?'selected':''}>له</option>
+          </select>
+        </div>
+        <input id="mOBNote" class="mtop" style="width:100%"
+          value="${a?esc(a.openingBalanceNote||''):''}"
+          placeholder="سببه — مثال: متأخرات يوليو وأغسطس">
+        <p class="small" style="color:var(--muted)">اكتب المبلغ موجب واختار «عليه» أو «له».
+          السبب بيظهر للساكن في كشف حسابه.</p></div>
       <div class="field2"><label>معرّف الوحدة <span class="small" style="color:var(--muted)">(اختياري — الدخول بيتم برقم الموبايل)</span></label><input id="mUser" value="${a?esc(a.username):''}" placeholder="سيبه فاضي — هيتسجّل برقم الموبايل"></div>
       <div class="field2"><label>كلمة مرور جديدة (اتركها فارغة للإبقاء)</label>${pwField('mPass','اختياري')}</div>
     </div>
@@ -10124,7 +10154,11 @@ async function saveApartment(id){
     }
   }
   const data={number,label:labelEl?labelEl.value.trim():'',
-    blockName:blockNameEl?blockNameEl.value.trim():'',type:document.getElementById('mType').value,usageType:document.getElementById('mUsage').value,closed:document.getElementById('mClosed').checked,openingBalance:Number(document.getElementById('mOpeningBalance').value||0),floor:document.getElementById('mFloor').value.trim(),ownerName,tenantName:document.getElementById('mTenant').value.trim(),tenantPhone:((document.getElementById('mTenantPhone')||{}).value||'').trim(),phoneCountry:document.getElementById('mCountry').value,phone,email:document.getElementById('mEmail').value.trim(),monthlyFee:fee,username,notes:document.getElementById('mNotes').value.trim()};
+    blockName:blockNameEl?blockNameEl.value.trim():'',type:document.getElementById('mType').value,usageType:document.getElementById('mUsage').value,closed:document.getElementById('mClosed').checked,openingBalance:(function(){
+      const raw=arDigitsToEn((document.getElementById('mOpeningBalance')||{}).value||'').trim();
+      const amt=Math.abs(money2(Number(raw)||0));
+      return ((document.getElementById('mOBDir')||{}).value==='for')? -amt : amt;
+    })(),openingBalanceNote:((document.getElementById('mOBNote')||{}).value||'').trim(),floor:document.getElementById('mFloor').value.trim(),ownerName,tenantName:document.getElementById('mTenant').value.trim(),tenantPhone:((document.getElementById('mTenantPhone')||{}).value||'').trim(),phoneCountry:document.getElementById('mCountry').value,phone,email:document.getElementById('mEmail').value.trim(),monthlyFee:fee,username,notes:document.getElementById('mNotes').value.trim()};
   const pass=document.getElementById('mPass').value;
   if(pass){const pwErr=passwordPolicyError(pass); if(pwErr)return showMessage(pwErr);}
   if(id){
@@ -12507,7 +12541,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.34';
+const APP_BUILD='2.35';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12710,25 +12744,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.34"></script>
-<script type="module" src="emartna-auth.js?v=2.34"></script>
-<script type="module" src="emartna-profile.js?v=2.34"></script>
-<script type="module" src="emartna-users.js?v=2.34"></script>
-<script type="module" src="emartna-platform.js?v=2.34"></script>
-<script type="module" src="emartna-contactlog.js?v=2.34"></script>
-<script type="module" src="emartna-permreport.js?v=2.34"></script>
-<script type="module" src="emartna-finops.js?v=2.34"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.34"></script>
-<script type="module" src="emartna-planscreens.js?v=2.34"></script>
+<script type="module" src="emartna-cloud.js?v=2.35"></script>
+<script type="module" src="emartna-auth.js?v=2.35"></script>
+<script type="module" src="emartna-profile.js?v=2.35"></script>
+<script type="module" src="emartna-users.js?v=2.35"></script>
+<script type="module" src="emartna-platform.js?v=2.35"></script>
+<script type="module" src="emartna-contactlog.js?v=2.35"></script>
+<script type="module" src="emartna-permreport.js?v=2.35"></script>
+<script type="module" src="emartna-finops.js?v=2.35"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.35"></script>
+<script type="module" src="emartna-planscreens.js?v=2.35"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.34"></script>
+<script type="module" src="emartna-perms.js?v=2.35"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.34"></script>
+<script type="module" src="emartna-bundle.js?v=2.35"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
