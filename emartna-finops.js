@@ -252,6 +252,10 @@ window.openAllocate = function(paymentId){
         <button class="btn sm ghost" onclick="allocAuto(${left})">⚡ وزّع على الأقدم تلقائيًا</button>
         <button class="btn sm ghost" onclick="allocClearInputs()">تفريغ</button>
       </div>
+      <p class="small" style="color:var(--muted);margin-top:6px">
+        الزرار بيسدّد المستحقات <b>بترتيب تاريخها</b> — اشتراكات ومشاريع مع بعض.
+        لو الساكن قال إن الدفعة دي <b>حساب مشروع معيّن</b>، اكتب المبلغ قدامه في
+        الجدول بدل ما تستعمل الزرار.</p>
       <div class="table-wrap mtop" style="max-height:40vh;overflow:auto">
         <table style="width:100%;font-size:12.5px">
           <thead><tr><th style="text-align:start">المستحق</th><th>القيمة</th>
