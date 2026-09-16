@@ -958,6 +958,47 @@ function constraintOf(raw){
    cloudErrorInfo — بترجّع الخطأ مقسّم بدل جملة واحدة:
    إيه اللي حصل · ليه · أعمل إيه · والتفاصيل التقنية للدعم.
    ============================================================ */
+/* ============================================================
+   تبليغ عن خطأ مش في الكتالوج
+   ------------------------------------------------------------
+   ⚠️ قواعد صارمة عشان ما يأثرش على أي حاجة شغالة:
+     · بينادَى بلا await — مايوقفش أي حفظ ولا إدخال
+     · جواه try/catch كامل — لو فشل مايحصلش حاجة
+     · مابيرجّعش قيمة ومابيغيّرش أي رد
+     · أخطاء الشبكة والجلسة مابتتبلّغش — ضوضاء
+     · نفس الخطأ مرة واحدة في الجلسة — مانغرقش الخادم
+   ============================================================ */
+const __reported = new Set();
+
+function reportUnknownError(code, constraintName, raw){
+  try{
+    const txt = String(raw || '');
+    /* ضوضاء: شبكة · جلسة منتهية · إلغاء */
+    if (/Failed to fetch|NetworkError|network|AbortError|JWT|token is expired/i.test(txt)) return;
+
+    const key = String(code||'') + '|' + String(constraintName||'') + '|' + txt.slice(0,120);
+    if (__reported.has(key)) return;
+    __reported.add(key);
+    if (__reported.size > 40) return;      // سقف للجلسة الواحدة
+
+    const sb = (window.CLOUD && window.CLOUD._sb) || null;
+    if (!sb) return;
+
+    let bld = null;
+    try{ bld = (window.D && window.D.building && window.D.building.__uuid) || null; }catch(e){}
+
+    /* بلا await — البرنامج بيكمّل على طول */
+    sb.rpc('report_error', {
+      p_code: String(code || '').slice(0,40),
+      p_constraint: String(constraintName || '').slice(0,80),
+      p_message: txt.slice(0,600),
+      p_screen: String((window.currentPage || window.__page || '')).slice(0,60),
+      p_build: String(window.APP_BUILD || '').slice(0,12),
+      p_building: bld,
+    }).then(()=>{}, ()=>{});     /* الفشل بيتبلع — مش مشكلة المستخدم */
+  }catch(e){ /* مايحصلش حاجة */ }
+}
+
 window.cloudErrorInfo = function(e){
   const raw  = String((e && (e.message || e.details || e)) || '');
   const code = (e && e.code) || '';
@@ -1024,7 +1065,16 @@ window.cloudErrorInfo = function(e){
     what = raw.slice(0,200) || 'خطأ غير معروف.';
     why  = 'مش قادرين نحدد السبب بالظبط.';
     fix  = 'حدّث الصفحة وجرّب تاني. لو تكرر، ابعت التفاصيل التقنية للدعم.';
+    /* الفرع ده معناه: خطأ مش في الكتالوج. دي بالظبط اللي محتاجين
+       نعرف عنها. بنبلّغ عنه في الخلفية — والنداء مالوش أي أثر على
+       الرد اللي بيرجع للمستخدم. */
+    reportUnknownError(code || st, cn, raw);
   }
+
+  /* ⚠️ قيد موجود في القاعدة ومالوش ترجمة في الكتالوج: بيقع في
+     الفرع العام فبيطلع رسالة مبهمة. ده بالظبط اللي محتاجين
+     نعرفه عشان نترجمه — فبنبلّغ عنه كمان. */
+  if (cn && !hit) reportUnknownError(code || st, cn, raw);
 
   return { title, what, why, fix,
            code: code || st || '-', constraint: cn || '-', raw: raw.slice(0,400) };

@@ -3835,7 +3835,7 @@ function renderSysContent(){
   }
   /* الشاشات اللي محتواها نافذة */
   if(SYS_MODAL_PAGES[curPage]){ c.innerHTML=pageSysModalHost(curPage); return; }
-  const fn={sysdash:pageSysDashboard,syslocations:(window.pageSysLocations||(()=>'<p class="small">جاري التحميل…</p>')),syspipeline:(window.pageSysPipeline||pageSysPipeline),sysfunnel:(window.pageSysFunnel||(()=>'<p class="small">جاري التحميل…</p>')),syshealth:(window.pageSysHealth||(()=>'<p class="small">جاري التحميل…</p>')),sysretention:(window.pageSysRetention||(()=>'<p class="small">جاري التحميل…</p>')),sysorphans:(window.pageSysOrphans||(()=>'<p class="small">جاري التحميل…</p>')),sysleads:pageSysMarketingLeads,sysvisits:(window.pageSysVisits||(()=>'<p class="small">جاري التحميل…</p>')),sysoffers:pageSysOffers,syscoupons:pageSysCoupons,sysmessages:pageSysMessageTemplates,sysusers:pageSysUsers,syslicenses:pageSysLicenses,syslicensehistory:pageSysLicenseHistory,sysplans:pageSysPlans,sysrevenue:pageSysRevenue,syslanding:pageSysLandingSettings,sysrenewals:pageSysRenewals,sysproposals:pageSysProposals,systickets:pageSysSupportTickets,sysstaff:pageSupportStaff,systasks:pageSysTasks,sysdailysummary:pageSysDailySummary,sysreports:pageSysReports,sysactivitylog:pageSysActivityLog,sysreferrals:pageSysReferrals,sysversions:pageSysVersions,sysmarketing:pageMarketingCard,systrash:pageSysTrash,sysaisettings:pageSysAISettings,sysaireports:pageSysAIReports,syssettings:pageSysSettings}[curPage]||pageSysDashboard;
+  const fn={sysdash:pageSysDashboard,syslocations:(window.pageSysLocations||(()=>'<p class="small">جاري التحميل…</p>')),syspipeline:(window.pageSysPipeline||pageSysPipeline),sysfunnel:(window.pageSysFunnel||(()=>'<p class="small">جاري التحميل…</p>')),syshealth:(window.pageSysHealth||(()=>'<p class="small">جاري التحميل…</p>')),syserrors:pageSysErrors,sysretention:(window.pageSysRetention||(()=>'<p class="small">جاري التحميل…</p>')),sysorphans:(window.pageSysOrphans||(()=>'<p class="small">جاري التحميل…</p>')),sysleads:pageSysMarketingLeads,sysvisits:(window.pageSysVisits||(()=>'<p class="small">جاري التحميل…</p>')),sysoffers:pageSysOffers,syscoupons:pageSysCoupons,sysmessages:pageSysMessageTemplates,sysusers:pageSysUsers,syslicenses:pageSysLicenses,syslicensehistory:pageSysLicenseHistory,sysplans:pageSysPlans,sysrevenue:pageSysRevenue,syslanding:pageSysLandingSettings,sysrenewals:pageSysRenewals,sysproposals:pageSysProposals,systickets:pageSysSupportTickets,sysstaff:pageSupportStaff,systasks:pageSysTasks,sysdailysummary:pageSysDailySummary,sysreports:pageSysReports,sysactivitylog:pageSysActivityLog,sysreferrals:pageSysReferrals,sysversions:pageSysVersions,sysmarketing:pageMarketingCard,systrash:pageSysTrash,sysaisettings:pageSysAISettings,sysaireports:pageSysAIReports,syssettings:pageSysSettings}[curPage]||pageSysDashboard;
   c.innerHTML=fn();
   if(curPage==='sysmarketing')renderMarketingQr();
   const bw=document.getElementById('sysNotifBellWrap'); if(bw)bw.innerHTML=renderSysNotifBell();
@@ -5613,6 +5613,71 @@ function openLicensePage(){closeModal();go('license')}
 /* --- شاشة مراجعة طلبات التجديد --- */
 function pendingRenewalsCount(){return(REG.renewalRequests||[]).filter(r=>r.status==='pending').length}
 /* --- سلة المحذوفات --- */
+/* ============================================================
+   🐞 الأخطاء غير المعروفة
+   ------------------------------------------------------------
+   البرنامج بيبلّغ تلقائيًا عن أي خطأ **مش في كتالوج الرسايل
+   العربية**. الشاشة دي بتعرضهم مرتّبين بالتكرار.
+
+   الفايدة: من غيرها، لو حصل عطل عند تلات عمارات، بتعرف بالصدفة
+   لو حد اتصل بيك. حصل النهارده فعلًا: عميل قعد ٦ ساعات بعطل،
+   والسبب مكانش متسجّل في أي مكان.
+
+   ⚠️ النص هنا **منظّف من البيانات الشخصية** على الخادم — مفيش
+      أرقام تليفونات ولا أسماء ولا معرّفات.
+   ⚠️ الشاشة دي بتفضّي نفسها: كل ما نترجم خطأ في الكتالوج،
+      بيختفي من هنا. لو فضلت مليانة، يبقى الكتالوج ناقص.
+   ============================================================ */
+let __sysErrRows = null;
+
+function pageSysErrors(){
+  if (__sysErrRows === null){
+    __sysErrRows = [];
+    loadSysErrors();
+    return '<p class="small">جاري التحميل…</p>';
+  }
+  const rows = __sysErrRows;
+  if (!rows.length)
+    return `<h2>🐞 الأخطاء غير المعروفة</h2>
+      <div class="card mtop" style="background:var(--tint-success)">
+        <b>مفيش أخطاء غير معروفة</b>
+        <div class="small mtop">كل الأخطاء اللي حصلت عند العملاء ليها رسالة عربية مفهومة.
+          لو ظهر هنا خطأ جديد، معناه إنه محتاج ترجمة في الكتالوج.</div></div>`;
+
+  const cols=[
+    {key:'hits',label:'مرات',value:r=>r.hits},
+    {key:'blds',label:'عمارات',value:r=>(r.buildings||[]).length},
+    {key:'constraint_name',label:'القيد',value:r=>r.constraint_name||'-'},
+    {key:'code',label:'الكود',value:r=>r.code||'-'},
+    {key:'screen',label:'الشاشة',value:r=>r.screen||'-'},
+    {key:'message',label:'الرسالة',value:r=>r.message||'',
+     render:r=>`<span class="small" style="direction:ltr;display:inline-block;text-align:left">${esc((r.message||'').slice(0,150))}</span>`},
+    {key:'app_build',label:'النسخة',value:r=>r.app_build||'-'},
+    {key:'last_seen',label:'آخر مرة',value:r=>r.last_seen||'',render:r=>esc(String(r.last_seen||'').slice(0,16))},
+  ];
+  return `<h2>🐞 الأخطاء غير المعروفة</h2>
+    <p class="small" style="color:var(--muted)">
+      دي الأخطاء اللي البرنامج مالوش ليها رسالة عربية. الأكتر تكرارًا فوق.
+      النص منظّف من أي بيانات شخصية.</p>
+    <div class="mtop">${sortableTable('sysErrTable', rows, cols, null,
+      {defaultKey:'hits', emptyText:'مفيش أخطاء', exportName:'الأخطاء غير المعروفة'})}</div>
+    <div class="modal-actions mtop2">
+      <button class="btn ghost" onclick="__sysErrRows=null;renderSysContent()">🔄 تحديث</button>
+    </div>`;
+}
+
+async function loadSysErrors(){
+  try{
+    const sb = window.CLOUD && window.CLOUD._sb;
+    if (!sb) { __sysErrRows = []; return renderSysContent(); }
+    const { data, error } = await sb.from('error_reports')
+      .select('*').eq('resolved', false)
+      .order('hits', { ascending:false }).limit(200);
+    __sysErrRows = (error || !data) ? [] : data;
+  }catch(e){ __sysErrRows = []; }
+  try{ renderSysContent(); }catch(e){}
+}
+
 function pageSysTrash(){
   const items=[...(REG.deletedBuildings||[])].sort((a,b)=>(b.deletedAt||'').localeCompare(a.deletedAt||''));
   return `<p class="small">العمارات المحذوفة بتفضل هنا محفوظة كاملة (بياناتها وحساباتها) لحد ما تسترجعها أو تحذفها نهائيًا. حسابات العمارة متوقفة عن الدخول طول ما هي هنا.</p>
@@ -7297,7 +7362,7 @@ var SYS_NAV_GROUPS=[
   {key:'site',icon:'🖥️',label:'الموقع العام',items:[['syslanding','🖥️','الصفحة الرئيسية وإعدادات العرض'],['sysversions','🆕','سجل الإصدارات والتحديثات'],['sysmarketing','🖨️','بطاقة دعاية للطباعة'],['syslocations','🗺️','المحافظات والمدن']]},
   {key:'feedback',icon:'💬',label:'التواصل مع العملاء',items:[['sysproposals','💡','مقترحات العملاء'],['systickets','🎫','طلبات الدعم الفني'],['syscontactlog','📇','سجل التواصل'],['sysfollowups','📅','متابعات مستحقة'],['sysstaff','🧑‍💼','فريق الدعم الفني'],['systasks','✅','مهام الفريق']]},
   {key:'ai',icon:'🤖',label:'الذكاء الاصطناعي',items:[['sysaisettings','⚙️','إعدادات الذكاء الاصطناعي'],['sysaireports','🤖','تقارير الذكاء الاصطناعي']]},
-  {key:'system',icon:'🛠️',label:'النظام',items:[['syshealth','🩺','صحة المنصة'],['sysretention','🗄️','سياسة حفظ المرفقات'],['sysorphans','👤','مستخدمون بلا عمارة'],['sysidle','⏳','سياسة إقفال الجلسة'],['sysfeatures','🎛️','مميزات البرنامج'],['systrash','🗑️','سلة المحذوفات'],['syssettings','⚙️','إعدادات حسابي']]},
+  {key:'system',icon:'🛠️',label:'النظام',items:[['syshealth','🩺','صحة المنصة'],['syserrors','🐞','أخطاء غير معروفة'],['sysretention','🗄️','سياسة حفظ المرفقات'],['sysorphans','👤','مستخدمون بلا عمارة'],['sysidle','⏳','سياسة إقفال الجلسة'],['sysfeatures','🎛️','مميزات البرنامج'],['systrash','🗑️','سلة المحذوفات'],['syssettings','⚙️','إعدادات حسابي']]},
 ];
 window.__navExpandedGroup=null;
 function findGroupKeyForPage(groups,page){const g=groups.find(g=>g.items.some(it=>it[0]===page));return g?g.key:null}
@@ -12541,7 +12606,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.36';
+const APP_BUILD='2.37';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -12744,25 +12809,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.36"></script>
-<script type="module" src="emartna-auth.js?v=2.36"></script>
-<script type="module" src="emartna-profile.js?v=2.36"></script>
-<script type="module" src="emartna-users.js?v=2.36"></script>
-<script type="module" src="emartna-platform.js?v=2.36"></script>
-<script type="module" src="emartna-contactlog.js?v=2.36"></script>
-<script type="module" src="emartna-permreport.js?v=2.36"></script>
-<script type="module" src="emartna-finops.js?v=2.36"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.36"></script>
-<script type="module" src="emartna-planscreens.js?v=2.36"></script>
+<script type="module" src="emartna-cloud.js?v=2.37"></script>
+<script type="module" src="emartna-auth.js?v=2.37"></script>
+<script type="module" src="emartna-profile.js?v=2.37"></script>
+<script type="module" src="emartna-users.js?v=2.37"></script>
+<script type="module" src="emartna-platform.js?v=2.37"></script>
+<script type="module" src="emartna-contactlog.js?v=2.37"></script>
+<script type="module" src="emartna-permreport.js?v=2.37"></script>
+<script type="module" src="emartna-finops.js?v=2.37"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.37"></script>
+<script type="module" src="emartna-planscreens.js?v=2.37"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.36"></script>
+<script type="module" src="emartna-perms.js?v=2.37"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.36"></script>
+<script type="module" src="emartna-bundle.js?v=2.37"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
