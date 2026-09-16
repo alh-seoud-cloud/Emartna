@@ -688,12 +688,40 @@ function bindCloudRecover(){
       /* بنقبل الرقم كمان: بنحوّله لإيميل الدخول الفعلي. الشاشة كانت
          بتطلب إيميل بالظبط، والمستخدم غالبًا فاكر رقمه مش إيميله. */
       let email = typed;
+      /* ⚠️ الـcatch هنا كان فاضي: لو النداء فشل لأي سبب، الخطأ
+         كان بيتبلع، و email بيفضل الرقم اللي كتبه — ومفيهوش @ —
+         فالمستخدم كان بيشوف «مالقيناش حساب بالبيانات دي».
+
+         حصل فعلًا يوم ١٦ سبتمبر: الدالة على الخادم فشلت، وعميل
+         حسابه موجود وسليم قعد ٦ ساعات يفتكر إن حسابه اتمسح.
+         الرسالة كانت بتكدب عليه، والسبب الحقيقي مكانش ظاهر
+         لا ليه ولا لينا.
+
+         دلوقتي بنفرّق بين تلات حالات مختلفة تمامًا:
+           · النداء نجح ومفيش حساب  → «مالقيناش حساب»
+           · النداء فشل (عطل/شبكة) → رسالة تقول إن فيه عطل
+           · مفيش نت أصلًا          → رسالة تقول كده
+         الفرق ده بيوفّر على العميل قلق، وعلينا ساعات تشخيص. */
+      let lookupFailed = null;
       try{
-        const { data } = await sb.rpc('login_email_for', { p_id: typed });
-        if (data) email = data;
-      }catch(e){}
-      if (!email.includes('@'))
+        const { data, error } = await sb.rpc('login_email_for', { p_id: typed });
+        if (error) lookupFailed = error;
+        else if (data) email = data;
+      }catch(e){ lookupFailed = e; }
+
+      if (!email.includes('@')){
+        if (lookupFailed){
+          const raw = String(lookupFailed.message || lookupFailed || '');
+          const offline = /Failed to fetch|NetworkError|network/i.test(raw) ||
+                          (navigator && navigator.onLine === false);
+          console.error('login_email_for failed:', lookupFailed);
+          return showLoginError(offline
+            ? 'مفيش اتصال بالإنترنت. اتأكد من الشبكة وجرّب تاني.'
+            : 'في عطل مؤقت عندنا — مش مشكلة في حسابك. جرّب تاني بعد دقيقة، '
+              + 'أو اكتب إيميلك بدل الرقم. لو فضلت، استخدم زرار التواصل مع الدعم تحت.');
+        }
         return showLoginError('مالقيناش حساب بالبيانات دي. جرّب الإيميل، أو استخدم زرار التواصل مع الدعم تحت.');
+      }
       if (/@emartna\.local$/i.test(email))
         return showLoginError('الحساب ده مالوش بريد إلكتروني مسجّل، فمش هينفع نبعتله رابط. استخدم زرار التواصل مع الدعم تحت.');
 
