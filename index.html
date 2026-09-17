@@ -2481,8 +2481,49 @@ function getFilteredSortedRows(tableId){
   const st=window.__sortState[tableId]||{};
   let filtered=rows;
   if(st.q){
-    const q=st.q.toLowerCase();
-    filtered=rows.filter(r=>columns.some(c=>c.value&&String(c.value(r)||'').toLowerCase().includes(q)));
+    /* ============================================================
+       البحث المشترك — بيخدم ٣٧ جدول
+       ------------------------------------------------------------
+       ⚠️ كان فيه ٣ عيوب:
+       ١) بيبحث في c.value بس — والأعمدة اللي ليها cell (زي الحالة
+          والشارات) مكانش بيتبحث فيها خالص.
+       ٢) بيقارن النص حرفيًا — فالبحث بـ«0114» مكانش بيلاقي رقم
+          متخزّن «+201147992900»، لأن الصفر مش موجود في المتخزّن.
+          وده اللي خلّى البحث بالتليفون مايشتغلش.
+       ٣) الهمزات — «أحمد» مكانش بيلاقي «احمد».
+       ============================================================ */
+    const norm = v => String(v==null?'':v)
+      .toLowerCase()
+      .replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0)-0x0660))  /* عربي→إنجليزي */
+      .replace(/[\u06F0-\u06F9]/g, d => String(d.charCodeAt(0)-0x06F0))  /* فارسي */
+      .replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه')          /* توحيد الحروف */
+      .replace(/[\u064B-\u0652\u0640]/g,'')                              /* تشكيل ومدّ */
+      .replace(/\s+/g,' ').trim();
+
+    /* الأرقام: بنقارن بالأرقام بس، وبنطابق من الآخر كمان عشان
+       +201147992900 يلاقيها لو كتب 0114 أو 1147 */
+    const digitsOf = v => norm(v).replace(/[^0-9]/g,'');
+
+    const q  = norm(st.q);
+    const qd = digitsOf(st.q);
+    const isNum = qd.length >= 3 && qd.length === q.replace(/[^0-9]/g,'').length && /^[\d\s+\-()]+$/.test(st.q.trim());
+
+    const cellText = (c,r) => {
+      if (c.value) { try{ return c.value(r); }catch(e){} }
+      if (c.cell)  { try{ return String(c.cell(r)||'').replace(/<[^>]*>/g,' '); }catch(e){} }
+      return '';
+    };
+
+    filtered = rows.filter(r => columns.some(c => {
+      const raw = cellText(c,r);
+      if (raw === '' || raw == null) return false;
+      if (norm(raw).includes(q)) return true;
+      if (isNum){
+        const d = digitsOf(raw);
+        if (d && (d.includes(qd) || qd.includes(d.slice(-9)) || d.endsWith(qd))) return true;
+      }
+      return false;
+    }));
   }
   const colFilters=window[tableId+'_filters'];
   if(colFilters){
@@ -5909,8 +5950,10 @@ function setVisPreset(days){
   __visPreset = days;
   const d = n => { const x=new Date(); x.setDate(x.getDate()-n);
                    return x.toISOString().slice(0,10); };
-  if (days === 0){ __visFrom = null; __visTo = null; }      /* الكل */
-  else { __visFrom = d(days); __visTo = new Date().toISOString().slice(0,10); }
+  const today = new Date().toISOString().slice(0,10);
+  if (days === 0){ __visFrom = null; __visTo = null; }        /* الكل */
+  else if (days === 1){ __visFrom = today; __visTo = today; } /* النهارده بس */
+  else { __visFrom = d(days-1); __visTo = today; }            /* أسبوع = ٧ أيام بالنهارده */
   __visRows = null; renderSysContent();
 }
 
@@ -5986,7 +6029,7 @@ function pageSysVisitors(){
     <div class="card mtop" style="background:var(--tint);padding:10px 12px">
       <div class="flexrow" style="gap:6px;flex-wrap:wrap;align-items:center">
         <span class="small" style="min-width:52px">المدة</span>
-        ${pre(30,'آخر شهر')}${pre(90,'٣ شهور')}${pre(180,'٦ شهور')}${pre(365,'سنة')}${pre(0,'الكل')}
+        ${pre(1,'النهارده')}${pre(7,'أسبوع')}${pre(30,'شهر')}${pre(90,'٣ شهور')}${pre(180,'٦ شهور')}${pre(365,'سنة')}${pre(0,'الكل')}
       </div>
       <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap;align-items:center">
         <span class="small" style="min-width:52px">من</span>
@@ -13134,7 +13177,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.50';
+const APP_BUILD='2.51';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -13349,25 +13392,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.50"></script>
-<script type="module" src="emartna-auth.js?v=2.50"></script>
-<script type="module" src="emartna-profile.js?v=2.50"></script>
-<script type="module" src="emartna-users.js?v=2.50"></script>
-<script type="module" src="emartna-platform.js?v=2.50"></script>
-<script type="module" src="emartna-contactlog.js?v=2.50"></script>
-<script type="module" src="emartna-permreport.js?v=2.50"></script>
-<script type="module" src="emartna-finops.js?v=2.50"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.50"></script>
-<script type="module" src="emartna-planscreens.js?v=2.50"></script>
+<script type="module" src="emartna-cloud.js?v=2.51"></script>
+<script type="module" src="emartna-auth.js?v=2.51"></script>
+<script type="module" src="emartna-profile.js?v=2.51"></script>
+<script type="module" src="emartna-users.js?v=2.51"></script>
+<script type="module" src="emartna-platform.js?v=2.51"></script>
+<script type="module" src="emartna-contactlog.js?v=2.51"></script>
+<script type="module" src="emartna-permreport.js?v=2.51"></script>
+<script type="module" src="emartna-finops.js?v=2.51"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.51"></script>
+<script type="module" src="emartna-planscreens.js?v=2.51"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.50"></script>
+<script type="module" src="emartna-perms.js?v=2.51"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.50"></script>
+<script type="module" src="emartna-bundle.js?v=2.51"></script>
 
 <!-- ⏳ الخروج التلقائي عند الخمول
      ⚠️ الملف ده كان موجود في المستودع (١١ ك.ب، مكتوب بالكامل)
@@ -13378,7 +13421,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
         مش مفعّلة فعلًا.
      ⚠️ بيتحمّل **بعد** الحزمة عن قصد، لأنه بيعتمد على getSession
         و logout و openModal. -->
-<script type="module" src="emartna-idle.js?v=2.50"></script>
+<script type="module" src="emartna-idle.js?v=2.51"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
