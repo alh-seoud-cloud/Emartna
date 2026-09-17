@@ -637,7 +637,42 @@ window.recoverHTML = function(){
           placeholder="name@example.com أو 01xxxxxxxxx" autocomplete="username">
         <p class="hint">لو دخلت برقم موبايلك، اكتبه هنا وهنلاقي إيميلك المسجّل.</p>
       </div>
-      <button class="login-btn" id="rcSendBtn">ابعت رابط الاسترداد</button>
+      <button class="login-btn" id="rcSendBtn">📧 ابعت رابط الاسترداد</button>
+
+      <div style="text-align:center;margin:14px 0 10px;color:#8A9A96;font-size:12.5px">— أو —</div>
+
+      <button type="button" class="login-btn" id="rcCodeBtn"
+        style="background:#F6F3E9;color:#153733;border:1px solid #E4DCC6"
+        onclick="showRecoverCode()">🔑 عندي كود من رئيس الاتحاد</button>
+
+      <div id="rcCodeBox" class="hidden" style="margin-top:12px;padding:14px;
+           background:#F6F3E9;border:1px solid #E4DCC6;border-radius:12px">
+        <p class="small" style="margin:0 0 10px;color:#4A5B57;line-height:1.8">
+          رئيس اتحاد عمارتك يقدر يدّيك كود ٦ أرقام. اكتبه هنا مع
+          رقم موبايلك وكلمة مرور جديدة.</p>
+
+        <div class="field"><label>رقم الموبايل</label>
+          <input id="rcPhone" type="text" dir="ltr" inputmode="numeric"
+            placeholder="01xxxxxxxxx" autocomplete="tel"></div>
+
+        <div class="field"><label>الكود (٦ أرقام)</label>
+          <input id="rcCode" type="text" dir="ltr" inputmode="numeric" maxlength="6"
+            placeholder="------" style="letter-spacing:8px;text-align:center;font-size:18px"></div>
+
+        <div class="field"><label>كلمة المرور الجديدة</label>
+          <input id="rcNew1" type="password" autocomplete="new-password"
+            placeholder="٨ خانات على الأقل"></div>
+
+        <div class="field"><label>أعد كتابتها</label>
+          <input id="rcNew2" type="password" autocomplete="new-password"
+            placeholder="نفس كلمة المرور"></div>
+
+        <button class="login-btn" id="rcGo" onclick="redeemRecoverCode()"
+          style="margin-top:4px">✅ غيّر كلمة المرور وادخل</button>
+
+        <p class="small" style="margin:10px 0 0;color:#8A9A96">
+          الكود صالح ٢٤ ساعة · ٥ محاولات بس.</p>
+      </div>
 
       <div class="mtop2" style="border-top:1px dashed var(--line);padding-top:14px">
         <p class="small" style="color:var(--muted)">
@@ -658,6 +693,59 @@ window.recoverHTML = function(){
 
 /* المستخدم اللي مالوش إيميل مش هيقدر يسترجع بنفسه — لازم مخرج واضح
    بدل ما يقف عند رسالة "اكتب إيميل". */
+/* ============================================================
+   🔑 الاسترداد بكود من رئيس الاتحاد
+   ------------------------------------------------------------
+   أسرع من الإيميل وأقرب للواقع: الساكن بيعرف رئيس اتحاده ورقمه،
+   والكود بيوصله واتساب في ثواني. الإيميل بقى آخر حل.
+   الآلية كانت مبنية في القاعدة وصفر استخدام — الناقص الشاشة دي.
+   ============================================================ */
+window.showRecoverCode = function(){
+  const box = document.getElementById('rcCodeBox');
+  const btn = document.getElementById('rcCodeBtn');
+  if (!box) return;
+  box.classList.remove('hidden');
+  if (btn) btn.style.display = 'none';
+  const el = document.getElementById('rcPhone');
+  if (el) el.focus();
+};
+
+window.redeemRecoverCode = async function(){
+  const g  = id => (document.getElementById(id) || {}).value || '';
+  const ar = v  => String(v).replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0)-0x0660));
+  const phone = ar(g('rcPhone')).trim();
+  const code  = ar(g('rcCode')).replace(/[^\d]/g,'');
+  const p1 = g('rcNew1'), p2 = g('rcNew2');
+
+  if (!phone)            return showLoginError('اكتب رقم موبايلك');
+  if (code.length !== 6) return showLoginError('الكود ٦ أرقام');
+  if (p1.length < 8)     return showLoginError('كلمة المرور لازم ٨ خانات على الأقل');
+  if (p1 !== p2)         return showLoginError('الكلمتين مش زي بعض');
+
+  const btn = document.getElementById('rcGo');
+  if (btn){ btn.disabled = true; btn.textContent = 'بيتحقق…'; }
+  try{
+    const sb = window.CLOUD && window.CLOUD._sb;
+    if (!sb) throw new Error('مفيش اتصال بالخادم');
+    const { data, error } = await sb.rpc('redeem_recovery_code',
+      { p_phone: phone, p_code: code, p_new_password: p1 });
+    if (error) throw error;
+    if (data === false) throw new Error('الكود غير صحيح أو منتهي');
+
+    showLoginError('');
+    toast('اتغيّرت كلمة المرور ✅ — ادخل بيها دلوقتي');
+    window.__viewMode = 'login';
+    renderRoot();
+  }catch(e){
+    if (btn){ btn.disabled = false; btn.textContent = '✅ غيّر كلمة المرور وادخل'; }
+    const raw = String((e && e.message) || '');
+    /* ⚠️ الرسالة الموحّدة مقصودة — مانكشفش إن الرقم مسجّل ولا لأ */
+    showLoginError(/غير صحيح|منتهي|invalid|expired/i.test(raw)
+      ? 'الكود غير صحيح أو منتهي. اطلب كود جديد من رئيس الاتحاد.'
+      : (raw || 'مقدرناش نتحقق من الكود'));
+  }
+};
+
 window.contactSupportForRecovery = function(){
   let phone = '', name = '';
   try{

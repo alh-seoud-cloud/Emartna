@@ -4829,7 +4829,11 @@ function pageSysUsers(){
     {key:'active',label:'الحالة',value:r=>r['نشط']?1:0,
      cell:r=>r['نشط']?'<span class="badge g">نشط</span>':'<span class="badge r">معطّل</span>'},
     {key:'x',label:'',value:null,
-     cell:r=>`<button class="btn sm ghost" onclick="sysToggleMember('${esc(r['membership_id'])}')">${r['نشط']?'تعطيل':'تفعيل'}</button>`},
+     cell:r=>`<div class="flexrow" style="gap:4px">
+       <button class="btn sm ghost" onclick="openRecoveryCode('${esc(r['user_id'])}','${esc(r['الاسم']||'')}')"
+         title="كود استرجاع الدخول">🔑</button>
+       <button class="btn sm ghost" onclick="sysToggleMember('${esc(r['membership_id'])}')">${r['نشط']?'تعطيل':'تفعيل'}</button>
+     </div>`},
   ];
   return `<p class="small">كل حسابات الدخول على المنصة —
     <b>${rows.length}</b> حساب في <b>${new Set(rows.map(r=>r['building_id'])).size}</b> عمارة
@@ -5994,6 +5998,97 @@ async function purgeAllCaches(){
   setTimeout(()=>{ try{
     location.replace(location.pathname + '?fresh=' + Date.now());
   }catch(_){ location.reload(true); } }, 600);
+}
+
+/* ============================================================
+   🔑 كود استرجاع الدخول
+   ------------------------------------------------------------
+   الساكن نسي كلمة المرور ومعندوش إيميل؟ رئيس الاتحاد يصدرله كود
+   ٦ أرقام ويبعتهوله واتساب. الإيميل بقى آخر حل مش أول حل.
+
+   الآلية كلها كانت مبنية في القاعدة من زمان **ومحدش بيستعملها** —
+   صفر كود اتصدر. الناقص كان الشاشات دي.
+
+   ⚠️ الحمايات (مفحوصة): الكود مشفّر SHA-256 · ٢٤ ساعة · ٥ محاولات
+      وبعدها يتحرق · كود واحد نشط لكل مستخدم · ورئيس الاتحاد
+      مايقدرش يصدر لعمارة تانية.
+   ============================================================ */
+/* رئيس الاتحاد بيتعامل مع «شقة ٤٠٢» مش مع معرّف مستخدم —
+   والواجهة عنده معندهاش المعرّف ده أصلًا. */
+async function openUnitRecoveryCode(apartmentId){
+  if(!apartmentId) return;
+  return openRecoveryCode(null, null, apartmentId);
+}
+
+async function openRecoveryCode(userId, label, apartmentId){
+  if(!userId && !apartmentId) return showMessage('الحساب ده مش مربوط بمستخدم.');
+  const ok = await new Promise(res=>{
+    confirmDelete('هيتولّد كود استرجاع لـ'+(label||'الحساب')+'.\n\n'+
+      'الكود صالح ٢٤ ساعة، و٥ محاولات بس.\n'+
+      'أي كود قديم هيتلغي.', ()=>res(true));
+    setTimeout(()=>res(false), 60000);
+  });
+  if(!ok) return;
+
+  try{
+    const sb = window.CLOUD && window.CLOUD._sb;
+    if(!sb) return showMessage('مفيش اتصال بالسحابة.');
+    const { data, error } = apartmentId
+      ? await sb.rpc('issue_recovery_code_for_unit', { p_apartment: apartmentId })
+      : await sb.rpc('issue_recovery_code_full',     { p_user: userId });
+    if(error) throw error;
+    const r = Array.isArray(data) ? data[0] : data;
+    if(!r || !r.code) throw new Error('مرجعش كود');
+
+    const name = r.full_name || label || r.unit || '';
+    const phone = r.phone || '';
+    const msg =
+      'أهلًا '+(name||'')+' 👋\n' +
+      'ده كود استرجاع الدخول بتاعك في برنامج عمارتنا:\n\n' +
+      '🔑  ' + r.code + '\n\n' +
+      'افتح ' + location.origin + ' ← استرداد الدخول ← «عندي كود»\n' +
+      'واكتب رقم موبايلك والكود وكلمة مرور جديدة.\n\n' +
+      'الكود صالح ٢٤ ساعة، وما تديهوش لحد.';
+
+    const wa = (window.waLink && phone) ? waLink(phone, msg) : '';
+
+    openModal(`
+      <h3>🔑 كود استرجاع — ${esc(name)}${r.unit?' · '+esc(r.unit):''}</h3>
+      <div class="card mtop" style="background:var(--tint);text-align:center;padding:18px">
+        <div style="font-size:34px;font-weight:800;letter-spacing:10px;
+                    direction:ltr;color:var(--brand,#0F7A6F)">${esc(r.code)}</div>
+        <p class="small mtop" style="color:var(--muted)">صالح ٢٤ ساعة · ٥ محاولات</p>
+      </div>
+
+      <div class="flexrow mtop2" style="gap:6px;flex-wrap:wrap">
+        ${wa?`<a class="btn primary" href="${esc(wa)}" target="_blank" rel="noopener">📱 ابعته واتساب</a>`
+            :`<span class="small" style="color:var(--muted)">مفيش رقم موبايل مسجّل — اقرا الكود في التليفون</span>`}
+        <button class="btn ghost" onclick="rcCopyCode('${esc(r.code)}')">📋 انسخ الكود</button>
+        <button class="btn ghost" onclick="rcCopyMsg()">📋 انسخ الرسالة</button>
+      </div>
+
+      <p class="small mtop2" style="color:var(--muted)">
+        ⚠️ الكود ده زي كلمة المرور — ابعته للساكن نفسه بس.
+        وأول ما يستعمله بيتحرق.</p>
+
+      <div class="modal-actions">
+        <button class="btn ghost" onclick="closeModal()">تمام</button>
+      </div>`);
+    window.__rcMsg = msg;
+  }catch(e){
+    if(window.showErrorDialog) showErrorDialog(e,'إصدار كود استرجاع');
+    else showMessage(String((e&&e.message)||e));
+  }
+}
+
+function rcCopyCode(c){
+  if(navigator.clipboard) navigator.clipboard.writeText(c)
+    .then(()=>toast('الكود اتنسخ'),()=>toast('مقدرش ينسخ'));
+}
+function rcCopyMsg(){
+  const m=window.__rcMsg||'';
+  if(navigator.clipboard) navigator.clipboard.writeText(m)
+    .then(()=>toast('الرسالة اتنسخت'),()=>toast('مقدرش ينسخ'));
 }
 
 function pageSysErrors(){
@@ -8515,6 +8610,8 @@ function openApartmentDetail(id){
       <button class="btn primary" onclick="openPaymentModal('${a.id}')">تسجيل دفعة</button>
       <button class="btn gold" onclick="printApartmentStatement('${a.id}')">🖨️ طباعة كشف الحساب</button>
       <button class="btn ghost" onclick="openApartmentModal('${a.id}')">تعديل بيانات الشقة</button>
+      <button class="btn ghost" onclick="openUnitRecoveryCode('${a.id}')"
+        title="الساكن نسي كلمة المرور؟">🔑 كود استرجاع</button>
       <button class="btn ghost" onclick="closeModal()">إغلاق</button>
     </div>
     <div class="card mtop2" style="background:var(--tint)">
@@ -12974,7 +13071,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.48';
+const APP_BUILD='2.49';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -13189,25 +13286,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.48"></script>
-<script type="module" src="emartna-auth.js?v=2.48"></script>
-<script type="module" src="emartna-profile.js?v=2.48"></script>
-<script type="module" src="emartna-users.js?v=2.48"></script>
-<script type="module" src="emartna-platform.js?v=2.48"></script>
-<script type="module" src="emartna-contactlog.js?v=2.48"></script>
-<script type="module" src="emartna-permreport.js?v=2.48"></script>
-<script type="module" src="emartna-finops.js?v=2.48"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.48"></script>
-<script type="module" src="emartna-planscreens.js?v=2.48"></script>
+<script type="module" src="emartna-cloud.js?v=2.49"></script>
+<script type="module" src="emartna-auth.js?v=2.49"></script>
+<script type="module" src="emartna-profile.js?v=2.49"></script>
+<script type="module" src="emartna-users.js?v=2.49"></script>
+<script type="module" src="emartna-platform.js?v=2.49"></script>
+<script type="module" src="emartna-contactlog.js?v=2.49"></script>
+<script type="module" src="emartna-permreport.js?v=2.49"></script>
+<script type="module" src="emartna-finops.js?v=2.49"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.49"></script>
+<script type="module" src="emartna-planscreens.js?v=2.49"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.48"></script>
+<script type="module" src="emartna-perms.js?v=2.49"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.48"></script>
+<script type="module" src="emartna-bundle.js?v=2.49"></script>
 
 <!-- ⏳ الخروج التلقائي عند الخمول
      ⚠️ الملف ده كان موجود في المستودع (١١ ك.ب، مكتوب بالكامل)
@@ -13218,7 +13315,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
         مش مفعّلة فعلًا.
      ⚠️ بيتحمّل **بعد** الحزمة عن قصد، لأنه بيعتمد على getSession
         و logout و openModal. -->
-<script type="module" src="emartna-idle.js?v=2.48"></script>
+<script type="module" src="emartna-idle.js?v=2.49"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
