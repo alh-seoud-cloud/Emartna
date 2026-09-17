@@ -2489,24 +2489,22 @@ function getFilteredSortedRows(tableId){
           والشارات) مكانش بيتبحث فيها خالص.
        ٢) بيقارن النص حرفيًا — فالبحث بـ«0114» مكانش بيلاقي رقم
           متخزّن «+201147992900»، لأن الصفر مش موجود في المتخزّن.
-          وده اللي خلّى البحث بالتليفون مايشتغلش.
        ٣) الهمزات — «أحمد» مكانش بيلاقي «احمد».
        ============================================================ */
     const norm = v => String(v==null?'':v)
       .toLowerCase()
-      .replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0)-0x0660))  /* عربي→إنجليزي */
-      .replace(/[\u06F0-\u06F9]/g, d => String(d.charCodeAt(0)-0x06F0))  /* فارسي */
-      .replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه')          /* توحيد الحروف */
-      .replace(/[\u064B-\u0652\u0640]/g,'')                              /* تشكيل ومدّ */
+      .replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0)-0x0660))
+      .replace(/[\u06F0-\u06F9]/g, d => String(d.charCodeAt(0)-0x06F0))
+      .replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه')
+      .replace(/[\u064B-\u0652\u0640]/g,'')
       .replace(/\s+/g,' ').trim();
 
-    /* الأرقام: بنقارن بالأرقام بس، وبنطابق من الآخر كمان عشان
-       +201147992900 يلاقيها لو كتب 0114 أو 1147 */
     const digitsOf = v => norm(v).replace(/[^0-9]/g,'');
 
     const q  = norm(st.q);
     const qd = digitsOf(st.q);
-    const isNum = qd.length >= 3 && qd.length === q.replace(/[^0-9]/g,'').length && /^[\d\s+\-()]+$/.test(st.q.trim());
+    const isNum = qd.length >= 3 && qd.length === q.replace(/[^0-9]/g,'').length
+                  && /^[\d\s+\-()]+$/.test(st.q.trim());
 
     const cellText = (c,r) => {
       if (c.value) { try{ return c.value(r); }catch(e){} }
@@ -5273,8 +5271,8 @@ function refreshCustomOfferPreview(buildingId){
     const days=document.getElementById('coDays').value||30;
     vars={اسم_العمارة:rec.name,اسم_الخطة:plan?plan.name:'',السعر:price,المدة:plan&&plan.durationMonths?plan.durationMonths+' شهر':'',أيام_العرض:days,كود_الخصم:'',نسبة_الخصم:''};
   }
-  const defaultBody='عزيزي رئيس اتحاد "{اسم_العمارة}"،\nعندنا عرض خاص ليك على نظام عمارتنا 🎁\n\nالخطة: {اسم_الخطة}\nالسعر الخاص: {السعر} جنيه\nالمدة: {المدة}\n\nللاستفادة من العرض، تواصل معانا في أقرب وقت.';
-  const couponBody='عزيزي رئيس اتحاد "{اسم_العمارة}"،\nعندنا كود خصم خاص ليك 🎟️\n\nالكود: {كود_الخصم}\nنسبة الخصم: {نسبة_الخصم}\nالخطة: {اسم_الخطة}\nالسعر بعد الخصم: {السعر} جنيه\n\nاستخدم الكود عند الترقية للاستفادة بالعرض.';
+  const defaultBody='عزيزي رئيس اتحاد "{اسم_العمارة}"،\nعندنا عرض خاص ليك على نظام عمارتنا.\n\nالخطة: {اسم_الخطة}\nالسعر الخاص: {السعر} جنيه\nالمدة: {المدة}\n\nللاستفادة من العرض، تواصل معانا في أقرب وقت.';
+  const couponBody='عزيزي رئيس اتحاد "{اسم_العمارة}"،\nعندنا كود خصم خاص ليك.\n\nالكود: {كود_الخصم}\nنسبة الخصم: {نسبة_الخصم}\nالخطة: {اسم_الخطة}\nالسعر بعد الخصم: {السعر} جنيه\n\nاستخدم الكود عند الترقية للاستفادة بالعرض.';
   const template=templates[idx]||{body:type==='coupon'?couponBody:defaultBody};
   document.getElementById('coMsgText').value=fillTemplateVars(template.body,vars);
 }
@@ -6324,10 +6322,10 @@ const MESSAGE_CATEGORIES=[
 window.MESSAGE_CATEGORIES = MESSAGE_CATEGORIES;
 function defaultMessageTemplates(){
   return[
-    {id:uid(),category:'lead_outreach',title:'دعوة عامة',body:'أهلًا 👋\nجرّب "عمارتنا" - نظام إدارة اتحاد الملاك بسهولة واحترافية!\nتحصيل، مصروفات، مشاريع، وتواصل مع السكان في مكان واحد.\nابدأ تجربة مجانية دلوقتي: {رابط_الموقع}'},
+    {id:uid(),category:'lead_outreach',title:'دعوة عامة',body:'أهلًا،\nجرّب "عمارتنا" - نظام إدارة اتحاد الملاك بسهولة واحترافية!\nتحصيل، مصروفات، مشاريع، وتواصل مع السكان في مكان واحد.\nابدأ تجربة مجانية دلوقتي: {رابط_الموقع}'},
     {id:uid(),category:'lead_outreach',title:'دعوة مختصرة',body:'عايز تدير اتحاد عمارتك بسهولة من موبايلك؟ جرّب "عمارتنا" مجانًا: {رابط_الموقع}'},
-    {id:uid(),category:'custom_offer',title:'عرض خاص قياسي',body:'عزيزي رئيس اتحاد "{اسم_العمارة}"،\nعندنا عرض خاص ليك على نظام عمارتنا 🎁\n\nالخطة: {اسم_الخطة}\nالسعر الخاص: {السعر} جنيه\nالمدة: {المدة}\nالعرض ساري لمدة {أيام_العرض} يوم من تاريخه.\n\nللاستفادة من العرض، تواصل معانا في أقرب وقت.'},
-    {id:uid(),category:'custom_offer',title:'عرض كود خصم قياسي',body:'عزيزي رئيس اتحاد "{اسم_العمارة}"،\nعندنا كود خصم خاص ليك 🎟️\n\nالكود: {كود_الخصم}\nنسبة الخصم: {نسبة_الخصم}\nالخطة: {اسم_الخطة}\nالسعر بعد الخصم: {السعر} جنيه\n\nاستخدم الكود عند الترقية للاستفادة بالعرض.'},
+    {id:uid(),category:'custom_offer',title:'عرض خاص قياسي',body:'عزيزي رئيس اتحاد "{اسم_العمارة}"،\nعندنا عرض خاص ليك على نظام عمارتنا.\n\nالخطة: {اسم_الخطة}\nالسعر الخاص: {السعر} جنيه\nالمدة: {المدة}\nالعرض ساري لمدة {أيام_العرض} يوم من تاريخه.\n\nللاستفادة من العرض، تواصل معانا في أقرب وقت.'},
+    {id:uid(),category:'custom_offer',title:'عرض كود خصم قياسي',body:'عزيزي رئيس اتحاد "{اسم_العمارة}"،\nعندنا كود خصم خاص ليك.\n\nالكود: {كود_الخصم}\nنسبة الخصم: {نسبة_الخصم}\nالخطة: {اسم_الخطة}\nالسعر بعد الخصم: {السعر} جنيه\n\nاستخدم الكود عند الترقية للاستفادة بالعرض.'},
     {id:uid(),category:'renewal_reminder',title:'تذكير تجديد قياسي',body:'عزيزي رئيس اتحاد "{اسم_العمارة}"،\nاشتراكك في نظام عمارتنا ({اسم_الخطة}) {تاريخ_الانتهاء}. برجاء التواصل لتجديد الاشتراك أو الترقية.'},
 
     /* ردود جاهزة على أسئلة العملاء المتكررة — بتوفّر إعادة صياغة
@@ -6576,15 +6574,32 @@ function openLeadDetailModal(id){
     <div style="max-height:250px;overflow-y:auto">${(lead.messages||[]).length?[...lead.messages].reverse().map(m=>`<div class="card mtop"><b class="small">${m.channel==='whatsapp'?'💬 واتساب':'✉️ رسالة نصية'}</b> - <span class="small">${esc(m.date)}</span><p class="small mtop">${esc(m.note||'')}</p></div>`).join(''):'<p class="small">لسه مفيش رسائل مسجّلة.</p>'}</div>
     <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`);
 }
+/* رابط الموقع: الخانة اليدوية أولًا، وإلا النطاق اللي البرنامج
+   شغّال عليه دلوقتي. مفيش سبب يستنى حد يكتبه وهو عارفه.
+   ⚠️ بنستثني العناوين المحلية عشان مانبعتش localhost لعميل. */
+function siteUrlOrHost(){
+  try{
+    const manual = (REG && REG.sysOwner && REG.sysOwner.siteUrl || '').trim();
+    if (manual) return manual.replace(/\/$/,'');
+    const o = location.origin || '';
+    if (/^https?:\/\//i.test(o) && !/localhost|127\.0\.0\.1|^file:/i.test(o))
+      return o.replace(/\/$/,'');
+  }catch(e){}
+  return '(هيتحط رابط الموقع هنا لما ينشر)';
+}
+
 function fillTemplateVars(text,vars){
   let out=text;
   Object.keys(vars).forEach(k=>{out=out.split('{'+k+'}').join(vars[k]);});
+  /* ⚠️ شبكة أمان: لو فضل متغيّر ماتبدلش، مانبعتوش للعميل بشكله
+     الخام {رابط_الموقع} — ده بيبان كأن البرنامج باظ. */
+  out = out.replace(/\{رابط_الموقع\}/g, siteUrlOrHost());
   return out;
 }
 function openSendLeadMessageModal(id){
   const lead=ensureMarketingLeads().find(l=>l.id===id); if(!lead)return;
   const templates=templatesForCategory('lead_outreach');
-  const vars={رابط_الموقع:REG.sysOwner.siteUrl||'(هيتحط رابط الموقع هنا لما ينشر)'};
+  const vars={رابط_الموقع:siteUrlOrHost()};
   const firstMsg=templates.length?fillTemplateVars(templates[0].body,vars):'أهلًا 👋\nجرّب "عمارتنا"!';
   openModal(`<h3>إرسال رسالة لـ${esc(lead.name||phoneFull(lead.phoneCountry,lead.phone))}</h3>
     ${templates.length>1?`<div class="field2 mtop"><label>اختر رسالة جاهزة</label><select id="leadTemplatePick" onchange="applyLeadTemplate('${id}')">${templates.map((t,i)=>`<option value="${i}">${esc(t.title)}</option>`).join('')}</select></div>`:''}
@@ -6597,7 +6612,7 @@ function applyLeadTemplate(id){
   const lead=ensureMarketingLeads().find(l=>l.id===id); if(!lead)return;
   const templates=templatesForCategory('lead_outreach');
   const idx=Number(document.getElementById('leadTemplatePick').value);
-  const vars={رابط_الموقع:REG.sysOwner.siteUrl||'(هيتحط رابط الموقع هنا لما ينشر)'};
+  const vars={رابط_الموقع:siteUrlOrHost()};
   document.getElementById('leadMsgText').value=fillTemplateVars(templates[idx].body,vars);
 }
 function refreshLeadSendButtons(id){
@@ -13177,7 +13192,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.51';
+const APP_BUILD='2.52';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -13392,25 +13407,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.51"></script>
-<script type="module" src="emartna-auth.js?v=2.51"></script>
-<script type="module" src="emartna-profile.js?v=2.51"></script>
-<script type="module" src="emartna-users.js?v=2.51"></script>
-<script type="module" src="emartna-platform.js?v=2.51"></script>
-<script type="module" src="emartna-contactlog.js?v=2.51"></script>
-<script type="module" src="emartna-permreport.js?v=2.51"></script>
-<script type="module" src="emartna-finops.js?v=2.51"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.51"></script>
-<script type="module" src="emartna-planscreens.js?v=2.51"></script>
+<script type="module" src="emartna-cloud.js?v=2.52"></script>
+<script type="module" src="emartna-auth.js?v=2.52"></script>
+<script type="module" src="emartna-profile.js?v=2.52"></script>
+<script type="module" src="emartna-users.js?v=2.52"></script>
+<script type="module" src="emartna-platform.js?v=2.52"></script>
+<script type="module" src="emartna-contactlog.js?v=2.52"></script>
+<script type="module" src="emartna-permreport.js?v=2.52"></script>
+<script type="module" src="emartna-finops.js?v=2.52"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.52"></script>
+<script type="module" src="emartna-planscreens.js?v=2.52"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.51"></script>
+<script type="module" src="emartna-perms.js?v=2.52"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.51"></script>
+<script type="module" src="emartna-bundle.js?v=2.52"></script>
 
 <!-- ⏳ الخروج التلقائي عند الخمول
      ⚠️ الملف ده كان موجود في المستودع (١١ ك.ب، مكتوب بالكامل)
@@ -13421,7 +13436,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
         مش مفعّلة فعلًا.
      ⚠️ بيتحمّل **بعد** الحزمة عن قصد، لأنه بيعتمد على getSession
         و logout و openModal. -->
-<script type="module" src="emartna-idle.js?v=2.51"></script>
+<script type="module" src="emartna-idle.js?v=2.52"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
