@@ -5956,6 +5956,44 @@ async function loadVisitors(){
   try{ renderSysContent(); }catch(e){}
 }
 
+/* ============================================================
+   🔄 تحديث إجباري — زرار الإنقاذ
+   ------------------------------------------------------------
+   بيمسح كل مخازن المتصفح ويعيد التحميل. للحالة النادرة اللي
+   المتصفح فيها ماسك نسخة قديمة رغم التنظيف التلقائي.
+
+   ⚠️ مابيمسّش أي بيانات — المخازن دي فيها ملفات البرنامج بس
+      (الكود والصور). بيانات العمارة في القاعدة وفي تخزين منفصل.
+   ============================================================ */
+async function purgeAllCaches(){
+  const ok = await new Promise(res=>{
+    confirmDelete('هيمسح ملفات البرنامج المخزّنة في المتصفح ويعيد التحميل.\n\n'+
+      'بياناتك مش هتتمس — دي ملفات الكود بس.\n'+
+      'استعمله لو البرنامج ماسك نسخة قديمة.', ()=>res(true));
+    setTimeout(()=>res(false), 60000);
+  });
+  if(!ok) return;
+  try{
+    /* ١) نبلّغ العامل يمسح — لو موجود */
+    if(navigator.serviceWorker && navigator.serviceWorker.controller){
+      navigator.serviceWorker.controller.postMessage({ type:'PURGE_ALL' });
+    }
+    /* ٢) ونمسح بنفسنا كمان — مانعتمدش على رد العامل */
+    if(window.caches){
+      const ks = await caches.keys();
+      await Promise.all(ks.map(k=>caches.delete(k)));
+    }
+    toast('اتمسح — بيعيد التحميل…');
+  }catch(e){
+    console.error('purge failed:', e);
+    toast('مقدرش يمسح — جرّب Ctrl+Shift+R');
+  }
+  /* ٣) إعادة تحميل بعنوان مختلف عشان نتخطّى أي كاش متبقي */
+  setTimeout(()=>{ try{
+    location.replace(location.pathname + '?fresh=' + Date.now());
+  }catch(_){ location.reload(true); } }, 600);
+}
+
 function pageSysErrors(){
   if (__sysErrRows === null){
     __sysErrRows = [];
@@ -5989,6 +6027,8 @@ function pageSysErrors(){
       {defaultKey:'hits', emptyText:'مفيش أخطاء', exportName:'الأخطاء غير المعروفة'})}</div>
     <div class="modal-actions mtop2">
       <button class="btn ghost" onclick="__sysErrRows=null;renderSysContent()">🔄 تحديث</button>
+      <button class="btn ghost" onclick="purgeAllCaches()" style="margin-right:auto">
+        🧹 تحديث إجباري للبرنامج</button>
     </div>`;
 }
 
@@ -12932,7 +12972,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.46';
+const APP_BUILD='2.47';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -13147,25 +13187,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.46"></script>
-<script type="module" src="emartna-auth.js?v=2.46"></script>
-<script type="module" src="emartna-profile.js?v=2.46"></script>
-<script type="module" src="emartna-users.js?v=2.46"></script>
-<script type="module" src="emartna-platform.js?v=2.46"></script>
-<script type="module" src="emartna-contactlog.js?v=2.46"></script>
-<script type="module" src="emartna-permreport.js?v=2.46"></script>
-<script type="module" src="emartna-finops.js?v=2.46"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.46"></script>
-<script type="module" src="emartna-planscreens.js?v=2.46"></script>
+<script type="module" src="emartna-cloud.js?v=2.47"></script>
+<script type="module" src="emartna-auth.js?v=2.47"></script>
+<script type="module" src="emartna-profile.js?v=2.47"></script>
+<script type="module" src="emartna-users.js?v=2.47"></script>
+<script type="module" src="emartna-platform.js?v=2.47"></script>
+<script type="module" src="emartna-contactlog.js?v=2.47"></script>
+<script type="module" src="emartna-permreport.js?v=2.47"></script>
+<script type="module" src="emartna-finops.js?v=2.47"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.47"></script>
+<script type="module" src="emartna-planscreens.js?v=2.47"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.46"></script>
+<script type="module" src="emartna-perms.js?v=2.47"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.46"></script>
+<script type="module" src="emartna-bundle.js?v=2.47"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
