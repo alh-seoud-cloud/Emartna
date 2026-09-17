@@ -5899,12 +5899,50 @@ let __sysErrRows = null;
    ⚠️ الموقع الجغرافي مش متسجّل — بقرار.
    ============================================================ */
 let __visRows = null, __visFilter = 'all';
+/* المدى الافتراضي: آخر شهر — أكتر حاجة بتتسأل */
+let __visFrom = null, __visTo = null, __visPreset = 30, __visQ = '';
 
 function setVisFilter(v){ __visFilter = v; renderSysContent(); }
 
+/* اختصارات المدى — بتملا الخانتين وتعيد التحميل */
+function setVisPreset(days){
+  __visPreset = days;
+  const d = n => { const x=new Date(); x.setDate(x.getDate()-n);
+                   return x.toISOString().slice(0,10); };
+  if (days === 0){ __visFrom = null; __visTo = null; }      /* الكل */
+  else { __visFrom = d(days); __visTo = new Date().toISOString().slice(0,10); }
+  __visRows = null; renderSysContent();
+}
+
+/* المدى اليدوي من الخانتين */
+function applyVisRange(){
+  const g = id => (document.getElementById(id)||{}).value || '';
+  __visFrom = g('visFrom') || null;
+  __visTo   = g('visTo')   || null;
+  __visPreset = -1;                    /* مخصّص */
+  __visRows = null; renderSysContent();
+}
+
+function setVisSearch(v){ __visQ = String(v||''); renderSysContent(); }
+
 function pageSysVisitors(){
-  if (__visRows === null){ __visRows = []; loadVisitors(); return '<p class="small">جاري التحميل…</p>'; }
-  const all = __visRows;
+  if (__visRows === null){
+    /* أول فتحة: آخر شهر — من غير ما نحمّل كل التاريخ */
+    if (__visFrom === null && __visTo === null && __visPreset === 30){
+      const d = new Date(); d.setDate(d.getDate()-30);
+      __visFrom = d.toISOString().slice(0,10);
+      __visTo   = new Date().toISOString().slice(0,10);
+    }
+    __visRows = []; loadVisitors();
+    return '<p class="small">جاري التحميل…</p>';
+  }
+  /* البحث بيدوّر في كل الحقول المهمة — اسم أو رقم أو مصدر أو عمارة */
+  const q = __visQ.trim().toLowerCase();
+  const all = !q ? __visRows : __visRows.filter(r =>
+    [r['الاسم'], r['الرقم'], r['المصدر'], r['الدور'],
+     r['اسم_العمارة'], r['كود_العمارة']]
+      .some(x => String(x||'').toLowerCase().includes(q)));
+
   const live = all.filter(r => r['الحالة'] === 'على الموقع');
   const rows = __visFilter === 'live' ? live
              : __visFilter === 'closed' ? all.filter(r => r['الحالة'] !== 'على الموقع')
@@ -5938,9 +5976,33 @@ function pageSysVisitors(){
        return m>=60 ? Math.floor(m/60)+' س '+(m%60)+' د' : m+' د';}},
   ];
 
+  const pre = (d,t) => `<button class="btn sm ${__visPreset===d?'primary':'ghost'}"
+    onclick="setVisPreset(${d})">${t}</button>`;
+
   return `<h2>👣 سجل الزوّار</h2>
     <p class="small" style="color:var(--muted)">
       كل زائر جرّب البرنامج — الأحدث فوق. «قفل» يعني مظهرش من أكتر من ٣ دقايق.</p>
+
+    <div class="card mtop" style="background:var(--tint);padding:10px 12px">
+      <div class="flexrow" style="gap:6px;flex-wrap:wrap;align-items:center">
+        <span class="small" style="min-width:52px">المدة</span>
+        ${pre(30,'آخر شهر')}${pre(90,'٣ شهور')}${pre(180,'٦ شهور')}${pre(365,'سنة')}${pre(0,'الكل')}
+      </div>
+      <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap;align-items:center">
+        <span class="small" style="min-width:52px">من</span>
+        <input id="visFrom" type="date" value="${esc(__visFrom||'')}" style="width:150px">
+        <span class="small">إلى</span>
+        <input id="visTo" type="date" value="${esc(__visTo||'')}" style="width:150px">
+        <button class="btn sm ghost" onclick="applyVisRange()">تطبيق</button>
+      </div>
+      <div class="flexrow mtop" style="gap:6px;align-items:center">
+        <span class="small" style="min-width:52px">بحث</span>
+        <input id="visQ" type="search" placeholder="اسم · رقم · مصدر · عمارة"
+          value="${esc(__visQ)}" oninput="setVisSearch(this.value)" style="flex:1;min-width:160px">
+        ${__visQ?`<button class="btn sm ghost" onclick="setVisSearch('')">مسح</button>`:''}
+      </div>
+    </div>
+
     <div class="flexrow mtop" style="gap:6px;flex-wrap:wrap">
       ${btn('all','الكل',all.length)}
       ${btn('live','🟢 على الموقع دلوقتي',live.length)}
@@ -5956,7 +6018,8 @@ async function loadVisitors(){
   try{
     const sb = window.CLOUD && window.CLOUD._sb;
     if (!sb) { __visRows = []; return renderSysContent(); }
-    const { data, error } = await sb.rpc('visitors_log', { p_days: 30 });
+    const { data, error } = await sb.rpc('visitors_log_range',
+      { p_from: __visFrom, p_to: __visTo });
     __visRows = (error || !data) ? [] : data;
   }catch(e){ __visRows = []; }
   try{ renderSysContent(); }catch(e){}
