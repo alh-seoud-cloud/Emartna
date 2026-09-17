@@ -42,6 +42,10 @@
     lastAct = Date.now();
     if (warnBox) dismissWarning();
   }
+  /* بنعرّضها عشان index.html يقدر يصفّر العدّاد عند لحظات معروفة
+     (بعد الدخول، بعد إنشاء عمارة، بعد تغيير كلمة المرور) —
+     فيه ٦ مواضع بتنادي resetIdleTimer() وكانت فاضية. */
+  window.idleReset = reset;
   ['mousedown','keydown','touchstart','scroll','wheel','pointerdown']
     .forEach(ev => document.addEventListener(ev, reset, { passive:true, capture:true }));
 

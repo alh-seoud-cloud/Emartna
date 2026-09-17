@@ -2016,7 +2016,9 @@ function logout(){
    شغالة أو فيه كلام مكتوب. النسخة القديمة كانت 20 دقيقة ثابتة للكل
    وكانت شغالة بالتوازي مع الجديدة. */
 let __idleTimer=null,__idleWarnTimer=null;
-function resetIdleTimer(){}
+/* بتوجّه لوحدة الخمول لو محمّلة. لو مش محمّلة مابتعملش حاجة —
+   البرنامج بيكمّل عادي. */
+function resetIdleTimer(){ try{ if(window.idleReset) idleReset(); }catch(e){} }
 function initIdleWatcher(){}
 /* ⚠️ كانت بتظهر الخانة دايمًا حتى لو الرسالة فاضية — فكان بيفضل
    شريط وردي فاضي فوق خانة الإيميل في شاشة الاسترداد، والمستخدم
@@ -12972,7 +12974,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.47';
+const APP_BUILD='2.48';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -13187,25 +13189,36 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.47"></script>
-<script type="module" src="emartna-auth.js?v=2.47"></script>
-<script type="module" src="emartna-profile.js?v=2.47"></script>
-<script type="module" src="emartna-users.js?v=2.47"></script>
-<script type="module" src="emartna-platform.js?v=2.47"></script>
-<script type="module" src="emartna-contactlog.js?v=2.47"></script>
-<script type="module" src="emartna-permreport.js?v=2.47"></script>
-<script type="module" src="emartna-finops.js?v=2.47"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.47"></script>
-<script type="module" src="emartna-planscreens.js?v=2.47"></script>
+<script type="module" src="emartna-cloud.js?v=2.48"></script>
+<script type="module" src="emartna-auth.js?v=2.48"></script>
+<script type="module" src="emartna-profile.js?v=2.48"></script>
+<script type="module" src="emartna-users.js?v=2.48"></script>
+<script type="module" src="emartna-platform.js?v=2.48"></script>
+<script type="module" src="emartna-contactlog.js?v=2.48"></script>
+<script type="module" src="emartna-permreport.js?v=2.48"></script>
+<script type="module" src="emartna-finops.js?v=2.48"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.48"></script>
+<script type="module" src="emartna-planscreens.js?v=2.48"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.47"></script>
+<script type="module" src="emartna-perms.js?v=2.48"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.47"></script>
+<script type="module" src="emartna-bundle.js?v=2.48"></script>
+
+<!-- ⏳ الخروج التلقائي عند الخمول
+     ⚠️ الملف ده كان موجود في المستودع (١١ ك.ب، مكتوب بالكامل)
+        **ومش بيتحمّل خالص** — الذكر الوحيد له في index.html كان
+        تعليق. والنتيجة إن resetIdleTimer() فاضية، وشاشة «سياسة
+        إقفال الجلسة» بتحفظ الإعدادات في القاعدة ومحدش بيقراها.
+        فالسياسة كانت مضبوطة (٥ دقايق للإدارة · ١٥ للسكان) وهي
+        مش مفعّلة فعلًا.
+     ⚠️ بيتحمّل **بعد** الحزمة عن قصد، لأنه بيعتمد على getSession
+        و logout و openModal. -->
+<script type="module" src="emartna-idle.js?v=2.48"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
