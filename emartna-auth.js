@@ -730,7 +730,12 @@ window.redeemRecoverCode = async function(){
     const { data, error } = await sb.rpc('redeem_recovery_code',
       { p_phone: phone, p_code: code, p_new_password: p1 });
     if (error) throw error;
-    if (data === false) throw new Error('الكود غير صحيح أو منتهي');
+    /* ⚠️ الدالة بترجّع كائن {ok:true} مش قيمة منطقية. الفحص القديم
+       (data === false) مكانش هيمسك {ok:false} لو الدالة اتغيّرت
+       يوم وبقت ترجّع كده بدل ما ترمي خطأ. بنفحص الشكلين. */
+    const okVal = (data && typeof data === 'object') ? data.ok : data;
+    if (okVal === false || okVal === null || okVal === undefined)
+      throw new Error('الكود غير صحيح أو منتهي');
 
     showLoginError('');
     toast('اتغيّرت كلمة المرور ✅ — ادخل بيها دلوقتي');
