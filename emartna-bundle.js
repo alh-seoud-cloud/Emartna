@@ -11633,31 +11633,66 @@
 
   /* صفوف إدخال المستخدمين — في الصفحة والنافذة */
   function usersRowsHTML(sfx){
-    /* ⚠️ الصفوف كانت واحد تحت التاني بسعر جنب كل واحد — ٨ صفوف
-       طويلة، والزائر بيتلخبط في الأسعار بدل ما يركّز في العدد.
-       دلوقتي: شبكة مضغوطة، بلا أسعار، والإجمالي في الآخر بس. */
+    /* ⚠️ ٨ خانات ظاهرة من الأول بتحسّس الزائر إن فيه شغل كتير
+       قدامه، والأغلبية مش محتاجين حد زيادة أصلًا. دلوقتي مطوية:
+       سطر واحد هادي، يفتح لو حب.
+       ⚠️ والخانات فاضية بتلميح «0» مش قيمة 0 — عشان ما يضطرش
+          يمسح الصفر قبل ما يكتب. */
     return `
     <div class="mtop2" style="border-top:1px dashed var(--line);padding-top:10px">
-      <div class="flexrow" style="align-items:baseline;gap:6px;margin-bottom:6px">
-        <b class="small" style="flex:1">👥 محتاج مستخدمين زيادة؟ <span
-          style="font-weight:400;color:var(--muted)">(اختياري)</span></b>
-        <a href="javascript:void(0)" class="small"
-           onclick="resetCalcUsers('${sfx}')" style="color:var(--accent)">تصفير</a>
+      <div id="uToggle_${sfx}" onclick="toggleCalcUsers('${sfx}')"
+           style="cursor:pointer;display:flex;align-items:center;gap:8px;
+                  padding:8px 10px;border-radius:10px;background:var(--tint,#F3F8F7);
+                  border:1px solid var(--line)">
+        <span style="font-size:15px">👥</span>
+        <span class="small" style="flex:1;line-height:1.5">
+          <b>محتاج مستخدمين زيادة؟</b>
+          <span style="color:var(--muted)"> — محاسب · حارس · نائب…</span>
+        </span>
+        <span id="uCount_${sfx}" class="small"
+              style="color:var(--accent);font-weight:700"></span>
+        <span id="uArrow_${sfx}" style="color:var(--muted);font-size:13px">▾</span>
       </div>
-      <p class="small" style="color:var(--muted);margin:0 0 8px;line-height:1.7">
-        الاشتراك شامل <b>رئيس اتحاد</b> و<b>كل أصحاب الشقق</b> مجانًا.</p>
 
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:6px">
-        ${ROLE_ROWS.map(([k,label])=>`
-          <label style="display:flex;align-items:center;gap:6px;background:var(--tint,#F3F8F7);
-                 border:1px solid var(--line);border-radius:9px;padding:5px 8px">
-            <span class="small" style="flex:1;line-height:1.3">${esc2(label)}</span>
-            <input class="calc-u-${sfx}" data-role="${k}" type="number" min="0" max="50"
-              value="0" oninput="calcPriceFull('${sfx}')" inputmode="numeric"
-              style="width:46px;text-align:center;padding:3px 2px;font-size:13px">
-          </label>`).join('')}
+      <div id="uBox_${sfx}" style="display:none;margin-top:8px">
+        <p class="small" style="color:var(--muted);margin:0 0 8px;line-height:1.7">
+          الاشتراك شامل <b>رئيس اتحاد</b> و<b>كل أصحاب الشقق</b> مجانًا —
+          سيبها فاضية لو مش محتاج.</p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px">
+          ${ROLE_ROWS.map(([k,label])=>`
+            <label style="display:flex;align-items:center;gap:6px;
+                   border:1px solid var(--line);border-radius:9px;padding:6px 9px">
+              <span class="small" style="flex:1;line-height:1.3">${esc2(label)}</span>
+              <input class="calc-u-${sfx}" data-role="${k}" type="number" min="0" max="50"
+                placeholder="0" inputmode="numeric"
+                oninput="calcPriceFull('${sfx}')" onfocus="this.select()"
+                style="width:48px;text-align:center;padding:4px 2px;font-size:13px">
+            </label>`).join('')}
+        </div>
+
+        <div style="text-align:left;margin-top:6px">
+          <a href="javascript:void(0)" class="small"
+             onclick="resetCalcUsers('${sfx}')" style="color:var(--muted)">تصفير الكل</a>
+        </div>
       </div>
     </div>`;
+  }
+
+  /* الطيّ والفتح — والسهم والعدّاد بيتحدّثوا معاه */
+  window.toggleCalcUsers = function(sfx){
+    const box = document.getElementById('uBox_'+sfx);
+    const arr = document.getElementById('uArrow_'+sfx);
+    if (!box) return;
+    const open = box.style.display !== 'none';
+    box.style.display = open ? 'none' : 'block';
+    if (arr) arr.textContent = open ? '▾' : '▴';
+  };
+
+  /* عدّاد صغير جنب العنوان — يفضل باين حتى لو الصندوق مقفول */
+  function updateUsersBadge(sfx, total){
+    const el = document.getElementById('uCount_'+sfx);
+    if (el) el.textContent = total ? ('+' + total) : '';
   }
 
   window.resetCalcUsers = function(sfx){
@@ -11678,8 +11713,8 @@
       return;
     }
 
-    /* المستخدمين — سطر واحد بالإجمالي، والتفصيل تحته بخط صغير */
-    let usersTotal = 0, totalUsers = 0; const lines = [], parts = [];
+    /* المستخدمين */
+    let usersTotal = 0, totalUsers = 0; const parts = [];
     document.querySelectorAll('.calc-u-'+sfx).forEach(i=>{
       const c = Math.max(0, Number(i.value) || 0);
       if (!c) return;
@@ -11687,10 +11722,10 @@
       if (!pr) return;
       const row = ROLE_ROWS.find(r => r[0] === k);
       usersTotal += c * pr; totalUsers += c;
-      lines.push(1);
       parts.push(`${esc2(row ? row[1] : k)} ${c}×${pr}ج`);
     });
     const detail = parts.join(' · ');
+    updateUsersBadge(sfx, totalUsers);
 
     const m = planPriceFor('monthly', n);
     const y = planPriceFor('yearly',  n);
@@ -11724,14 +11759,11 @@
         </div>
         <p class="small" style="color:var(--muted);margin:4px 0 6px">
           شامل رئيس اتحاد + كل أصحاب الشقق</p>
-        ${lines.length ? `
+        ${totalUsers ? `
           <div class="flexrow small" style="padding:3px 0">
             <span style="flex:1">مستخدمين إضافيين (${totalUsers})</span>
-            <span>${usersTotal} ج</span>
-          </div>
-          <div class="small" style="color:var(--muted);padding:0 0 4px;line-height:1.7">
-            ${detail}
-          </div>
+            <span>${usersTotal} ج</span></div>
+          <div class="small" style="color:var(--muted);padding:0 0 4px;line-height:1.7">${detail}</div>
           <div class="flexrow small" style="padding:5px 0;border-top:1px solid var(--line);margin-top:2px">
              <span style="flex:1"><b>الإجمالي شهريًا</b></span><span><b>${mTot} ج</b></span></div>`
           : '<p class="small" style="color:var(--muted);margin:0">مفيش مستخدمين إضافيين — ده السعر الافتراضي.</p>'}
@@ -11898,8 +11930,9 @@
         onclick="closeModal();setTimeout(()=>openSignup(),150)">ابدأ مجانًا دلوقتي</button>`, true);
     setTimeout(() => { const el = document.getElementById('calcUnitsModal'); if (el) el.focus(); }, 200);
     /* الأسعار بتوصل بعد لحظة — نحدّث الأرقام المعروضة لما تجي */
-    /* الأسعار بتوصل بعد لحظة — نعيد الحساب لما تجي */
     loadPricingCfg().then(()=>{ try{
+      document.querySelectorAll('[data-rp]').forEach(sp=>{
+        sp.textContent = rolePrice(sp.dataset.rp) + ' ج'; });
       if (document.getElementById('calcUnitsModal')) calcPriceFull('modal');
     }catch(e){} });
   };
@@ -11967,6 +12000,8 @@
   /* الأسعار بتتحمّل مرة واحدة عند بدء البرنامج — عشان الصفحة
      الرئيسية تعرض الأرقام الصح من غير انتظار. */
   setTimeout(()=>{ loadPricingCfg().then(()=>{ try{
+    document.querySelectorAll('[data-rp]').forEach(sp=>{
+      sp.textContent = rolePrice(sp.dataset.rp) + ' ج'; });
     if (document.getElementById('calcUnits') &&
         Number(document.getElementById('calcUnits').value)) calcPriceFull('page');
   }catch(e){} }); }, 1500);
