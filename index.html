@@ -2481,45 +2481,29 @@ function getFilteredSortedRows(tableId){
   const st=window.__sortState[tableId]||{};
   let filtered=rows;
   if(st.q){
-    /* ============================================================
-       البحث المشترك — بيخدم ٣٧ جدول
-       ------------------------------------------------------------
-       ⚠️ كان فيه ٣ عيوب:
-       ١) بيبحث في c.value بس — والأعمدة اللي ليها cell (زي الحالة
-          والشارات) مكانش بيتبحث فيها خالص.
-       ٢) بيقارن النص حرفيًا — فالبحث بـ«0114» مكانش بيلاقي رقم
-          متخزّن «+201147992900»، لأن الصفر مش موجود في المتخزّن.
-       ٣) الهمزات — «أحمد» مكانش بيلاقي «احمد».
-       ============================================================ */
-    const norm = v => String(v==null?'':v)
-      .toLowerCase()
+    /* ⚠️ كان فيه ٣ عيوب: بيبحث في c.value بس (الأعمدة اللي ليها
+       cell مكانش بيتبحث فيها) · بيقارن حرفيًا فـ«0114» مكانش
+       بيلاقي «+201147992900» · والهمزات كانت تمنع المطابقة. */
+    const norm = v => String(v==null?'':v).toLowerCase()
       .replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0)-0x0660))
       .replace(/[\u06F0-\u06F9]/g, d => String(d.charCodeAt(0)-0x06F0))
       .replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه')
-      .replace(/[\u064B-\u0652\u0640]/g,'')
-      .replace(/\s+/g,' ').trim();
-
+      .replace(/[\u064B-\u0652\u0640]/g,'').replace(/\s+/g,' ').trim();
     const digitsOf = v => norm(v).replace(/[^0-9]/g,'');
-
-    const q  = norm(st.q);
-    const qd = digitsOf(st.q);
+    const q  = norm(st.q), qd = digitsOf(st.q);
     const isNum = qd.length >= 3 && qd.length === q.replace(/[^0-9]/g,'').length
                   && /^[\d\s+\-()]+$/.test(st.q.trim());
-
     const cellText = (c,r) => {
       if (c.value) { try{ return c.value(r); }catch(e){} }
       if (c.cell)  { try{ return String(c.cell(r)||'').replace(/<[^>]*>/g,' '); }catch(e){} }
       return '';
     };
-
     filtered = rows.filter(r => columns.some(c => {
       const raw = cellText(c,r);
       if (raw === '' || raw == null) return false;
       if (norm(raw).includes(q)) return true;
-      if (isNum){
-        const d = digitsOf(raw);
-        if (d && (d.includes(qd) || qd.includes(d.slice(-9)) || d.endsWith(qd))) return true;
-      }
+      if (isNum){ const d = digitsOf(raw);
+        if (d && (d.includes(qd) || qd.includes(d.slice(-9)) || d.endsWith(qd))) return true; }
       return false;
     }));
   }
@@ -5949,9 +5933,9 @@ function setVisPreset(days){
   const d = n => { const x=new Date(); x.setDate(x.getDate()-n);
                    return x.toISOString().slice(0,10); };
   const today = new Date().toISOString().slice(0,10);
-  if (days === 0){ __visFrom = null; __visTo = null; }        /* الكل */
-  else if (days === 1){ __visFrom = today; __visTo = today; } /* النهارده بس */
-  else { __visFrom = d(days-1); __visTo = today; }            /* أسبوع = ٧ أيام بالنهارده */
+  if (days === 0){ __visFrom = null; __visTo = null; }
+  else if (days === 1){ __visFrom = today; __visTo = today; }
+  else { __visFrom = d(days-1); __visTo = today; }
   __visRows = null; renderSysContent();
 }
 
@@ -6574,8 +6558,7 @@ function openLeadDetailModal(id){
     <div style="max-height:250px;overflow-y:auto">${(lead.messages||[]).length?[...lead.messages].reverse().map(m=>`<div class="card mtop"><b class="small">${m.channel==='whatsapp'?'💬 واتساب':'✉️ رسالة نصية'}</b> - <span class="small">${esc(m.date)}</span><p class="small mtop">${esc(m.note||'')}</p></div>`).join(''):'<p class="small">لسه مفيش رسائل مسجّلة.</p>'}</div>
     <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">إغلاق</button></div>`);
 }
-/* رابط الموقع: الخانة اليدوية أولًا، وإلا النطاق اللي البرنامج
-   شغّال عليه دلوقتي. مفيش سبب يستنى حد يكتبه وهو عارفه.
+/* رابط الموقع: الخانة اليدوية أولًا، وإلا النطاق الحالي.
    ⚠️ بنستثني العناوين المحلية عشان مانبعتش localhost لعميل. */
 function siteUrlOrHost(){
   try{
@@ -6591,8 +6574,7 @@ function siteUrlOrHost(){
 function fillTemplateVars(text,vars){
   let out=text;
   Object.keys(vars).forEach(k=>{out=out.split('{'+k+'}').join(vars[k]);});
-  /* ⚠️ شبكة أمان: لو فضل متغيّر ماتبدلش، مانبعتوش للعميل بشكله
-     الخام {رابط_الموقع} — ده بيبان كأن البرنامج باظ. */
+  /* شبكة أمان: مانبعتش متغيّر خام للعميل — بيبان كأن البرنامج باظ */
   out = out.replace(/\{رابط_الموقع\}/g, siteUrlOrHost());
   return out;
 }
@@ -7383,10 +7365,129 @@ function previewLandingPage(){
   window.__previewMode=true;
   renderRoot();
 }
+/* ============================================================
+   💰 سعر المستخدم الإضافي — جدول قابل للتعديل
+   ------------------------------------------------------------
+   الخطة بتغطّي: الوحدات + رئيس اتحاد واحد + كل أصحاب الشقق.
+   أي مستخدم إداري زيادة له سعر شهري حسب صفته.
+
+   ⚠️ الأسعار في إعدادات المنصة مش في الكود — تعدّلها من هنا
+      ويسري فورًا على كل العملاء من غير رفع أي ملف.
+   ⚠️ صاحب الشقة صفر عن قصد: هو اللي بيدفع الاشتراك للعمارة،
+      فمحاسبته عليه بتقلب المنطق.
+   ============================================================ */
+let __userPricing = null;
+
+const USER_ROLE_ROWS = [
+  ['admin',     'رئيس الاتحاد',        'الأول مجاني مع الخطة · الإضافي بيتحاسب'],
+  ['deputy',    'نائب رئيس الاتحاد',   'كل حاجة ما عدا الإعدادات'],
+  ['accountant','محاسب العمارة',       'الماليات بس'],
+  ['treasurer', 'أمين الصندوق',        'الماليات بس'],
+  ['board',     'عضو مجلس الإدارة',    'اطّلاع وطباعة + المحادثات'],
+  ['manager',   'إداري العمارة',       'كل حاجة بدون ماليات'],
+  ['guard',     'حارس العمارة',        'المحادثات بس — يقرا ويبعت'],
+  ['tenant',    'مستأجر',              'حسابه وكشفه والمحادثات'],
+  ['owner',     'صاحب شقة',            'مجاني — هو اللي بيدفع الاشتراك'],
+];
+
+function userPricingTableHTML(){
+  if (__userPricing === null){ __userPricing = {}; loadUserPricing(); 
+    return '<div class="card mtop"><p class="small">جاري تحميل أسعار المستخدمين…</p></div>'; }
+  const cfg = __userPricing || {};
+  const prices = cfg.prices || {};
+  const freeAdmins = cfg.freeAdmins ?? 1;
+
+  return `<div class="card mtop" style="background:var(--tint)">
+    <div class="section-title"><h3 style="font-size:13.5px">💰 سعر المستخدم الإضافي (شهريًا)</h3></div>
+    <p class="small" style="color:var(--muted);line-height:1.9">
+      الخطة بتغطّي <b>الوحدات</b> + <b>${freeAdmins} رئيس اتحاد</b> + <b>كل أصحاب الشقق</b>.
+      أي مستخدم إداري زيادة بيتحاسب بالسعر اللي تحدده هنا.
+      <b>التعديل بيسري فورًا</b> على كل العملاء.</p>
+
+    <div style="overflow-x:auto" class="mtop">
+      <table style="width:100%">
+        <thead><tr>
+          <th style="text-align:right">الصفة</th>
+          <th style="text-align:right">صلاحياته</th>
+          <th style="text-align:right;width:130px">السعر / شهر</th>
+        </tr></thead>
+        <tbody>
+          ${USER_ROLE_ROWS.map(([k,label,desc])=>`
+            <tr>
+              <td><b>${esc(label)}</b></td>
+              <td><span class="small" style="color:var(--muted)">${esc(desc)}</span></td>
+              <td><div class="flexrow" style="gap:4px;align-items:center">
+                <input id="up_${k}" type="text" inputmode="numeric" style="width:78px"
+                  value="${esc(String(prices[k] ?? 20))}" oninput="mNormalizeDigits(this)">
+                <span class="small">ج</span>
+              </div></td>
+            </tr>`).join('')}
+          <tr style="background:var(--bg)">
+            <td colspan="2"><b>رؤساء الاتحاد المجانيين مع الخطة</b></td>
+            <td><input id="up_freeAdmins" type="text" inputmode="numeric" style="width:78px"
+              value="${esc(String(freeAdmins))}" oninput="mNormalizeDigits(this)"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="flexrow mtop2" style="gap:6px">
+      <button class="btn primary" onclick="saveUserPricing()">💾 حفظ الأسعار</button>
+      <button class="btn ghost" onclick="__userPricing=null;renderSysContent()">🔄 تحديث</button>
+    </div>
+  </div>`;
+}
+
+async function loadUserPricing(){
+  try{
+    const sb = window.CLOUD && window.CLOUD._sb;
+    if(!sb){ __userPricing={}; return renderSysContent(); }
+    const { data, error } = await sb.from('platform_settings')
+      .select('value').eq('key','user_pricing').maybeSingle();
+    __userPricing = (error||!data) ? {} : (data.value||{});
+  }catch(e){ __userPricing = {}; }
+  try{ renderSysContent(); }catch(e){}
+}
+
+async function saveUserPricing(){
+  const num = id => {
+    const raw = arDigitsToEn((document.getElementById(id)||{}).value||'').trim();
+    const n = Number(raw);
+    return (isNaN(n) || n < 0) ? null : money2(n);
+  };
+  const prices = {};
+  for (const [k] of USER_ROLE_ROWS){
+    const v = num('up_'+k);
+    if (v === null) return showMessage('سعر «'+
+      (USER_ROLE_ROWS.find(r=>r[0]===k)||[])[1]+'» لازم يكون رقم مش سالب.');
+    prices[k] = v;
+  }
+  const fa = num('up_freeAdmins');
+  if (fa === null) return showMessage('عدد رؤساء الاتحاد المجانيين لازم يكون رقم صحيح.');
+
+  const payload = { enabled:true, freeAdmins: Math.round(fa), prices };
+  try{
+    const sb = window.CLOUD && window.CLOUD._sb;
+    if(!sb) return showMessage('مفيش اتصال بالسحابة.');
+    const { error } = await sb.from('platform_settings')
+      .upsert({ key:'user_pricing', value: payload }, { onConflict:'key' });
+    if(error) throw error;
+    __userPricing = payload;
+    toast('الأسعار اتحفظت ✅ — سارية فورًا');
+    renderSysContent();
+  }catch(e){
+    if(window.showErrorDialog) showErrorDialog(e,'حفظ أسعار المستخدمين');
+    else showMessage(String((e&&e.message)||e));
+  }
+}
+
 function pageSysPlans(){
   const plans=ensurePlans();
   const usageCount=key=>REG.buildings.filter(b=>ensureLicense(b).plan===key).length;
   return `<p class="small">إدارة خطط الاشتراك المعروضة على كل العملاء: السعر قبل الخصم، نسبة الخصم، السعر بعد الخصم، ومدة الاشتراك بالشهور.</p>
+
+  ${userPricingTableHTML()}
+
   <div class="flexrow mtop"><div class="spacer"></div><button class="btn primary" onclick="openPlanModal()">+ إضافة خطة جديدة</button></div>
   <div class="grid g3 mtop">
     ${plans.map(p=>{
@@ -8011,11 +8112,52 @@ function hasGroupPermission(u,groupKey){
    عشان تفعيل النظام التفصيلي ما يقفلش شاشات على حد بالغلط. */
 /* بوابة الإجراء داخل الشاشة (إضافة/تعديل/حذف/طباعة).
    نفس مبدأ screenVisible: من غير صلاحيات تفصيلية السلوك ما يتغيّرش. */
+/* ============================================================
+   الأفعال الكتابية — اللي بتتمنع لما الاشتراك ينتهي
+   ------------------------------------------------------------
+   القراءة والطباعة والتصدير مسموحين دايمًا: العميل له حق يشوف
+   بياناته ويطلعها حتى لو مدفعش. اللي بيتمنع الكتابة بس.
+   ============================================================ */
+const WRITE_ACTIONS = ['add','edit','delete','approve','unapprove',
+                       'att_add','att_delete','send','attach','moderate','delete_any'];
+
+/* ============================================================
+   بوابة الإدخال الوحيدة — ٦٦ نداء في البرنامج بيمرّوا من هنا
+   ------------------------------------------------------------
+   ⚠️ انتهاء الاشتراك بقى يمنع الكتابة. قبل كده كان بيعرض شريط
+      تحذير بس، والعميل يكمّل إدخال عادي — يعني الاشتراك مكانش
+      بيفرق في حاجة إلا التحذير.
+   ⚠️ صاحب المنصة مستثنى: لازم يقدر يدخّل ويصلّح لأي عمارة، وإلا
+      مايقدرش يساعد عميل اشتراكه خلص.
+   ⚠️ الفحص قبل فحص الصلاحيات، لأن الاشتراك شرط أعم.
+   ============================================================ */
 function guardAction(page,action){
+  /* انتهاء الاشتراك = قراءة فقط */
+  try{
+    if (WRITE_ACTIONS.includes(action) && !isPlatformOwnerView()){
+      const st = licenseStatusCheck();
+      if (st && !st.ok){
+        showMessage('البرنامج في وضع «قراءة فقط».\n\n' + st.reason +
+          '\n\nتقدر تشوف وتطبع وتصدّر كل بياناتك، لكن الإدخال والتعديل متوقفين لحد التجديد.');
+        return false;
+      }
+    }
+  }catch(e){ /* أي خطأ في الفحص مايمنعش الشغل */ }
+
   const u=window.currentUser?currentUser():null;
   if(!u||!u.screenPerms)return true;
   if(window.requirePerm)return requirePerm(page,action);
   return true;
+}
+
+/* صاحب المنصة بيتعامل مع كل العمارات — مايتوقفش باشتراك عمارة */
+function isPlatformOwnerView(){
+  try{
+    if (window.__viewMode === 'sysowner') return true;
+    if (window.REG && REG.sysOwner && REG.sysOwner.isPlatformAdmin) return true;
+    const u = window.currentUser ? currentUser() : null;
+    return !!(u && u.isPlatformAdmin);
+  }catch(e){ return false; }
 }
 function screenVisible(u,page){
   if(!u)return false;
@@ -13192,7 +13334,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.52';
+const APP_BUILD='2.53';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -13407,25 +13549,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.52"></script>
-<script type="module" src="emartna-auth.js?v=2.52"></script>
-<script type="module" src="emartna-profile.js?v=2.52"></script>
-<script type="module" src="emartna-users.js?v=2.52"></script>
-<script type="module" src="emartna-platform.js?v=2.52"></script>
-<script type="module" src="emartna-contactlog.js?v=2.52"></script>
-<script type="module" src="emartna-permreport.js?v=2.52"></script>
-<script type="module" src="emartna-finops.js?v=2.52"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.52"></script>
-<script type="module" src="emartna-planscreens.js?v=2.52"></script>
+<script type="module" src="emartna-cloud.js?v=2.53"></script>
+<script type="module" src="emartna-auth.js?v=2.53"></script>
+<script type="module" src="emartna-profile.js?v=2.53"></script>
+<script type="module" src="emartna-users.js?v=2.53"></script>
+<script type="module" src="emartna-platform.js?v=2.53"></script>
+<script type="module" src="emartna-contactlog.js?v=2.53"></script>
+<script type="module" src="emartna-permreport.js?v=2.53"></script>
+<script type="module" src="emartna-finops.js?v=2.53"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.53"></script>
+<script type="module" src="emartna-planscreens.js?v=2.53"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.52"></script>
+<script type="module" src="emartna-perms.js?v=2.53"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.52"></script>
+<script type="module" src="emartna-bundle.js?v=2.53"></script>
 
 <!-- ⏳ الخروج التلقائي عند الخمول
      ⚠️ الملف ده كان موجود في المستودع (١١ ك.ب، مكتوب بالكامل)
@@ -13436,7 +13578,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
         مش مفعّلة فعلًا.
      ⚠️ بيتحمّل **بعد** الحزمة عن قصد، لأنه بيعتمد على getSession
         و logout و openModal. -->
-<script type="module" src="emartna-idle.js?v=2.52"></script>
+<script type="module" src="emartna-idle.js?v=2.53"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
