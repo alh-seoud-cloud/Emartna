@@ -7742,6 +7742,7 @@ function openLicenseManage(buildingId){
         <button class="btn sm ${lic.status==='suspended'?'primary':'red'}" onclick="toggleLicenseSuspend('${buildingId}')">${lic.status==='suspended'?'✅ إعادة تفعيل':'⛔ إيقاف الاشتراك'}</button>
       </div>
     </div>
+    <div id="licUsersBox"></div>
     <div class="section-title"><h3 style="font-size:13.5px">تفعيل خطة جديدة <a href="javascript:void(0)" style="font-weight:400;font-size:12px" onclick="closeModal();goSys('sysplans')">(إدارة الخطط والأسعار)</a></h3></div>
     <div class="grid g2">
       ${[...activePlans(),...(curDef&&curDef.active===false?[curDef]:[])].map(p=>{const after=planPriceAfter(p);return `<div class="card" style="text-align:center">
@@ -7757,6 +7758,13 @@ function openLicenseManage(buildingId){
     <div style="max-height:220px;overflow-y:auto">
       ${history.length?history.map(h=>`<div class="comment-item"><b>${esc(h.action)}</b>${h.detail?' - '+esc(h.detail):''}<div class="comment-meta">${esc(new Date(h.date).toLocaleString('ar-EG'))}${h.performedBy?' - بواسطة: '+esc(h.performedBy):''}</div></div>`).join(''):'<p class="small">لا يوجد سجل حركات بعد</p>'}
     </div>`,true);
+
+  /* تكلفة مستخدمي العمارة — بتتحمّل بعد الرسم عشان محتاجة الخادم.
+     ⚠️ الشاشة بتشتغل عادي لو ما وصلتش. */
+  setTimeout(() => { try{
+    const uuid = (rec && (rec.__uuid || rec.uuid)) || buildingId;
+    loadLicenseUsers(uuid, curDef ? planPriceAfter(curDef) : 0);
+  }catch(e){} }, 0);
 }
 function computeRenewedLicense(rec,planKey){
   const def=findPlan(planKey);
@@ -7772,6 +7780,62 @@ function computeRenewedLicense(rec,planKey){
   }
   return buildLicense(planKey);
 }
+/* ============================================================
+   👥 مستخدمو العمارة في شاشة الاشتراك
+   ------------------------------------------------------------
+   ⚠️ الشاشة كانت بتوري سعر الخطة بس. يعني رئيس اتحاد عنده نائب
+      ومحاسب بيشوف «٣٠ ج» والحقيقة ٧٠ — ويتفاجئ بالفاتورة.
+
+   دلوقتي بتعدّ مستخدمي العمارة الفعليين من القاعدة وتوري:
+   الخطة + المستخدمين = الإجمالي الحقيقي.
+   ============================================================ */
+async function loadLicenseUsers(buildingUuid, planPrice){
+  const box = document.getElementById('licUsersBox');
+  if (!box || !buildingUuid) return;
+  try{
+    const sb = window.CLOUD && window.CLOUD._sb;
+    if (!sb) return;
+    const { data, error } = await sb.rpc('building_user_charges', { p_building: buildingUuid });
+    if (error || !Array.isArray(data)) return;
+
+    const paid  = data.filter(r => Number(r['مدفوع']) > 0);
+    const extra = paid.reduce((a,r) => a + Number(r['الإجمالي'] || 0), 0);
+    const base  = Number(planPrice) || 0;
+
+    /* اللي مغطّى بالخطة — عشان يشوف إنه مش بيدفع على الكل */
+    const free = data.filter(r => Number(r['مجاني']) > 0)
+      .map(r => `${esc(r['الوصف'])} (${r['مجاني']})`).join(' · ');
+
+    box.innerHTML = `
+      <div class="card mtop" style="background:var(--tint)">
+        <div class="section-title"><h3 style="font-size:13.5px">👥 مستخدمو العمارة والتكلفة</h3></div>
+
+        <div class="flexrow small" style="padding:4px 0;border-bottom:1px dashed var(--line)">
+          <span style="flex:1">الخطة الحالية</span><span><b>${money(base)}</b></span>
+        </div>
+        ${free ? `<p class="small" style="color:var(--muted);margin:5px 0 0">
+          مغطّى بالخطة مجانًا: ${free}</p>` : ''}
+
+        ${paid.length ? paid.map(r => `
+          <div class="flexrow small" style="padding:4px 0;border-bottom:1px dashed var(--line)">
+            <span style="flex:1">${esc(r['الوصف'])} × ${r['مدفوع']}
+              <span style="color:var(--muted)"> (${r['سعر_الواحد']} ج للواحد)</span></span>
+            <span>${money(r['الإجمالي'])}</span>
+          </div>`).join('') +
+          `<div class="flexrow mtop" style="padding-top:6px;border-top:1px solid var(--line)">
+             <span style="flex:1"><b>الإجمالي شهريًا</b></span>
+             <span style="font-size:17px;font-weight:800;color:var(--accent)">${money(base + extra)}</span>
+           </div>`
+        : `<p class="small mtop" style="color:var(--muted);margin:6px 0 0">
+             مفيش مستخدمين إضافيين — <b>${money(base)}</b> هو الإجمالي.</p>`}
+
+        <p class="small mtop" style="color:var(--muted);line-height:1.8">
+          ⚠️ التكلفة بتتحسب من <b>المستخدمين المضافين فعلًا</b> دلوقتي.
+          لو ضفت أو شلت حد، الرقم بيتغيّر.</p>
+      </div>`;
+  }catch(e){ /* الشاشة بتشتغل عادي من غيره */ }
+}
+
 function activatePlan(buildingId,planKey){
   const rec=REG.buildings.find(b=>b.id===buildingId);
   const oldPlan=rec.license?rec.license.plan:null;
