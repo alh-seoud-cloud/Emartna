@@ -11633,24 +11633,21 @@
 
   /* صفوف إدخال المستخدمين — في الصفحة والنافذة */
   function usersRowsHTML(sfx){
-    /* ⚠️ ٨ خانات ظاهرة من الأول بتحسّس الزائر إن فيه شغل كتير
-       قدامه، والأغلبية مش محتاجين حد زيادة أصلًا. دلوقتي مطوية:
-       سطر واحد هادي، يفتح لو حب.
-       ⚠️ والخانات فاضية بتلميح «0» مش قيمة 0 — عشان ما يضطرش
-          يمسح الصفر قبل ما يكتب. */
+    /* ⚠️ ٨ خانات ظاهرة من الأول بتحسّس الزائر إن قدامه شغل كتير،
+       والأغلبية مش محتاجين حد زيادة. دلوقتي مطوية: سطر واحد هادي.
+       ⚠️ والخانات فاضية بتلميح «0» مش قيمة — عشان ما يضطرش يمسح
+          الصفر قبل ما يكتب. */
     return `
     <div class="mtop2" style="border-top:1px dashed var(--line);padding-top:10px">
-      <div id="uToggle_${sfx}" onclick="toggleCalcUsers('${sfx}')"
+      <div onclick="toggleCalcUsers('${sfx}')"
            style="cursor:pointer;display:flex;align-items:center;gap:8px;
                   padding:8px 10px;border-radius:10px;background:var(--tint,#F3F8F7);
                   border:1px solid var(--line)">
         <span style="font-size:15px">👥</span>
         <span class="small" style="flex:1;line-height:1.5">
           <b>محتاج مستخدمين زيادة؟</b>
-          <span style="color:var(--muted)"> — محاسب · حارس · نائب…</span>
-        </span>
-        <span id="uCount_${sfx}" class="small"
-              style="color:var(--accent);font-weight:700"></span>
+          <span style="color:var(--muted)"> — محاسب · حارس · نائب…</span></span>
+        <span id="uCount_${sfx}" class="small" style="color:var(--accent);font-weight:700"></span>
         <span id="uArrow_${sfx}" style="color:var(--muted);font-size:13px">▾</span>
       </div>
 
@@ -11658,7 +11655,6 @@
         <p class="small" style="color:var(--muted);margin:0 0 8px;line-height:1.7">
           الاشتراك شامل <b>رئيس اتحاد</b> و<b>كل أصحاب الشقق</b> مجانًا —
           سيبها فاضية لو مش محتاج.</p>
-
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px">
           ${ROLE_ROWS.map(([k,label])=>`
             <label style="display:flex;align-items:center;gap:6px;
@@ -11670,7 +11666,6 @@
                 style="width:48px;text-align:center;padding:4px 2px;font-size:13px">
             </label>`).join('')}
         </div>
-
         <div style="text-align:left;margin-top:6px">
           <a href="javascript:void(0)" class="small"
              onclick="resetCalcUsers('${sfx}')" style="color:var(--muted)">تصفير الكل</a>
@@ -11679,7 +11674,6 @@
     </div>`;
   }
 
-  /* الطيّ والفتح — والسهم والعدّاد بيتحدّثوا معاه */
   window.toggleCalcUsers = function(sfx){
     const box = document.getElementById('uBox_'+sfx);
     const arr = document.getElementById('uArrow_'+sfx);
@@ -11689,14 +11683,13 @@
     if (arr) arr.textContent = open ? '▾' : '▴';
   };
 
-  /* عدّاد صغير جنب العنوان — يفضل باين حتى لو الصندوق مقفول */
   function updateUsersBadge(sfx, total){
     const el = document.getElementById('uCount_'+sfx);
     if (el) el.textContent = total ? ('+' + total) : '';
   }
 
   window.resetCalcUsers = function(sfx){
-    document.querySelectorAll('.calc-u-'+sfx).forEach(i=>{ i.value = 0; });
+    document.querySelectorAll('.calc-u-'+sfx).forEach(i=>{ i.value = ''; });
     calcPriceFull(sfx);
   };
 
@@ -11870,21 +11863,11 @@
     </div>`;
   }
 
-  /* بنحطها قبل قسم المميزات في الصفحة الرئيسية */
-  const origLanding = window.landingHTML;
-  if (typeof origLanding === 'function' && !origLanding.__calc){
-    const wrapped = function(){
-      const html = origLanding.apply(this, arguments);
-      if (window.landingUIOn && !landingUIOn('calcSection')) return html;
-      const mark = '<div class="section-title" style="text-align:center"><h3>مميزات البرنامج</h3>';
-      const i = html.indexOf(mark);
-      const sec = calcSection();
-      return i > -1 ? html.slice(0,i) + sec + html.slice(i) : html + sec;
-    };
-    wrapped.__calc = true;
-    window.landingHTML = wrapped;
-  }
+  /* ⚠️ قسم الحاسبة اتشال من الصفحة الرئيسية بقرار: كان بياخد
+     مساحة كبيرة وبيحسّس الزائر إن قدامه شغل. دلوقتي الحاسبة
+     في نافذة بتتفتح من زرار الشريط العلوي، والصفحة بقت أنضف.
 
+     calcSection() فوق لسه موجودة للتوافق لو حد نداها. */
 
   /* ============================================================
      زرار عائم + شريط علوي للحاسبة
@@ -11931,8 +11914,6 @@
     setTimeout(() => { const el = document.getElementById('calcUnitsModal'); if (el) el.focus(); }, 200);
     /* الأسعار بتوصل بعد لحظة — نحدّث الأرقام المعروضة لما تجي */
     loadPricingCfg().then(()=>{ try{
-      document.querySelectorAll('[data-rp]').forEach(sp=>{
-        sp.textContent = rolePrice(sp.dataset.rp) + ' ج'; });
       if (document.getElementById('calcUnitsModal')) calcPriceFull('modal');
     }catch(e){} });
   };
@@ -11940,34 +11921,9 @@
   /* الزرار العائم بقى واحد في emartna-welcome.js وبيفتح
      الحاسبة والتجربة مع بعض — عشان ما يتكدّسوش على الموبايل. */
 
-  /* شريط في أعلى الصفحة الرئيسية */
-  const origLanding2 = window.landingHTML;
-  if (typeof origLanding2 === 'function' && !origLanding2.__calcBar){
-    const wrapped = function(){
-      const html = origLanding2.apply(this, arguments);
-      if (window.landingUIOn && !landingUIOn('calcBar')) return html;
-      const bar = `
-        <div onclick="openPriceCalc()" style="cursor:pointer;margin:0 0 14px;
-             background:linear-gradient(135deg,#159A8C,#0f7a6f);color:#fff;
-             border-radius:14px;padding:13px 18px;display:flex;align-items:center;
-             justify-content:center;gap:10px;flex-wrap:wrap;text-align:center;
-             box-shadow:0 4px 16px rgba(21,154,140,.25)">
-          <b style="font-size:15px">💰 عمارتك كام وحدة؟ احسب اشتراكك في ثانية</b>
-          <span style="background:rgba(255,255,255,.22);border-radius:20px;
-                padding:4px 12px;font-size:12.5px;font-weight:700">
-            من ${lowestPrice()} جنيه للعمارة كلها</span>
-        </div>`;
-      // بعد أول عنوان مباشرة
-      const i = html.indexOf('</h1>');
-      if (i > -1){
-        const j = html.indexOf('</div>', i);
-        if (j > -1) return html.slice(0, j + 6) + bar + html.slice(j + 6);
-      }
-      return bar + html;
-    };
-    wrapped.__calcBar = true;
-    window.landingHTML = wrapped;
-  }
+  /* ⚠️ الشريط الأخضر اللي كان في نص الصفحة اتشال: بقى فيه زرار
+     «💰 احسب اشتراكك» في الشريط العلوي نفسه — أوضح، ومتاح من
+     أي مكان في الصفحة، ومابياخدش مساحة. */
 
   /* وفي شاشة الدخول */
   const origLogin = window.loginHTML;
@@ -12000,8 +11956,6 @@
   /* الأسعار بتتحمّل مرة واحدة عند بدء البرنامج — عشان الصفحة
      الرئيسية تعرض الأرقام الصح من غير انتظار. */
   setTimeout(()=>{ loadPricingCfg().then(()=>{ try{
-    document.querySelectorAll('[data-rp]').forEach(sp=>{
-      sp.textContent = rolePrice(sp.dataset.rp) + ' ج'; });
     if (document.getElementById('calcUnits') &&
         Number(document.getElementById('calcUnits').value)) calcPriceFull('page');
   }catch(e){} }); }, 1500);
