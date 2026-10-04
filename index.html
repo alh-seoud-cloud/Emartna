@@ -2690,8 +2690,50 @@ function noBuildingHTML(){
   </div>`;
 }
 
-window.joinWithCode = async function(){
-  const el=document.getElementById('joinCode');
+/* ============================================================
+   + ضُم عمارة تانية — من جوه البرنامج
+   ------------------------------------------------------------
+   ⚠️ الخيارين دول كانوا في شاشة «مستخدم بلا عمارة» بس — يعني
+      اللي عنده عمارة فعلًا ماكانش يقدر يضم تانية إلا لو خرج
+      وسجّل من الأول.
+   ============================================================ */
+window.openAddBuilding = function(){
+  openModal(`
+    <h3>+ ضُم عمارة تانية</h3>
+    <p class="small" style="color:var(--muted);line-height:1.8">
+      تقدر تكون ساكن في عمارة ورئيس اتحاد في تانية —
+      وتبدّل بينهم من القايمة.</p>
+
+    <div class="card mtop" style="text-align:start">
+      <b class="small">🔑 عندك كود عمارة؟</b>
+      <p class="small" style="color:var(--muted)">
+        رئيس اتحاد العمارة بيديك الكود.</p>
+      <div class="field2 mtop">
+        <input id="joinCode2" placeholder="مثال: AYU5AL"
+          style="text-transform:uppercase;text-align:center;letter-spacing:2px">
+      </div>
+      <button class="btn primary mtop" style="width:100%"
+        onclick="joinWithCode('joinCode2')">انضم للعمارة</button>
+    </div>
+
+    <div class="card mtop2" style="text-align:start">
+      <b class="small">🏗️ أو سجّل عمارة جديدة</b>
+      <p class="small" style="color:var(--muted)">
+        لو انت رئيس الاتحاد وعايز تضيف عمارة تانية لإدارتك.</p>
+      <button class="btn mtop" style="width:100%"
+        onclick="closeModal();startNewBuilding()">سجّل عمارة جديدة</button>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">إغلاق</button>
+    </div>`);
+  setTimeout(() => { const el = document.getElementById('joinCode2'); if (el) el.focus(); }, 180);
+};
+
+window.joinWithCode = async function(fieldId){
+  /* الخانة ممكن تكون في شاشة «بلا عمارة» أو في نافذة الضم */
+  const el = document.getElementById(fieldId || 'joinCode')
+          || document.getElementById('joinCode2');
   const code=((el||{}).value||'').trim().toUpperCase();
   if(!code) return showMessage('اكتب كود العمارة');
   try{
@@ -8317,35 +8359,70 @@ function shellHTML(u){
     <div class="sidebar" id="sidebar">
       <div class="brand" style="cursor:pointer" onclick="go('${isAdmin?'dashboard':'home'}')"><div class="mark">${appLogoSVG(38)}</div><div><h1>عمارتنا</h1><p>${esc(D.building.name||'')}</p></div></div>
       ${(function(){
-        /* مبدّل العمارات — يظهر بس لو المستخدم له صلاحية في أكتر من عمارة */
+        /* ============================================================
+           🏢 مبدّل العمارات — مفروز بالصفة
+           ------------------------------------------------------------
+           ⚠️ كان قائمة منسدلة واحدة بكل العمارات مخلوطة، وبتختفي
+              خالص لو عنده عمارة واحدة — فما كانش فيه طريق يضيف
+              عمارة تانية من جوه البرنامج.
+
+           دلوقتي: مفروزة لمجموعتين (بيشرف عليها / ساكن فيها) عشان
+           يفرّق بنظرة، و«+ ضُم عمارة تانية» ظاهر دايمًا حتى لو
+           عنده واحدة بس.
+           ============================================================ */
         const list = window.myBuildings ? myBuildings() : [];
-        if (list.length < 2) return '';
-        /* المفتاح "عمارة + وحدة": الساكن ممكن يملك وحدتين في نفس
-           العمارة، وبالكود لوحده الاتنين بنفس المفتاح فالتبديل
-           بيلاقي الأول دايمًا وما بيحصلش تغيير. */
         const sess = (window.getSession && getSession()) || {};
         const curKey = (sess.buildingId || '') + '::' + (sess.apartmentId || '');
-        const anyUnit = list.some(b => b.apartment_id);
+
+        /* فرز: إداري (مشرف) · ساكن */
+        const staff = list.filter(b => isStaffRole(b.role));
+        const resid = list.filter(b => !isStaffRole(b.role));
+
         const label = b => {
           const unit = b.unit_number
-            ? ' — ' + (b.unit_type === 'shop' ? 'محل ' : 'شقة ') + b.unit_number
-            : (isStaffRole(b.role) ? ' — ' + roleLabelAr(b.role) : '');
-          return esc((b.name || b.code) + unit);
+            ? (b.unit_type === 'shop' ? 'محل ' : 'شقة ') + b.unit_number
+            : '';
+          return { name: esc(b.name || b.code), unit: esc(unit),
+                   role: esc(roleLabelAr(b.role) || '') };
         };
-        return `<div style="padding:8px 12px 4px">
-          <label class="small" style="color:var(--sidebar-muted)">${
-            anyUnit ? '🏠 الوحدة الحالية' : '🏢 العمارة الحالية'}</label>
-          <select style="width:100%;margin-top:4px"
-            onchange="switchBuilding(this.value)">
-            ${list.map(b => {
-              const k = window.myUnitKey ? myUnitKey(b) : b.code;
-              return `<option value="${esc(k)}" ${k===curKey?'selected':''}>${label(b)}</option>`;
-            }).join('')}
-          </select>
-          ${list.length>1?`<button class="btn sm ghost" style="width:100%;margin-top:6px;font-size:12px"
-            onclick="openOtherUnitInNewTab()">↗️ افتح وحدة تانية في تاب جديد</button>`:''}
-          <p class="small" style="color:var(--sidebar-muted);margin-top:4px">
-            ${anyUnit ? 'كل وحدة ليها رابط خاص بيها' : 'التبديل بيفتح العمارة المختارة لوحدها'}</p>
+
+        const row = b => {
+          const k = window.myUnitKey ? myUnitKey(b) : b.code;
+          const L = label(b);
+          const on = (k === curKey);
+          return `<div onclick="switchBuilding('${esc(k)}')"
+            style="display:flex;align-items:center;gap:7px;cursor:pointer;
+                   padding:7px 9px;border-radius:9px;margin-bottom:4px;
+                   background:${on ? 'rgba(255,255,255,.13)' : 'transparent'};
+                   border:1px solid ${on ? 'rgba(255,255,255,.22)' : 'transparent'}">
+            <span style="flex:1;min-width:0">
+              <span style="display:block;font-size:12.5px;font-weight:${on?700:500};
+                    color:var(--sidebar-text);white-space:nowrap;overflow:hidden;
+                    text-overflow:ellipsis">${L.name}</span>
+              <span style="display:block;font-size:10.5px;color:var(--sidebar-muted)">
+                ${L.unit || L.role}</span>
+            </span>
+            ${on ? '<span style="font-size:12px;color:var(--sidebar-text)">✓</span>' : ''}
+          </div>`;
+        };
+
+        const section = (title, arr) => arr.length ? `
+          <div style="font-size:10.5px;color:var(--sidebar-muted);
+               margin:6px 2px 4px;font-weight:700">${title}</div>
+          ${arr.map(row).join('')}` : '';
+
+        return `<div style="padding:6px 10px 2px">
+          ${section('🏢 عمارات بتشرف عليها', staff)}
+          ${section('🏠 عمارات ساكن فيها', resid)}
+
+          <button class="btn sm ghost" style="width:100%;margin-top:6px;font-size:12px;
+            color:var(--sidebar-text);border-color:var(--sidebar-muted)"
+            onclick="openAddBuilding()">+ ضُم عمارة تانية</button>
+
+          ${list.length > 1 ? `<button class="btn sm ghost"
+            style="width:100%;margin-top:4px;font-size:11.5px;
+                   color:var(--sidebar-muted);border-color:transparent"
+            onclick="openOtherUnitInNewTab()">↗️ افتح وحدة تانية في تاب جديد</button>` : ''}
         </div>`;
       })()}
       <div id="navContainer">${renderNavGroups(groups)}</div>
@@ -13400,7 +13477,7 @@ function bindPageEvents(page){if(page==='collections'){const s=document.getEleme
 
 /* ---------- تشغيل التطبيق ---------- */
 /* رقم بناء الملفات — غيّره مع كل إصدار عشان المتصفحات تجيب الجديد */
-const APP_BUILD='2.56';
+const APP_BUILD='2.57';
 window.APP_BUILD=APP_BUILD;
 
 function setupPWA(){
@@ -13615,25 +13692,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
 </script>
 
 <!-- ☁️ طبقة السحابة — عمارتنا Emartna -->
-<script type="module" src="emartna-cloud.js?v=2.56"></script>
-<script type="module" src="emartna-auth.js?v=2.56"></script>
-<script type="module" src="emartna-profile.js?v=2.56"></script>
-<script type="module" src="emartna-users.js?v=2.56"></script>
-<script type="module" src="emartna-platform.js?v=2.56"></script>
-<script type="module" src="emartna-contactlog.js?v=2.56"></script>
-<script type="module" src="emartna-permreport.js?v=2.56"></script>
-<script type="module" src="emartna-finops.js?v=2.56"></script>
-<script type="module" src="emartna-chatrooms.js?v=2.56"></script>
-<script type="module" src="emartna-planscreens.js?v=2.56"></script>
+<script type="module" src="emartna-cloud.js?v=2.57"></script>
+<script type="module" src="emartna-auth.js?v=2.57"></script>
+<script type="module" src="emartna-profile.js?v=2.57"></script>
+<script type="module" src="emartna-users.js?v=2.57"></script>
+<script type="module" src="emartna-platform.js?v=2.57"></script>
+<script type="module" src="emartna-contactlog.js?v=2.57"></script>
+<script type="module" src="emartna-permreport.js?v=2.57"></script>
+<script type="module" src="emartna-finops.js?v=2.57"></script>
+<script type="module" src="emartna-chatrooms.js?v=2.57"></script>
+<script type="module" src="emartna-planscreens.js?v=2.57"></script>
 <!-- emartna-pwa.js اتشال: كان ١٧٦ ك.ب لأيقونات مضمّنة كـdata:image
      ومanifest متولّد كـBlob — والاتنين اتعوّضوا بملفات حقيقية
      (manifest.webmanifest + icon-*.png). كان بيتصارع مع التثبيت. -->
-<script type="module" src="emartna-perms.js?v=2.56"></script>
+<script type="module" src="emartna-perms.js?v=2.57"></script>
 <!-- emartna-lastlogin.js اتشال: مش موجود في المستودع أصلًا -->
 <!-- الحزمة type=module: السكربتات العادية (defer) بتتنفّذ قبل
      الـmodules، فالحزمة كانت بتشتغل قبل emartna-cloud.js وباقي
      الوحدات اللي بتعتمد عليها — والنتيجة "تعذّر تحميل العمارة". -->
-<script type="module" src="emartna-bundle.js?v=2.56"></script>
+<script type="module" src="emartna-bundle.js?v=2.57"></script>
 
 <!-- ⏳ الخروج التلقائي عند الخمول
      ⚠️ الملف ده كان موجود في المستودع (١١ ك.ب، مكتوب بالكامل)
@@ -13644,7 +13721,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
         مش مفعّلة فعلًا.
      ⚠️ بيتحمّل **بعد** الحزمة عن قصد، لأنه بيعتمد على getSession
         و logout و openModal. -->
-<script type="module" src="emartna-idle.js?v=2.56"></script>
+<script type="module" src="emartna-idle.js?v=2.57"></script>
 <script>
 /* ═══ التحميل عند الطلب ═══
    ٦ وحدات مرتبطة بشاشات بعينها — مفيش داعي تتحمّل عند فتح
